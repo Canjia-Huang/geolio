@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/12.
 // Copyright (c) 2026 Graphics@XMU. All rights reserved.
 //
-#ifndef ROBUSTLOCALREMESHING_ENVIRONMENT_SPDLOG_H
-#define ROBUSTLOCALREMESHING_ENVIRONMENT_SPDLOG_H
+#ifndef MESHOPT_ENVIRONMENT_SPDLOG_H
+#define MESHOPT_ENVIRONMENT_SPDLOG_H
 
 #include <gtest/gtest.h>
 #include "common/log.h"
@@ -15,4 +15,4 @@ public:
     }
 };
 
-#endif //ROBUSTLOCALREMESHING_ENVIRONMENT_SPDLOG_H
+#endif //MESHOPT_ENVIRONMENT_SPDLOG_H
