@@ -30,9 +30,12 @@ target_include_directories(${PROJECT_NAME}_TESTS
 )
 
 target_link_libraries(${PROJECT_NAME}_TESTS
+        ${PROJECT_NAME}
         Geogram::geogram
         GTest::gtest_main
 )
+
+add_compile_definitions(TEST_DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/")
 
 include(GoogleTest)
 gtest_discover_tests(${PROJECT_NAME}_TESTS)
