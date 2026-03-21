@@ -16,11 +16,13 @@ namespace MeshOpt
      *
      * @param[in] M Input mesh.
      * @param[in] f Facet index of the target triangle.
-     * @return Minimum interior angle of facet @p f (in radians).
+     * @return Minimum interior angle of facet @p f (in radians, range: [0, pi], best: pi/3).
      */
     double get_triangle_minimum_angle(
         const GEO::Mesh& M,
         GEO::index_t f);
+
+
 }
 
 #endif //MESHOPT_TRIANGLE_METRICS_H
