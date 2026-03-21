@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/12.
 // Copyright (c) 2026 Graphics@XMU. All rights reserved.
 //
-#ifndef ROBUSTLOCALREMESHING_LOG_H
-#define ROBUSTLOCALREMESHING_LOG_H
+#ifndef MESHOPT_LOG_H
+#define MESHOPT_LOG_H
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>
@@ -117,4 +117,4 @@ namespace LOG {
 } // namespace LOG
 
 
-#endif //ROBUSTLOCALREMESHING_LOG_H
+#endif //MESHOPT_LOG_H

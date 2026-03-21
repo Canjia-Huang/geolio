@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/12.
 // Copyright (c) 2026 Graphics@XMU. All rights reserved.
 //
-#ifndef ROBUSTLOCALREMESHING_ENVIRONMENT_GEOGRAM_H
-#define ROBUSTLOCALREMESHING_ENVIRONMENT_GEOGRAM_H
+#ifndef MESHOPT_ENVIRONMENT_GEOGRAM_H
+#define MESHOPT_ENVIRONMENT_GEOGRAM_H
 
 #include <geogram/basic/command_line_args.h>
 #include <geogram/basic/common.h>
@@ -19,4 +19,4 @@ public:
     }
 };
 
-#endif //ROBUSTLOCALREMESHING_ENVIRONMENT_GEOGRAM_H
+#endif //MESHOPT_ENVIRONMENT_GEOGRAM_H
