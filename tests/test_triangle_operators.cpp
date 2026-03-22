@@ -63,7 +63,7 @@ namespace
             ) {
             start_f_ = start_f;
             start_lv_ = start_lv;
-            MeshOpt::get_vertex_one_ring_triangles(M_, start_f_, start_lv_, ordered_f_and_lv);
+            ProgressiveMeshOpt::get_vertex_one_ring_triangles(M_, start_f_, start_lv_, ordered_f_and_lv);
             check_incident();
         }
 
@@ -121,7 +121,7 @@ namespace
             const GEO::index_t new_v = M_.vertices.create_vertices(1);
             const GEO::index_t new_f = M_.facets.create_triangles(2);
 
-            MeshOpt::split_triangle_edge(
+            ProgressiveMeshOpt::split_triangle_edge(
                 M_,
                 f, lv,
                 r,
@@ -138,7 +138,7 @@ namespace
             const GEO::index_t new_v = M_.vertices.create_vertices(1);
             const GEO::index_t new_f = M_.facets.create_triangles(1);
 
-            MeshOpt::split_triangle_edge(
+            ProgressiveMeshOpt::split_triangle_edge(
                 M_,
                 f, lv,
                 r,
@@ -175,7 +175,7 @@ namespace
             ) {
             GEO::index_t disuse_v, disuse_f0, disuse_f1;
 
-            MeshOpt::collapse_triangle_edge(
+            ProgressiveMeshOpt::collapse_triangle_edge(
                 M_,
                 f, lv,
                 r,
@@ -196,7 +196,7 @@ namespace
             ) {
             GEO::index_t disuse_v, disuse_f0, disuse_f1;
 
-            MeshOpt::collapse_triangle_edge(
+            ProgressiveMeshOpt::collapse_triangle_edge(
                 M_,
                 f, lv,
                 r,
@@ -235,7 +235,7 @@ namespace
             const GEO::index_t f,
             const GEO::index_t lv
             ) {
-            MeshOpt::flip_triangle_edge(M_, f, lv);
+            ProgressiveMeshOpt::flip_triangle_edge(M_, f, lv);
         }
     };
 

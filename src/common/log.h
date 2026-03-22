@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/12.
 // Copyright (c) 2026 Graphics@XMU. All rights reserved.
 //
-#ifndef MESHOPT_LOG_H
-#define MESHOPT_LOG_H
+#ifndef PROGRESSIVEMESHOPT_LOG_H
+#define PROGRESSIVEMESHOPT_LOG_H
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>
@@ -117,4 +117,4 @@ namespace LOG {
 } // namespace LOG
 
 
-#endif //MESHOPT_LOG_H
+#endif //PROGRESSIVEMESHOPT_LOG_H

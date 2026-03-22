@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/12.
 // Copyright (c) 2026 Graphics@XMU. All rights reserved.
 //
-#ifndef MESHOPT_ENVIRONMENT_SPDLOG_H
-#define MESHOPT_ENVIRONMENT_SPDLOG_H
+#ifndef PROGRESSIVEMESHOPT_ENVIRONMENT_SPDLOG_H
+#define PROGRESSIVEMESHOPT_ENVIRONMENT_SPDLOG_H
 
 #include <gtest/gtest.h>
 #include "common/log.h"
@@ -15,4 +15,4 @@ public:
     }
 };
 
-#endif //MESHOPT_ENVIRONMENT_SPDLOG_H
+#endif //PROGRESSIVEMESHOPT_ENVIRONMENT_SPDLOG_H
