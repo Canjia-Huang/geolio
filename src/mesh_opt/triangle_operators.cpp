@@ -1,12 +1,12 @@
 //
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/13.
-// Copyright (c) 2026 Graphics@XMU. All rights reserved.
+// Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 
 #include "triangle_operators.h"
 #include "common/log.h"
 
-namespace MeshOpt
+namespace ProgressiveMeshOpt
 {
     void get_vertex_one_ring_triangles(
         const GEO::Mesh& M,
@@ -230,7 +230,7 @@ namespace MeshOpt
             const GEO::index_t nlv1 = (nlv0+1)%3;
             const GEO::index_t nlv2 = (nlv0+2)%3;
             const GEO::index_t nv0 = M.facets.vertex(af0, nlv0);
-            const GEO::index_t nv1 = M.facets.vertex(af0, nlv1);
+            // const GEO::index_t nv1 = M.facets.vertex(af0, nlv1);
             const GEO::index_t nv2 = M.facets.vertex(af0, nlv2);
             const GEO::index_t naf1 = M.facets.adjacent(af0, nlv1);
             const GEO::index_t naf2 = M.facets.adjacent(af0, nlv2);
@@ -276,14 +276,15 @@ namespace MeshOpt
          */
         const GEO::index_t lv1 = (lv+1)%3;
         const GEO::index_t lv2 = (lv+2)%3;
-        const GEO::index_t v0 = M.facets.vertex(f, lv);
+        // const GEO::index_t v0 = M.facets.vertex(f, lv);
         const GEO::index_t v1 = M.facets.vertex(f, lv1);
         const GEO::index_t v2 = M.facets.vertex(f, lv2);
 
         const GEO::index_t af = M.facets.adjacent(f, lv);
-        assert(af != GEO::NO_FACET);
+        if (af == GEO::NO_FACET)
+            return;
         const GEO::index_t af1 = M.facets.adjacent(f, lv1);
-        const GEO::index_t af2 = M.facets.adjacent(f, lv2);
+        // const GEO::index_t af2 = M.facets.adjacent(f, lv2);
 
         const GEO::index_t nlv0 = M.facets.find_vertex(af, v1);
         assert(nlv0 != GEO::NO_INDEX);
@@ -292,7 +293,7 @@ namespace MeshOpt
         const GEO::index_t v3 = M.facets.vertex(af, nlv2);
 
         const GEO::index_t af0 = M.facets.adjacent(af, nlv1);
-        const GEO::index_t af3 = M.facets.adjacent(af, nlv2);
+        // const GEO::index_t af3 = M.facets.adjacent(af, nlv2);
 
         /* Set vertices */
         M.facets.set_vertex(f, lv1, v3);

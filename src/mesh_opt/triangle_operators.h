@@ -1,13 +1,13 @@
 //
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/13.
-// Copyright (c) 2026 Graphics@XMU. All rights reserved.
+// Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef MESHOPT_TRIANGLE_OPERATORS_H
-#define MESHOPT_TRIANGLE_OPERATORS_H
+#ifndef PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
+#define PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
 
 #include <geogram/mesh/mesh.h>
 
-namespace MeshOpt
+namespace ProgressiveMeshOpt
 {
     /**
      * @brief Collect triangles incident to a vertex in one-ring order.
@@ -104,5 +104,5 @@ namespace MeshOpt
         GEO::index_t lv);
 }
 
-#endif //MESHOPT_TRIANGLE_OPERATORS_H
+#endif //PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
 
