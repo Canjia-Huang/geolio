@@ -11,9 +11,9 @@ namespace
 {
     /*
      * Lookup table for mapping cell local facet vertices to cell local vertices in a tetrahedron
-     * cf_lf_lv_to_c_lv[local_facet_index][local_vertex_index] = cell_local_vertex_index
+     * cells.facet_vertex(c, lf, lv) = cells.vertex(c, cell_lf_lv_to_lv[lf][lv])
      */
-    std::array<std::array<GEO::index_t, 3>, 4> cf_lf_lv_to_c_lv = {
+    std::array<std::array<GEO::index_t, 3>, 4> cell_lf_lv_to_lv = {
         {{1, 3, 2}, {0, 2, 3}, {3, 1, 0}, {0, 1, 2}}
     };
 }
@@ -39,9 +39,9 @@ namespace ProgressiveMeshOpt::Tet
         const GEO::index_t v0 = M.cells.facet_vertex(c, lf, 0);
         const GEO::index_t v1 = M.cells.facet_vertex(c, lf, 1);
         const GEO::index_t v2 = M.cells.facet_vertex(c, lf, 2);
-        const GEO::index_t lv0 = cf_lf_lv_to_c_lv[lf][0];
-        const GEO::index_t lv1 = cf_lf_lv_to_c_lv[lf][1];
-        const GEO::index_t lv2 = cf_lf_lv_to_c_lv[lf][2];
+        const GEO::index_t lv0 = cell_lf_lv_to_lv[lf][0];
+        const GEO::index_t lv1 = cell_lf_lv_to_lv[lf][1];
+        const GEO::index_t lv2 = cell_lf_lv_to_lv[lf][2];
         const GEO::index_t nc0 = M.cells.adjacent(c, lv0);
         const GEO::index_t nc1 = M.cells.adjacent(c, lv1);
         const GEO::index_t nc2 = M.cells.adjacent(c, lv2);
@@ -51,9 +51,9 @@ namespace ProgressiveMeshOpt::Tet
         GEO::index_t nlv0{GEO::NO_INDEX}, nlv1{GEO::NO_INDEX}, nlv2{GEO::NO_INDEX};
         for (GEO::index_t i = 0; i < 3; ++i) {
             if (M.cells.facet_vertex(nc, nlf, i) == v0) { // cell_vertex(nc, nlv0) == cell_vertex(c, lv0)
-                nlv0 = cf_lf_lv_to_c_lv[nlf][i];
-                nlv1 = cf_lf_lv_to_c_lv[nlf][(i+1)%3];
-                nlv2 = cf_lf_lv_to_c_lv[nlf][(i+2)%3];
+                nlv0 = cell_lf_lv_to_lv[nlf][i];
+                nlv1 = cell_lf_lv_to_lv[nlf][(i+1)%3];
+                nlv2 = cell_lf_lv_to_lv[nlf][(i+2)%3];
                 break;
             }
         }
