@@ -12,11 +12,12 @@
 
 namespace
 {
-    using namespace ProgressiveMeshOpt::Triangle;
+    using namespace ProgressiveMeshOpt::Tri;
 
     class TriangleOperatorsTest : public ::testing::Test {
         void SetUp() override {
-            ASSERT_TRUE(GEO::mesh_load(std::string(TEST_DATA_PATH) + "case0.obj", M_));
+            ASSERT_TRUE(GEO::mesh_load(std::string(TEST_DATA_PATH) + "simple_tri_mesh.obj", M_));
+            LOG::DEBUG("M #V:{}, #F: {}", M_.vertices.nb(), M_.facets.nb());
 
             M_v_to_delete_.bind(M_.vertices.attributes(), "delete");
             M_f_to_delete_.bind(M_.facets.attributes(), "delete");
@@ -47,7 +48,7 @@ namespace
             }
         }
 
-        void save_results() {
+        void save_results() const {
             EXPECT_TRUE(GEO::mesh_save(M_, get_current_test_name()+".geogram"));
         }
 
@@ -119,7 +120,7 @@ namespace
             const GEO::index_t lv,
             const double r
             ) {
-            EXPECT_NE(M_.facets.adjacent(f, lv), GEO::NO_FACET);
+            ASSERT_NE(M_.facets.adjacent(f, lv), GEO::NO_FACET);
             const GEO::index_t new_v = M_.vertices.create_vertices(1);
             const GEO::index_t new_f = M_.facets.create_triangles(2);
 
@@ -136,7 +137,7 @@ namespace
             const GEO::index_t lv,
             const double r
             ) {
-            EXPECT_EQ(M_.facets.adjacent(f, lv), GEO::NO_FACET);
+            ASSERT_EQ(M_.facets.adjacent(f, lv), GEO::NO_FACET);
             const GEO::index_t new_v = M_.vertices.create_vertices(1);
             const GEO::index_t new_f = M_.facets.create_triangles(1);
 

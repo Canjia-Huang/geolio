@@ -31,6 +31,11 @@ namespace
         M.vertices.point(3) = GEO::vec3(0,0,1);
         M.cells.create_tet(0,1,2,3);
 
+        for (GEO::index_t lv = 0; lv < 4; ++lv)
+            LOG::INFO("tet lv {} - v {}", lv, M.cells.vertex(0, lv));
+        for (GEO::index_t lf = 0; lf < 4; ++lf)
+            LOG::INFO("tet lf {} - v {},{},{}", lf, M.cells.facet_vertex(0, lf, 0), M.cells.facet_vertex(0, lf, 1), M.cells.facet_vertex(0, lf, 2));
+
         const std::string write_file_path = get_current_test_name() + ".mesh";
         EXPECT_TRUE(GEO::mesh_save(M, write_file_path));
         EXPECT_TRUE(std::filesystem::exists(write_file_path));

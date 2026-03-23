@@ -28,11 +28,12 @@ namespace ProgressiveMeshOpt::Tet
         ) {
         assert(c < M.cells.nb());
         assert(lf < 4);
-        assert(new_c < M.cells.nb());
 
         const GEO::index_t nc = M.cells.adjacent(c, lf);
         if (nc == GEO::NO_CELL)
             return;
+
+        assert(new_c < M.cells.nb());
 
         const GEO::index_t v = M.cells.vertex(c, lf);
         const GEO::index_t v0 = M.cells.facet_vertex(c, lf, 0);
