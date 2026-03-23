@@ -7,7 +7,7 @@
 
 #include <geogram/mesh/mesh.h>
 
-namespace ProgressiveMeshOpt::Triangle
+namespace ProgressiveMeshOpt::Tri
 {
     /**
      * @brief Collect triangles incident to a vertex in one-ring order.

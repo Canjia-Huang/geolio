@@ -6,7 +6,7 @@
 #include "triangle_operators.h"
 #include "common/log.h"
 
-namespace ProgressiveMeshOpt::Triangle
+namespace ProgressiveMeshOpt::Tri
 {
     void get_vertex_one_ring_triangles(
         const GEO::Mesh& M,
