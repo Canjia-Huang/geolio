@@ -27,6 +27,29 @@ namespace ProgressiveMeshOpt::Tet
         GEO::index_t c,
         GEO::index_t lf,
         GEO::index_t new_c);
+
+    /**
+     * Splits one tetrahedron into four tetrahedra by inserting an interior vertex.
+     *
+     * The vertex index @p new_v is expected to be pre-allocated. Its position will be set
+     * to the barycenter of cell @p c. The original cell @p c is updated in-place and
+     * three additional tetrahedra (@p new_c0, @p new_c1, @p new_c2) are filled.
+     * Adjacency between the four resulting cells and neighboring cells is updated.
+     *
+     * @param[in,out] M      The tetrahedral mesh to modify
+     * @param[in]     c      Index of the tetrahedron to split
+     * @param[in]     new_v  Index of a pre-allocated vertex used as the split vertex
+     * @param[in]     new_c0 Index of the first pre-allocated tetrahedron created by the split
+     * @param[in]     new_c1 Index of the second pre-allocated tetrahedron created by the split
+     * @param[in]     new_c2 Index of the third pre-allocated tetrahedron created by the split
+     */
+    void cell_split(
+        GEO::Mesh& M,
+        GEO::index_t c,
+        GEO::index_t new_v,
+        GEO::index_t new_c0,
+        GEO::index_t new_c1,
+        GEO::index_t new_c2);
 }
 
 #endif //PROGRESSIVEMESHOPT_TETRAHEDRON_OPERATORS_H

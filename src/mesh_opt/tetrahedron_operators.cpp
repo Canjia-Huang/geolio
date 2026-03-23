@@ -118,4 +118,76 @@ namespace ProgressiveMeshOpt::Tet
             M.cells.set_adjacent(nc_nc2, M.cells.find_tet_facet(nc_nc2, nv, nv0, nv1), new_c);
         }
     }
+
+    void cell_split(
+        GEO::Mesh& M,
+        const GEO::index_t c,
+        const GEO::index_t new_v,
+        const GEO::index_t new_c0,
+        const GEO::index_t new_c1,
+        const GEO::index_t new_c2
+        ) {
+        assert(c < M.cells.nb());
+        assert(new_v < M.cells.nb());
+        assert(new_c0 < M.cells.nb());
+        assert(new_c1 < M.cells.nb());
+        assert(new_c2 < M.cells.nb());
+
+        const GEO::index_t v0 = M.cells.vertex(c, 0);
+        const GEO::index_t v1 = M.cells.vertex(c, 1);
+        const GEO::index_t v2 = M.cells.vertex(c, 2);
+        const GEO::index_t v3 = M.cells.vertex(c, 3);
+        const GEO::index_t nc0 = M.cells.adjacent(c, 0);
+        const GEO::index_t nc1 = M.cells.adjacent(c, 1);
+        const GEO::index_t nc2 = M.cells.adjacent(c, 2);
+        const GEO::index_t nc3 = M.cells.adjacent(c, 3);
+
+        /* Create new vertex */
+        M.vertices.point(new_v) = 0.25 * (
+            M.cells.point(c, 0) + M.cells.point(c, 1) + M.cells.point(c, 2) + M.cells.point(c, 3));
+
+        /* Set vertices */
+        M.cells.set_vertex(new_c0, 0, new_v);
+        M.cells.set_vertex(new_c0, 1, v1);
+        M.cells.set_vertex(new_c0, 2, v2);
+        M.cells.set_vertex(new_c0, 3, v3);
+        M.cells.set_vertex(new_c1, 0, v0);
+        M.cells.set_vertex(new_c1, 1, new_v);
+        M.cells.set_vertex(new_c1, 2, v2);
+        M.cells.set_vertex(new_c1, 3, v3);
+        M.cells.set_vertex(new_c2, 0, v0);
+        M.cells.set_vertex(new_c2, 1, v1);
+        M.cells.set_vertex(new_c2, 2, new_v);
+        M.cells.set_vertex(new_c2, 3, v3);
+        M.cells.set_vertex(c, 3, new_v);
+
+        /* Set adjacency */
+        M.cells.set_adjacent(new_c0, 0, nc0);
+        M.cells.set_adjacent(new_c0, 1, new_c1);
+        M.cells.set_adjacent(new_c0, 2, new_c2);
+        M.cells.set_adjacent(new_c0, 3, c);
+        M.cells.set_adjacent(new_c1, 0, new_c0);
+        M.cells.set_adjacent(new_c1, 1, nc1);
+        M.cells.set_adjacent(new_c1, 2, new_c2);
+        M.cells.set_adjacent(new_c1, 3, c);
+        M.cells.set_adjacent(new_c2, 0, new_c0);
+        M.cells.set_adjacent(new_c2, 1, new_c1);
+        M.cells.set_adjacent(new_c2, 2, nc2);
+        M.cells.set_adjacent(new_c2, 3, c);
+        M.cells.set_adjacent(c, 0, new_c0);
+        M.cells.set_adjacent(c, 1, new_c1);
+        M.cells.set_adjacent(c, 2, new_c2);
+        if (nc0 != GEO::NO_CELL) {
+            assert(M.cells.find_tet_facet(nc0, v1, v2, v3) != GEO::NO_INDEX);
+            M.cells.set_adjacent(nc0, M.cells.find_tet_facet(nc0, v1, v2, v3), new_c0);
+        }
+        if (nc1 != GEO::NO_CELL) {
+            assert(M.cells.find_tet_facet(nc1, v0, v3, v2) != GEO::NO_INDEX);
+            M.cells.set_adjacent(nc1, M.cells.find_tet_facet(nc1, v0, v3, v2), new_c1);
+        }
+        if (nc2 != GEO::NO_CELL) {
+            assert(M.cells.find_tet_facet(nc2, v0, v1, v3) != GEO::NO_INDEX);
+            M.cells.set_adjacent(nc2, M.cells.find_tet_facet(nc2, v0, v1, v3), new_c2);
+        }
+    }
 }

@@ -129,4 +129,38 @@ namespace
         check_connections();
         save_results();
     }
+
+    /* == CellSplit ================================================================================================ */
+    class CellSplitTest : public TetrahedronOperatorsTest {
+    public:
+        void compute(
+            const GEO::index_t c
+            ) {
+            const GEO::index_t new_v = M_.vertices.create_vertices(1);
+            const GEO::index_t new_c = M_.cells.create_tets(3);
+
+            M_c_processed_[c] = 1;
+            M_c_processed_[new_c] = 1;
+            M_c_processed_[new_c+1] = 1;
+            M_c_processed_[new_c+2] = 1;
+
+            cell_split(
+                M_,
+                c,
+                new_v,
+                new_c, new_c+1, new_c+2);
+        }
+    };
+
+    TEST_F(CellSplitTest, interior) {
+        compute(8);
+        check_connections();
+        save_results();
+    }
+
+    TEST_F(CellSplitTest, border) {
+        compute(0);
+        check_connections();
+        save_results();
+    }
 }
