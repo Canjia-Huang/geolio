@@ -6,7 +6,7 @@
 #include "triangle_operators.h"
 #include "common/log.h"
 
-namespace ProgressiveMeshOpt
+namespace ProgressiveMeshOpt::Triangle
 {
     void get_vertex_one_ring_triangles(
         const GEO::Mesh& M,
@@ -65,7 +65,7 @@ namespace ProgressiveMeshOpt
             ordered_f_and_lv.push_back(f_lv);
     }
 
-    void split_triangle_edge(
+    void edge_split(
        GEO::Mesh& M,
        const GEO::index_t f,
        const GEO::index_t lv,
@@ -159,7 +159,7 @@ namespace ProgressiveMeshOpt
         }
     }
 
-    void collapse_triangle_edge(
+    void edge_collapse(
         GEO::Mesh& M,
         const GEO::index_t f,
         const GEO::index_t lv,
@@ -255,7 +255,7 @@ namespace ProgressiveMeshOpt
             M.facets.set_vertex(adj_f, adj_lv, v0);
     }
 
-    void flip_triangle_edge(
+    void edge_swap(
         GEO::Mesh& M,
         const GEO::index_t f,
         const GEO::index_t lv

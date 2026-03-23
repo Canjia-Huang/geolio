@@ -7,7 +7,7 @@
 
 #include <geogram/mesh/mesh.h>
 
-namespace ProgressiveMeshOpt
+namespace ProgressiveMeshOpt::Triangle
 {
     /**
      * @brief Collect triangles incident to a vertex in one-ring order.
@@ -48,7 +48,7 @@ namespace ProgressiveMeshOpt
      * @param[in] new_f1 Index of the pre-allocated new facet produced by splitting the adjacent facet @p af.
      * Ignored when @p af does not exist (NO_FACET).
      */
-     void split_triangle_edge(
+     void edge_split(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
@@ -74,7 +74,7 @@ namespace ProgressiveMeshOpt
      * @param[out] disuse_f1 Index of the second unused facet across the collapsed edge;
      *                       set to GEO::NO_FACET when the edge is on the border.
      */
-    void collapse_triangle_edge(
+    void edge_collapse(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
@@ -84,7 +84,7 @@ namespace ProgressiveMeshOpt
         GEO::index_t& disuse_f1);
 
     /**
-     * @brief Flip an interior edge shared by two triangles.
+     * @brief Swap an interior edge shared by two triangles.
      *
      * For facet @p f and local edge @p lv (between local vertices @c lv1 and @c lv2), this
      * operation replaces the shared diagonal with the other diagonal of the local quadrilateral.
@@ -98,7 +98,7 @@ namespace ProgressiveMeshOpt
      *               (@c M.facets.adjacent(f, lv) != GEO::NO_FACET).
      * @pre the edge to flip is a border edge
      */
-    void flip_triangle_edge(
+    void edge_swap(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv);
