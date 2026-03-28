@@ -33,6 +33,8 @@ namespace
 
         for (GEO::index_t lv = 0; lv < 4; ++lv)
             LOG::INFO("tet lv {} - v {}", lv, M.cells.vertex(0, lv));
+        for (GEO::index_t le = 0; le < 6; ++le)
+            LOG::INFO("tet le {} - v {}", le, M.cells.edge_vertex(0, le, 0), M.cells.edge_vertex(0, le, 1));
         for (GEO::index_t lf = 0; lf < 4; ++lf)
             LOG::INFO("tet lf {} - v {},{},{}", lf, M.cells.facet_vertex(0, lf, 0), M.cells.facet_vertex(0, lf, 1), M.cells.facet_vertex(0, lf, 2));
 

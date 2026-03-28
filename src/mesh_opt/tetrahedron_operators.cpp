@@ -140,7 +140,7 @@ namespace ProgressiveMeshOpt::Tet
         const GEO::index_t nc0 = M.cells.adjacent(c, 0);
         const GEO::index_t nc1 = M.cells.adjacent(c, 1);
         const GEO::index_t nc2 = M.cells.adjacent(c, 2);
-        const GEO::index_t nc3 = M.cells.adjacent(c, 3);
+        // const GEO::index_t nc3 = M.cells.adjacent(c, 3);
 
         /* Create new vertex */
         M.vertices.point(new_v) = 0.25 * (
