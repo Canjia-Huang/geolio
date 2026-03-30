@@ -66,7 +66,7 @@ namespace
             ) {
             start_f_ = start_f;
             start_lv_ = start_lv;
-            get_vertex_one_ring_triangles(M_, start_f_, start_lv_, ordered_f_and_lv);
+            get_vertex_incident_triangles(M_, start_f_, start_lv_, ordered_f_and_lv);
             check_incident();
         }
 

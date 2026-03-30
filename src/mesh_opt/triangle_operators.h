@@ -23,8 +23,9 @@ namespace ProgressiveMeshOpt::Tri
      * @param[out] ordered_f_and_lv Output ordered one-ring list. Each element is (f, lv), where
      *                              @p f is an incident facet and @p lv is the local index of the target
      *                              vertex inside that facet. Existing contents are cleared.
+     * @return true if the target vertex is on the mesh border; false if it is an interior vertex.
      */
-    void get_vertex_one_ring_triangles(
+    bool get_vertex_incident_triangles(
         const GEO::Mesh& M,
         GEO::index_t start_f,
         GEO::index_t start_lv,

@@ -8,7 +8,7 @@
 
 namespace ProgressiveMeshOpt::Tri
 {
-    void get_vertex_one_ring_triangles(
+    bool get_vertex_incident_triangles(
         const GEO::Mesh& M,
         const GEO::index_t start_f,
         const GEO::index_t start_lv,
@@ -44,7 +44,6 @@ namespace ProgressiveMeshOpt::Tri
             GEO::index_t f = start_f;
             GEO::index_t lv = (start_lv+2)%3;
 
-
             for (;;) {
                 const GEO::index_t next_f = M.facets.adjacent(f, lv);
                 if (next_f == GEO::NO_FACET)
@@ -63,6 +62,8 @@ namespace ProgressiveMeshOpt::Tri
             ordered_f_and_lv.push_back(prev_ordered_f_and_lv[i_end-i-1]);
         for (const auto& f_lv : next_ordered_f_and_lv)
             ordered_f_and_lv.push_back(f_lv);
+
+        return is_on_border;
     }
 
     void edge_split(
@@ -202,7 +203,7 @@ namespace ProgressiveMeshOpt::Tri
 
         /* Find all (f, lv) that incident to v1 */
         std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_and_lv;
-        get_vertex_one_ring_triangles(M, f, lv1, ordered_f_and_lv);
+        get_vertex_incident_triangles(M, f, lv1, ordered_f_and_lv);
 
         /* Set facet adjacency */
         if (af1 != GEO::NO_FACET) {

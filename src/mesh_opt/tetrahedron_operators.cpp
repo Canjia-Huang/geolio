@@ -13,13 +13,114 @@ namespace
      * Lookup table for mapping cell local facet vertices to cell local vertices in a tetrahedron
      * cells.facet_vertex(c, lf, lv) = cells.vertex(c, cell_lf_lv_to_lv[lf][lv])
      */
-    std::array<std::array<GEO::index_t, 3>, 4> cell_lf_lv_to_lv = {
+    constexpr std::array<std::array<GEO::index_t, 3>, 4> CELL_LF_LV_TO_LV = {
         {{1, 3, 2}, {0, 2, 3}, {3, 1, 0}, {0, 1, 2}}
     };
+
+    /**
+     * @brief Return the third vertex of a tetrahedron facet given two facet vertices.
+     * @param[in] M Input tetrahedral mesh.
+     * @param[in] c Cell index.
+     * @param[in] lf Local facet index of cell @p c (0..3).
+     * @param[in] v0 First known vertex on facet (@p c, @p lf).
+     * @param[in] v1 Second known vertex on facet (@p c, @p lf), expected to be different from @p v0.
+     * @return The vertex on facet (@p c, @p lf) that is different from @p v0 and @p v1.
+     *         Caller must ensure inputs are valid; otherwise the result is not guaranteed.
+     */
+    GEO::index_t get_cell_facet_another_vertex(
+        const GEO::Mesh& M,
+        const GEO::index_t c,
+        const GEO::index_t lf,
+        const GEO::index_t v0,
+        const GEO::index_t v1
+        ) {
+        assert(c < M.cells.nb());
+        assert(lf < 4);
+        GEO::index_t v2 = GEO::NO_VERTEX;
+        for (GEO::index_t lv = 0; lv < 3; ++lv) {
+            v2 = M.cells.facet_vertex(c, lf, lv);
+            if (v2 != v0 && v2 != v1)
+                break;
+        }
+        return v2;
+    }
 }
 
 namespace ProgressiveMeshOpt::Tet
 {
+    bool get_edge_incident_tetrahedra(
+        const GEO::Mesh& M,
+        const GEO::index_t start_c,
+        const GEO::index_t start_lf,
+        const GEO::index_t start_lv,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_c_and_lf
+        ) {
+        assert(start_c < M.cells.nb());
+        assert(start_lf < 4);
+        assert(start_lv < 3);
+
+        const auto ev0 = M.cells.facet_vertex(start_c, start_lf, start_lv);
+        const auto ev1 = M.cells.facet_vertex(start_c, start_lf, (start_lv+1)%3);
+        bool is_on_border = false;
+
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> next_ordered_c_and_lf;
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> prev_ordered_c_and_lf;
+        {
+            GEO::index_t c = start_c;
+            GEO::index_t lf = start_lf;
+            for (;;) {
+                next_ordered_c_and_lf.emplace_back(c, lf);
+
+                const GEO::index_t nc = M.cells.adjacent(c, lf);
+                if (nc == GEO::NO_CELL) {
+                    is_on_border = true;
+                    break;
+                }
+                if (nc == start_c) // a loop
+                    break;
+
+                /* Get next lf */
+                const GEO::index_t oppo_v = get_cell_facet_another_vertex(M, c, lf, ev0, ev1); // (oppo_v, ev0, ev1) form the cell c's lf
+                assert(oppo_v != GEO::NO_VERTEX);
+
+                lf = M.cells.find_tet_vertex(nc, oppo_v);
+                assert(lf != GEO::NO_INDEX);
+                c = nc;
+            }
+        }
+
+        if (is_on_border) { // inverse travel
+            GEO::index_t c = start_c;
+            GEO::index_t lf = M.cells.find_tet_vertex(start_c, M.cells.facet_vertex(start_c, start_lf, (start_lv+2)%3));
+
+            for (;;) {
+                const GEO::index_t nc = M.cells.adjacent(c, lf);
+                if (nc == GEO::NO_CELL)
+                    break;
+
+                /* Get next lf */
+                const GEO::index_t oppo_v = get_cell_facet_another_vertex(M, c, lf, ev0, ev1); // (oppo_v, ev0, ev1) form the cell c's lf
+                assert(oppo_v != GEO::NO_VERTEX);
+
+                lf = M.cells.find_tet_vertex(nc, oppo_v);
+                assert(lf != GEO::NO_INDEX);
+                c = nc;
+
+                prev_ordered_c_and_lf.emplace_back(c, lf);
+            }
+        }
+
+        /* Output */
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>().swap(ordered_c_and_lf);
+        ordered_c_and_lf.reserve(next_ordered_c_and_lf.size() + prev_ordered_c_and_lf.size());
+        for (GEO::index_t i = 0, i_end = prev_ordered_c_and_lf.size(); i < i_end; ++i)
+            ordered_c_and_lf.push_back(prev_ordered_c_and_lf[i_end-i-1]);
+        for (const auto& c_lf : next_ordered_c_and_lf)
+            ordered_c_and_lf.push_back(c_lf);
+
+        return is_on_border;
+    }
+
     void edge_swap_2_3(
         GEO::Mesh& M,
         const GEO::index_t c,
@@ -39,9 +140,9 @@ namespace ProgressiveMeshOpt::Tet
         const GEO::index_t v0 = M.cells.facet_vertex(c, lf, 0);
         const GEO::index_t v1 = M.cells.facet_vertex(c, lf, 1);
         const GEO::index_t v2 = M.cells.facet_vertex(c, lf, 2);
-        const GEO::index_t lv0 = cell_lf_lv_to_lv[lf][0];
-        const GEO::index_t lv1 = cell_lf_lv_to_lv[lf][1];
-        const GEO::index_t lv2 = cell_lf_lv_to_lv[lf][2];
+        const GEO::index_t lv0 = CELL_LF_LV_TO_LV[lf][0];
+        const GEO::index_t lv1 = CELL_LF_LV_TO_LV[lf][1];
+        const GEO::index_t lv2 = CELL_LF_LV_TO_LV[lf][2];
         const GEO::index_t nc0 = M.cells.adjacent(c, lv0);
         const GEO::index_t nc1 = M.cells.adjacent(c, lv1);
         const GEO::index_t nc2 = M.cells.adjacent(c, lv2);
@@ -51,9 +152,9 @@ namespace ProgressiveMeshOpt::Tet
         GEO::index_t nlv0{GEO::NO_INDEX}, nlv1{GEO::NO_INDEX}, nlv2{GEO::NO_INDEX};
         for (GEO::index_t i = 0; i < 3; ++i) {
             if (M.cells.facet_vertex(nc, nlf, i) == v0) { // cell_vertex(nc, nlv0) == cell_vertex(c, lv0)
-                nlv0 = cell_lf_lv_to_lv[nlf][i];
-                nlv1 = cell_lf_lv_to_lv[nlf][(i+1)%3];
-                nlv2 = cell_lf_lv_to_lv[nlf][(i+2)%3];
+                nlv0 = CELL_LF_LV_TO_LV[nlf][i];
+                nlv1 = CELL_LF_LV_TO_LV[nlf][(i+1)%3];
+                nlv2 = CELL_LF_LV_TO_LV[nlf][(i+2)%3];
                 break;
             }
         }
