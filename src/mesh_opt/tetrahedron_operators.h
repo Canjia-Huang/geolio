@@ -32,6 +32,25 @@ namespace ProgressiveMeshOpt::Tet
         std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_c_and_lf);
 
     /**
+     * Collects tetrahedra incident to a mesh edge in traversal order.
+     *
+     * Starting from a cell-local-edge seed, this function traces the edge
+     * ring (or border chain) and outputs an ordered list of (cell, local-facet)
+     * pairs, where each local facet contains the queried edge.
+     *
+     * @param[in]     M                 The tetrahedral mesh to query
+     * @param[in]     start_c           Index of the seed cell
+     * @param[in]     start_le          Local edge index (0-5) in @p start_c
+     * @param[in,out] ordered_c_and_lf  Output ordered (cell, local-facet) list; existing contents are cleared
+     * @return true if the queried edge is on the mesh border; false if it is an interior edge
+     */
+    bool get_edge_incident_tetrahedra(
+        const GEO::Mesh& M,
+        GEO::index_t start_c,
+        GEO::index_t start_le,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_c_and_lf);
+
+    /**
      * Performs a 2-3 edge swap operation on a tetrahedral mesh.
      *
      * This operation replaces 2 tetrahedra sharing a common facet with 3 tetrahedra

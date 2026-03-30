@@ -92,7 +92,76 @@ namespace ProgressiveMeshOpt::Tet
         if (is_on_border) { // inverse travel
             GEO::index_t c = start_c;
             GEO::index_t lf = M.cells.find_tet_vertex(start_c, M.cells.facet_vertex(start_c, start_lf, (start_lv+2)%3));
+            for (;;) {
+                const GEO::index_t nc = M.cells.adjacent(c, lf);
+                if (nc == GEO::NO_CELL)
+                    break;
 
+                /* Get next lf */
+                const GEO::index_t oppo_v = get_cell_facet_another_vertex(M, c, lf, ev0, ev1); // (oppo_v, ev0, ev1) form the cell c's lf
+                assert(oppo_v != GEO::NO_VERTEX);
+
+                lf = M.cells.find_tet_vertex(nc, oppo_v);
+                assert(lf != GEO::NO_INDEX);
+                c = nc;
+
+                prev_ordered_c_and_lf.emplace_back(c, lf);
+            }
+        }
+
+        /* Output */
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>().swap(ordered_c_and_lf);
+        ordered_c_and_lf.reserve(next_ordered_c_and_lf.size() + prev_ordered_c_and_lf.size());
+        for (GEO::index_t i = 0, i_end = prev_ordered_c_and_lf.size(); i < i_end; ++i)
+            ordered_c_and_lf.push_back(prev_ordered_c_and_lf[i_end-i-1]);
+        for (const auto& c_lf : next_ordered_c_and_lf)
+            ordered_c_and_lf.push_back(c_lf);
+
+        return is_on_border;
+    }
+
+    bool get_edge_incident_tetrahedra(
+        const GEO::Mesh& M,
+        const GEO::index_t start_c,
+        const GEO::index_t start_le,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_c_and_lf
+        ) {
+        assert(start_c < M.cells.nb());
+        assert(start_le < 6);
+
+        const auto ev0 = M.cells.edge_vertex(start_c, start_le, 0);
+        const auto ev1 = M.cells.edge_vertex(start_c, start_le, 1);
+        bool is_on_border = false;
+
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> next_ordered_c_and_lf;
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> prev_ordered_c_and_lf;
+        {
+            GEO::index_t c = start_c;
+            GEO::index_t lf = M.cells.edge_adjacent_facet(start_c, start_le, 0);
+            for (;;) {
+                next_ordered_c_and_lf.emplace_back(c, lf);
+
+                const GEO::index_t nc = M.cells.adjacent(c, lf);
+                if (nc == GEO::NO_CELL) {
+                    is_on_border = true;
+                    break;
+                }
+                if (nc == start_c) // a loop
+                    break;
+
+                /* Get next lf */
+                const GEO::index_t oppo_v = get_cell_facet_another_vertex(M, c, lf, ev0, ev1); // (oppo_v, ev0, ev1) form the cell c's lf
+                assert(oppo_v != GEO::NO_VERTEX);
+
+                lf = M.cells.find_tet_vertex(nc, oppo_v);
+                assert(lf != GEO::NO_INDEX);
+                c = nc;
+            }
+        }
+
+        if (is_on_border) {
+            GEO::index_t c = start_c;
+            GEO::index_t lf = M.cells.edge_adjacent_facet(start_c, start_le, 1);
             for (;;) {
                 const GEO::index_t nc = M.cells.adjacent(c, lf);
                 if (nc == GEO::NO_CELL)
