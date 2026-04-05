@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 
-#include "tetrahedron_operators.h"
+#include "tet_operators.h"
 #include <cassert>
 #include "common/log.h"
 

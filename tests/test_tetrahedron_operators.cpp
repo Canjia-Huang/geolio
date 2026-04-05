@@ -7,7 +7,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_repair.h>
-#include "mesh_utils/tetrahedron_operators.h"
+#include "mesh_utils/tet_operators.h"
 #include "utils.h"
 #include "common/log.h"
 
