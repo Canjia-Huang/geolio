@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
-#include "mesh_utils/triangle_operators.h"
+#include "mesh_utils/tri_operators.h"
 #include "utils.h"
 #include "common/log.h"
 
