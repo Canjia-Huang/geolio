@@ -6,13 +6,13 @@
 #include <gtest/gtest.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
-#include "mesh_opt/triangle_operators.h"
+#include "mesh_utils/triangle_operators.h"
 #include "utils.h"
 #include "common/log.h"
 
-namespace
+namespace GEO::MeshUtils::Test
 {
-    using namespace ProgressiveMeshOpt::Tri;
+    using namespace GEO::MeshUtils;
 
     class TriangleOperatorsTest : public ::testing::Test {
         void SetUp() override {

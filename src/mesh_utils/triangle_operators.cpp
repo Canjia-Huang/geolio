@@ -6,7 +6,7 @@
 #include "triangle_operators.h"
 #include "common/log.h"
 
-namespace ProgressiveMeshOpt::Tri
+namespace GEO::MeshUtils
 {
     bool get_vertex_incident_triangles(
         const GEO::Mesh& M,

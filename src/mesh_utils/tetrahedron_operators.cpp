@@ -46,7 +46,7 @@ namespace
     }
 }
 
-namespace ProgressiveMeshOpt::Tet
+namespace GEO::MeshUtils
 {
     bool get_edge_incident_tetrahedra(
         const GEO::Mesh& M,

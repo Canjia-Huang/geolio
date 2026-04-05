@@ -5,7 +5,7 @@
 #include "triangle_metrics.h"
 #include <cassert>
 
-namespace ProgressiveMeshOpt
+namespace GEO::MeshUtils
 {
     double get_triangle_minimum_angle(
         const GEO::Mesh& M,

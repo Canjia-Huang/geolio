@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/12.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef PROGRESSIVEMESHOPT_LOG_H
-#define PROGRESSIVEMESHOPT_LOG_H
+#ifndef GEOGRAM_MESH_UTILS_LOG_H
+#define GEOGRAM_MESH_UTILS_LOG_H
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>
@@ -117,4 +117,4 @@ namespace LOG {
 } // namespace LOG
 
 
-#endif //PROGRESSIVEMESHOPT_LOG_H
+#endif //GEOGRAM_MESH_UTILS_LOG_H

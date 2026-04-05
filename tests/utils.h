@@ -6,8 +6,9 @@
 #define ROBUSTLOCALREMESHING_UTILS_H
 
 #include <gtest/gtest.h>
+#include <string>
 
-namespace
+namespace GEO::MeshUtils::Test
 {
     inline std::string get_current_test_name(){
         const testing::TestInfo* const current_test_info = testing::UnitTest::GetInstance()->current_test_info();

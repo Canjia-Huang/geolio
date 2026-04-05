@@ -9,7 +9,7 @@
 #include "utils.h"
 #include "common/log.h"
 
-namespace
+namespace GEO::MeshUtils::Test
 {
     TEST(DepsSpdlogTest, log) {
         LOG::TRACE("Hello World!");

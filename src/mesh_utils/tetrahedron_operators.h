@@ -2,12 +2,12 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/23.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef PROGRESSIVEMESHOPT_TETRAHEDRON_OPERATORS_H
-#define PROGRESSIVEMESHOPT_TETRAHEDRON_OPERATORS_H
+#ifndef GEOGRAM_MESH_UTILS_TETRAHEDRON_OPERATORS_H
+#define GEOGRAM_MESH_UTILS_TETRAHEDRON_OPERATORS_H
 
 #include <geogram/mesh/mesh.h>
 
-namespace ProgressiveMeshOpt::Tet
+namespace GEO::MeshUtils
 {
     /**
      * Collects tetrahedra incident to a mesh edge in traversal order.
@@ -93,4 +93,4 @@ namespace ProgressiveMeshOpt::Tet
         GEO::index_t new_c2);
 }
 
-#endif //PROGRESSIVEMESHOPT_TETRAHEDRON_OPERATORS_H
+#endif //GEOGRAM_MESH_UTILS_TETRAHEDRON_OPERATORS_H

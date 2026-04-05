@@ -2,12 +2,12 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/13.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
-#define PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
+#ifndef GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
+#define GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
 
 #include <geogram/mesh/mesh.h>
 
-namespace ProgressiveMeshOpt::Tri
+namespace GEO::MeshUtils
 {
     /**
      * @brief Collect triangles incident to a vertex in one-ring order.
@@ -105,5 +105,5 @@ namespace ProgressiveMeshOpt::Tri
         GEO::index_t lv);
 }
 
-#endif //PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
+#endif //GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
 

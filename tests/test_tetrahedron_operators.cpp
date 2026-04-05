@@ -7,13 +7,13 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_repair.h>
-#include "mesh_opt/tetrahedron_operators.h"
+#include "mesh_utils/tetrahedron_operators.h"
 #include "utils.h"
 #include "common/log.h"
 
-namespace
+namespace GEO::MeshUtils::Test
 {
-    using namespace ProgressiveMeshOpt::Tet;
+    using namespace GEO::MeshUtils;
 
     class TetrahedronOperatorsTest : public ::testing::Test {
         void SetUp() override {
