@@ -2,12 +2,12 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/13.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
-#define PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
+#ifndef GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
+#define GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
 
 #include <geogram/mesh/mesh.h>
 
-namespace ProgressiveMeshOpt
+namespace GEO::MeshUtils
 {
     /**
      * @brief Collect triangles incident to a vertex in one-ring order.
@@ -23,8 +23,9 @@ namespace ProgressiveMeshOpt
      * @param[out] ordered_f_and_lv Output ordered one-ring list. Each element is (f, lv), where
      *                              @p f is an incident facet and @p lv is the local index of the target
      *                              vertex inside that facet. Existing contents are cleared.
+     * @return true if the target vertex is on the mesh border; false if it is an interior vertex.
      */
-    void get_vertex_one_ring_triangles(
+    bool get_vertex_incident_triangles(
         const GEO::Mesh& M,
         GEO::index_t start_f,
         GEO::index_t start_lv,
@@ -48,7 +49,7 @@ namespace ProgressiveMeshOpt
      * @param[in] new_f1 Index of the pre-allocated new facet produced by splitting the adjacent facet @p af.
      * Ignored when @p af does not exist (NO_FACET).
      */
-     void split_triangle_edge(
+     void edge_split(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
@@ -74,7 +75,7 @@ namespace ProgressiveMeshOpt
      * @param[out] disuse_f1 Index of the second unused facet across the collapsed edge;
      *                       set to GEO::NO_FACET when the edge is on the border.
      */
-    void collapse_triangle_edge(
+    void edge_collapse(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
@@ -84,7 +85,7 @@ namespace ProgressiveMeshOpt
         GEO::index_t& disuse_f1);
 
     /**
-     * @brief Flip an interior edge shared by two triangles.
+     * @brief Swap an interior edge shared by two triangles.
      *
      * For facet @p f and local edge @p lv (between local vertices @c lv1 and @c lv2), this
      * operation replaces the shared diagonal with the other diagonal of the local quadrilateral.
@@ -98,11 +99,11 @@ namespace ProgressiveMeshOpt
      *               (@c M.facets.adjacent(f, lv) != GEO::NO_FACET).
      * @pre the edge to flip is a border edge
      */
-    void flip_triangle_edge(
+    void edge_swap(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv);
 }
 
-#endif //PROGRESSIVEMESHOPT_TRIANGLE_OPERATORS_H
+#endif //GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
 

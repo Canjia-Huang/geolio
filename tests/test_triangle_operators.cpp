@@ -6,15 +6,18 @@
 #include <gtest/gtest.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
-#include "mesh_opt/triangle_operators.h"
+#include "mesh_utils/triangle_operators.h"
 #include "utils.h"
 #include "common/log.h"
 
-namespace
+namespace GEO::MeshUtils::Test
 {
+    using namespace GEO::MeshUtils;
+
     class TriangleOperatorsTest : public ::testing::Test {
         void SetUp() override {
-            ASSERT_TRUE(GEO::mesh_load(std::string(TEST_DATA_PATH) + "case0.obj", M_));
+            ASSERT_TRUE(GEO::mesh_load(std::string(TEST_DATA_PATH) + "simple_tri_mesh.obj", M_));
+            LOG::DEBUG("M #V:{}, #F: {}", M_.vertices.nb(), M_.facets.nb());
 
             M_v_to_delete_.bind(M_.vertices.attributes(), "delete");
             M_f_to_delete_.bind(M_.facets.attributes(), "delete");
@@ -45,7 +48,7 @@ namespace
             }
         }
 
-        void save_results() {
+        void save_results() const {
             EXPECT_TRUE(GEO::mesh_save(M_, get_current_test_name()+".geogram"));
         }
 
@@ -63,7 +66,7 @@ namespace
             ) {
             start_f_ = start_f;
             start_lv_ = start_lv;
-            ProgressiveMeshOpt::get_vertex_one_ring_triangles(M_, start_f_, start_lv_, ordered_f_and_lv);
+            get_vertex_incident_triangles(M_, start_f_, start_lv_, ordered_f_and_lv);
             check_incident();
         }
 
@@ -117,11 +120,11 @@ namespace
             const GEO::index_t lv,
             const double r
             ) {
-            EXPECT_NE(M_.facets.adjacent(f, lv), GEO::NO_FACET);
+            ASSERT_NE(M_.facets.adjacent(f, lv), GEO::NO_FACET);
             const GEO::index_t new_v = M_.vertices.create_vertices(1);
             const GEO::index_t new_f = M_.facets.create_triangles(2);
 
-            ProgressiveMeshOpt::split_triangle_edge(
+            edge_split(
                 M_,
                 f, lv,
                 r,
@@ -134,11 +137,11 @@ namespace
             const GEO::index_t lv,
             const double r
             ) {
-            EXPECT_EQ(M_.facets.adjacent(f, lv), GEO::NO_FACET);
+            ASSERT_EQ(M_.facets.adjacent(f, lv), GEO::NO_FACET);
             const GEO::index_t new_v = M_.vertices.create_vertices(1);
             const GEO::index_t new_f = M_.facets.create_triangles(1);
 
-            ProgressiveMeshOpt::split_triangle_edge(
+            edge_split(
                 M_,
                 f, lv,
                 r,
@@ -175,7 +178,7 @@ namespace
             ) {
             GEO::index_t disuse_v, disuse_f0, disuse_f1;
 
-            ProgressiveMeshOpt::collapse_triangle_edge(
+            edge_collapse(
                 M_,
                 f, lv,
                 r,
@@ -196,7 +199,7 @@ namespace
             ) {
             GEO::index_t disuse_v, disuse_f0, disuse_f1;
 
-            ProgressiveMeshOpt::collapse_triangle_edge(
+            edge_collapse(
                 M_,
                 f, lv,
                 r,
@@ -235,7 +238,7 @@ namespace
             const GEO::index_t f,
             const GEO::index_t lv
             ) {
-            ProgressiveMeshOpt::flip_triangle_edge(M_, f, lv);
+            edge_swap(M_, f, lv);
         }
     };
 

@@ -2,12 +2,12 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/21.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef PROGRESSIVEMESHOPT_TRIANGLE_METRICS_H
-#define PROGRESSIVEMESHOPT_TRIANGLE_METRICS_H
+#ifndef GEOGRAM_MESH_UTILS_TRIANGLE_METRICS_H
+#define GEOGRAM_MESH_UTILS_TRIANGLE_METRICS_H
 
 #include <geogram/mesh/mesh.h>
 
-namespace ProgressiveMeshOpt
+namespace GEO::MeshUtils
 {
     /**
      * @brief Compute the minimum interior angle of a triangle facet.
@@ -25,4 +25,4 @@ namespace ProgressiveMeshOpt
 
 }
 
-#endif //PROGRESSIVEMESHOPT_TRIANGLE_METRICS_H
+#endif //GEOGRAM_MESH_UTILS_TRIANGLE_METRICS_H
