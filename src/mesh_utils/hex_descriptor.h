@@ -5,6 +5,9 @@
 #ifndef GEOGRAMMESHUTILS_HEX_DESCRIPTOR_H
 #define GEOGRAMMESHUTILS_HEX_DESCRIPTOR_H
 
+#include <geogram/basic/numeric.h>
+#include <array>
+
 namespace GEO::MeshUtils
 {
     /**
@@ -78,6 +81,30 @@ namespace GEO::MeshUtils
     };
 
     /**
+     * Bitmask encoding for each local edge.
+     *
+     * `HEX_ENCODED_LE[le]` stores a 2-bit vertex mask of edge `le`:
+     * `(1 << lv_a) | (1 << lv_b)`, where `lv_a` and `lv_b` are its endpoints.
+     * This supports order-independent edge lookup from two local vertices.
+     */
+    constexpr std::array<GEO::index_t, 12> HEX_ENCODED_LE = {
+        {
+            (1<<HEX_LE_INCIDENT_LV[0][0]) | (1<<HEX_LE_INCIDENT_LV[0][1]),
+            (1<<HEX_LE_INCIDENT_LV[1][0]) | (1<<HEX_LE_INCIDENT_LV[1][1]),
+            (1<<HEX_LE_INCIDENT_LV[2][0]) | (1<<HEX_LE_INCIDENT_LV[2][1]),
+            (1<<HEX_LE_INCIDENT_LV[3][0]) | (1<<HEX_LE_INCIDENT_LV[3][1]),
+            (1<<HEX_LE_INCIDENT_LV[4][0]) | (1<<HEX_LE_INCIDENT_LV[4][1]),
+            (1<<HEX_LE_INCIDENT_LV[5][0]) | (1<<HEX_LE_INCIDENT_LV[5][1]),
+            (1<<HEX_LE_INCIDENT_LV[6][0]) | (1<<HEX_LE_INCIDENT_LV[6][1]),
+            (1<<HEX_LE_INCIDENT_LV[7][0]) | (1<<HEX_LE_INCIDENT_LV[7][1]),
+            (1<<HEX_LE_INCIDENT_LV[8][0]) | (1<<HEX_LE_INCIDENT_LV[8][1]),
+            (1<<HEX_LE_INCIDENT_LV[9][0]) | (1<<HEX_LE_INCIDENT_LV[9][1]),
+            (1<<HEX_LE_INCIDENT_LV[10][0]) | (1<<HEX_LE_INCIDENT_LV[10][1]),
+            (1<<HEX_LE_INCIDENT_LV[11][0]) | (1<<HEX_LE_INCIDENT_LV[11][1]),
+        }
+    };
+
+    /**
      * Local-face to corner-local-vertex table for a hexahedron.
      *
      * `HEX_LF_INCIDENT_LV[lf]` returns the four corner local vertices
@@ -118,6 +145,24 @@ namespace GEO::MeshUtils
      */
     constexpr std::array<GEO::index_t, 6> HEX_LF_OPPOSITE_LF = {
         {1, 0, 3, 2, 5, 4}
+    };
+
+    /**
+     * Bitmask encoding for each local face.
+     *
+     * `HEX_ENCODED_LF[lf]` stores a 4-bit vertex mask of face `lf`:
+     * `(1 << lv0) | (1 << lv1) | (1 << lv2) | (1 << lv3)`.
+     * This enables fast face lookup from either 3 or 4 local vertices.
+     */
+    constexpr std::array<GEO::index_t, 6> HEX_ENCODED_LF = {
+        {
+            (1<<HEX_LF_INCIDENT_LV[0][0]) | (1<<HEX_LF_INCIDENT_LV[0][1]) | (1<<HEX_LF_INCIDENT_LV[0][2]) | (1<<HEX_LF_INCIDENT_LV[0][3]),
+            (1<<HEX_LF_INCIDENT_LV[1][0]) | (1<<HEX_LF_INCIDENT_LV[1][1]) | (1<<HEX_LF_INCIDENT_LV[1][2]) | (1<<HEX_LF_INCIDENT_LV[1][3]),
+            (1<<HEX_LF_INCIDENT_LV[2][0]) | (1<<HEX_LF_INCIDENT_LV[2][1]) | (1<<HEX_LF_INCIDENT_LV[2][2]) | (1<<HEX_LF_INCIDENT_LV[2][3]),
+            (1<<HEX_LF_INCIDENT_LV[3][0]) | (1<<HEX_LF_INCIDENT_LV[3][1]) | (1<<HEX_LF_INCIDENT_LV[3][2]) | (1<<HEX_LF_INCIDENT_LV[3][3]),
+            (1<<HEX_LF_INCIDENT_LV[4][0]) | (1<<HEX_LF_INCIDENT_LV[4][1]) | (1<<HEX_LF_INCIDENT_LV[4][2]) | (1<<HEX_LF_INCIDENT_LV[4][3]),
+            (1<<HEX_LF_INCIDENT_LV[5][0]) | (1<<HEX_LF_INCIDENT_LV[5][1]) | (1<<HEX_LF_INCIDENT_LV[5][2]) | (1<<HEX_LF_INCIDENT_LV[5][3])
+        }
     };
 }
 
