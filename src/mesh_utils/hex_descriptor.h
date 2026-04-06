@@ -5,8 +5,8 @@
 #ifndef GEOGRAMMESHUTILS_HEX_DESCRIPTOR_H
 #define GEOGRAMMESHUTILS_HEX_DESCRIPTOR_H
 
-#include <geogram/basic/numeric.h>
 #include <array>
+#include <geogram/basic/numeric.h>
 
 namespace GEO::MeshUtils
 {
@@ -77,6 +77,18 @@ namespace GEO::MeshUtils
     constexpr std::array<std::array<GEO::index_t, 2>, 12> HEX_LE_INCIDENT_LV = {
         {
             {0, 1}, {1, 3}, {3, 2}, {2, 0}, {4, 5}, {5, 7}, {7, 6}, {6, 4}, {0, 4}, {1, 5}, {3, 7}, {2, 6}
+        }
+    };
+
+    /**
+     * Local-edge to incident-local-face table for a hexahedron.
+     *
+     * `HEX_LE_INCIDENT_LF[le]` returns the two local faces (LF, 0-5)
+     * sharing local edge `le`.
+     */
+    constexpr std::array<std::array<GEO::index_t, 2>, 12> HEX_LE_INCIDENT_LF = {
+        {
+            {4, 2}, {4, 1}, {4, 3}, {4, 0}, {2, 5}, {1, 5}, {3, 5}, {0, 5}, {2, 0}, {1, 2}, {3, 1}, {0, 3}
         }
     };
 

@@ -110,6 +110,15 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(HexDescriptorTest, HEX_LE_INCIDENT_LF) {
+        ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_INCIDENT_LF.size());
+
+        for (GEO::index_t le = 0; le < M.cells.nb_edges(c); ++le) {
+            for (GEO::index_t i = 0; i < 2; ++i)
+                EXPECT_EQ(M.cells.edge_adjacent_facet(c, le, i), HEX_LE_INCIDENT_LF[le][i]);
+        }
+    }
+
     TEST_F(HexDescriptorTest, HEX_ENCODED_LE) {
         ASSERT_EQ(M.cells.nb_edges(c), HEX_ENCODED_LE.size());
 
