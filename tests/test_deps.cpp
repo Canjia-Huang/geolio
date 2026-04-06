@@ -34,7 +34,7 @@ namespace GEO::MeshUtils::Test
         for (GEO::index_t lv = 0; lv < 4; ++lv)
             LOG::INFO("tet lv {} - v {}", lv, M.cells.vertex(0, lv));
         for (GEO::index_t le = 0; le < 6; ++le)
-            LOG::INFO("tet le {} - v {}", le, M.cells.edge_vertex(0, le, 0), M.cells.edge_vertex(0, le, 1));
+            LOG::INFO("tet le {} - v {},{}", le, M.cells.edge_vertex(0, le, 0), M.cells.edge_vertex(0, le, 1));
         for (GEO::index_t le = 0; le < 6; ++le)
             LOG::INFO("tet le {} - adj_lf {},{}", le, M.cells.edge_adjacent_facet(0, le, 0), M.cells.edge_adjacent_facet(0, le, 1));
         for (GEO::index_t lf = 0; lf < 4; ++lf)
@@ -66,7 +66,7 @@ namespace GEO::MeshUtils::Test
         for (GEO::index_t lv = 0; lv < 8; ++lv)
             LOG::INFO("hex lv {} - v {}", lv, M.cells.vertex(0, lv));
         for (GEO::index_t le = 0; le < 12; ++le)
-            LOG::INFO("hex le {} - v {}", le, M.cells.edge_vertex(0, le, 0), M.cells.edge_vertex(0, le, 1));
+            LOG::INFO("hex le {} - v {},{}", le, M.cells.edge_vertex(0, le, 0), M.cells.edge_vertex(0, le, 1));
         for (GEO::index_t le = 0; le < 12; ++le)
             LOG::INFO("hex le {} - adj_lf {},{}", le, M.cells.edge_adjacent_facet(0, le, 0), M.cells.edge_adjacent_facet(0, le, 1));
         for (GEO::index_t lf = 0; lf < 6; ++lf)
