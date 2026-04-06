@@ -70,6 +70,16 @@ namespace GEO::MeshUtils
     };
 
     /**
+     * Local-edge to opposite-local-edge table for a tetrahedron.
+     *
+     * `TET_LE_OPPOSITE_LE[le]` returns the unique local edge that is
+     * disjoint from local edge `le` (i.e., shares no endpoint vertex).
+     */
+    constexpr std::array<GEO::index_t, 6> TET_LE_OPPOSITE_LE = {
+        {5, 3, 4, 1, 2, 0}
+    };
+
+    /**
      * Local-edge to incident-local-face table for a tetrahedron.
      *
      * `TET_LE_INCIDENT_LF[le]` returns the two local faces (LF, 0-3)

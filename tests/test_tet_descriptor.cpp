@@ -106,6 +106,27 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(TetDescriptorTest, TET_LE_OPPOSITE_LE) {
+        ASSERT_EQ(M.cells.nb_edges(0), TET_LE_OPPOSITE_LE.size());
+
+        for (GEO::index_t le = 0; le < M.cells.nb_edges(0); ++le) {
+            const auto& ev0 = M.cells.edge_vertex(c, le, 0);
+            const auto& ev1 = M.cells.edge_vertex(c, le, 1);
+
+            GEO::index_t oppo_le = GEO::NO_INDEX;
+            for (GEO::index_t ole = 0; ole < M.cells.nb_edges(c); ++ole) {
+                const auto& ev2 = M.cells.edge_vertex(c, ole, 0);
+                const auto& ev3 = M.cells.edge_vertex(c, ole, 1);
+                if (ev2 != ev0 && ev2 != ev1 && ev3 != ev0 && ev3 != ev1) {
+                    EXPECT_EQ(oppo_le, GEO::NO_INDEX);
+                    oppo_le = ole;
+                }
+            }
+
+            EXPECT_EQ(oppo_le, TET_LE_OPPOSITE_LE[le]);
+        }
+    }
+
     TEST_F(TetDescriptorTest, TET_LE_INCIDENT_LF) {
         ASSERT_EQ(M.cells.nb_edges(c), TET_LE_INCIDENT_LF.size());
 
