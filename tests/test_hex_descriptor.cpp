@@ -53,6 +53,29 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(HexDescriptorTest, HEX_LV_ADJACENT_LV_orientation) {
+        ASSERT_EQ(M.cells.nb_vertices(c), HEX_LV_ADJACENT_LV.size());
+
+        for (GEO::index_t lv = 0; lv < M.cells.nb_vertices(c); ++lv) {
+            const auto& p = M.cells.point(c, lv);
+
+            ASSERT_EQ(HEX_LV_ADJACENT_LV[lv].size(), 3);
+            const auto& lv0 = HEX_LV_ADJACENT_LV[lv][0];
+            const auto& lv1 = HEX_LV_ADJACENT_LV[lv][1];
+            const auto& lv2 = HEX_LV_ADJACENT_LV[lv][2];
+            const auto& p0 = M.cells.point(c, lv0);
+            const auto& p1 = M.cells.point(c, lv1);
+            const auto& p2 = M.cells.point(c, lv2);
+            const auto pp0 = p0 - p;
+            const auto pp1 = p1 - p;
+            const auto pp2 = p2 - p;
+
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(pp0, pp1), pp2), 1, 1e-10);
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(pp1, pp2), pp0), 1, 1e-10);
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(pp2, pp0), pp1), 1, 1e-10);
+        }
+    }
+
     TEST_F(HexDescriptorTest, HEX_LV_INCIDENT_LE) {
         ASSERT_EQ(M.cells.nb_vertices(c), HEX_LV_INCIDENT_LE.size());
 
@@ -70,6 +93,40 @@ namespace GEO::MeshUtils::Test
             EXPECT_EQ(adj_edges.size(), HEX_LV_INCIDENT_LE[lv].size());
             for (const auto& adj_e : HEX_LV_INCIDENT_LE[lv])
                 EXPECT_TRUE(adj_edges.contains(adj_e));
+        }
+    }
+
+    TEST_F(HexDescriptorTest, HEX_LV_INCIDENT_LE_orientation) {
+        ASSERT_EQ(M.cells.nb_vertices(c), HEX_LV_INCIDENT_LE.size());
+
+        for (GEO::index_t lv = 0; lv < M.cells.nb_vertices(c); ++lv) {
+            const auto& v = M.cells.vertex(c, lv);
+            const auto& p = M.cells.point(c, lv);
+
+            ASSERT_EQ(HEX_LV_ADJACENT_LV[lv].size(), 3);
+            const auto& le0 = HEX_LV_INCIDENT_LE[lv][0];
+            const auto& le1 = HEX_LV_INCIDENT_LE[lv][1];
+            const auto& le2 = HEX_LV_INCIDENT_LE[lv][2];
+            auto v0 = M.cells.edge_vertex(c, le0, 0);
+            if (v0 == v)
+                v0 = M.cells.edge_vertex(c, le0, 1);
+            auto v1 = M.cells.edge_vertex(c, le1, 0);
+            if (v1 == v)
+                v1 = M.cells.edge_vertex(c, le1, 1);
+            auto v2 = M.cells.edge_vertex(c, le2, 0);
+            if (v2 == v)
+                v2 = M.cells.edge_vertex(c, le2, 1);
+            const auto& p0 = M.vertices.point(v0);
+            const auto& p1 = M.vertices.point(v1);
+            const auto& p2 = M.vertices.point(v2);
+
+            const auto pp0 = p0 - p;
+            const auto pp1 = p1 - p;
+            const auto pp2 = p2 - p;
+
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(pp0, pp1), pp2), 1, 1e-10);
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(pp1, pp2), pp0), 1, 1e-10);
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(pp2, pp0), pp1), 1, 1e-10);
         }
     }
 
@@ -95,6 +152,37 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(HexDescriptorTest, HEX_LV_INCIDENT_LF_orientation) {
+        ASSERT_EQ(M.cells.nb_vertices(c), HEX_LV_INCIDENT_LF.size());
+
+        for (GEO::index_t lv = 0; lv < M.cells.nb_vertices(c); ++lv) {
+            ASSERT_EQ(HEX_LV_INCIDENT_LF[lv].size(), 3);
+
+            const auto& lf0 = HEX_LV_INCIDENT_LF[lv][0];
+            const auto& lf1 = HEX_LV_INCIDENT_LF[lv][1];
+            const auto& lf2 = HEX_LV_INCIDENT_LF[lv][2];
+            ASSERT_LE(lf0, M.cells.nb_facets(c));
+            ASSERT_LE(lf1, M.cells.nb_facets(c));
+            ASSERT_LE(lf2, M.cells.nb_facets(c));
+
+            const auto n0 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 2))));
+            const auto n1 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 2))));
+            const auto n2 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf2, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf2, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf2, 2))));
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(n0, n1), n2), -1, 1e-10);
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(n1, n2), n0), -1, 1e-10);
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(n2, n0), n1), -1, 1e-10);
+        }
+    }
+
     TEST_F(HexDescriptorTest, HEX_LE_INCIDENT_LV) {
         ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_INCIDENT_LV.size());
 
@@ -116,6 +204,29 @@ namespace GEO::MeshUtils::Test
         for (GEO::index_t le = 0; le < M.cells.nb_edges(c); ++le) {
             for (GEO::index_t i = 0; i < 2; ++i)
                 EXPECT_EQ(M.cells.edge_adjacent_facet(c, le, i), HEX_LE_INCIDENT_LF[le][i]);
+        }
+    }
+
+    TEST_F(HexDescriptorTest, HEX_LE_INCIDENT_LF_orientation) {
+        ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_INCIDENT_LF.size());
+
+        for (GEO::index_t le = 0; le < M.cells.nb_edges(c); ++le) {
+            const auto& p0 = M.vertices.point(M.cells.edge_vertex(c, le, 0));
+            const auto& p1 = M.vertices.point(M.cells.edge_vertex(c, le, 1));
+
+            ASSERT_EQ(HEX_LE_INCIDENT_LF[le].size(), 2);
+            const auto& lf0 = HEX_LE_INCIDENT_LF[le][0];
+            const auto& lf1 = HEX_LE_INCIDENT_LF[le][1];
+            const auto n0 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 2))));
+            const auto n1 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 2))));
+
+            EXPECT_NEAR(GEO::Geom::cos_angle(GEO::cross(n0, n1), p1-p0), -1, 1e-10);
         }
     }
 
@@ -158,6 +269,27 @@ namespace GEO::MeshUtils::Test
             EXPECT_EQ(adj_edges.size(), HEX_LF_INCIDENT_LE[lf].size());
             for (const auto& adj_e : HEX_LF_INCIDENT_LE[lf])
                 EXPECT_TRUE(adj_edges.contains(adj_e));
+        }
+    }
+
+    TEST_F(HexDescriptorTest, HEX_LF_INCIDENT_LE_orientation) {
+        ASSERT_EQ(M.cells.nb_facets(c), HEX_LF_INCIDENT_LE.size());
+
+        for (GEO::index_t lf = 0; lf < M.cells.nb_facets(c); ++lf) {
+            ASSERT_EQ(HEX_LF_INCIDENT_LE[lf].size(), 4);
+
+            for (GEO::index_t i = 0; i < 4; ++i) {
+                const auto& le0 = HEX_LF_INCIDENT_LE[lf][i];
+                const auto& le1 = HEX_LF_INCIDENT_LE[lf][(i+1)%4];
+
+                /* Check le0 and le1 are connected */
+                const auto& ev00 = M.cells.edge_vertex(c, le0, 0);
+                const auto& ev01 = M.cells.edge_vertex(c, le0, 1);
+                const auto& ev10 = M.cells.edge_vertex(c, le1, 0);
+                const auto& ev11 = M.cells.edge_vertex(c, le1, 1);
+                EXPECT_TRUE(ev00 == ev10 || ev00 == ev11 ||
+                            ev01 == ev10 || ev01 == ev11);
+            }
         }
     }
 

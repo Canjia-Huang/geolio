@@ -15,16 +15,19 @@ namespace GEO::MeshUtils
      *
      * Each local vertex (LV, 0-7) has exactly three edge-neighbor vertices.
      * `HEX_LV_ADJACENT_LV[lv]` returns those three adjacent LV indices.
+     *
+     * @note Orientation points toward the hex interior, i.e.
+     * `cross(v0 - v, v1 - v) == (v2 - v)`.
      */
     constexpr std::array<std::array<GEO::index_t, 3>, 8> HEX_LV_ADJACENT_LV = {
         {
             {1, 2, 4},
-            {0, 3, 5},
+            {0, 5, 3},
             {0, 3, 6},
-            {1, 2, 7},
-            {0, 5, 6},
+            {1, 7, 2},
+            {0, 6, 5},
             {1, 4, 7},
-            {2, 4, 7},
+            {2, 7, 4},
             {3, 5, 6}
         }
     };
@@ -34,14 +37,17 @@ namespace GEO::MeshUtils
      *
      * `HEX_LV_INCIDENT_LE[lv]` lists the three local edges (LE, 0-11)
      * incident to the local vertex `lv`.
+     *
+     * @note Orientation points toward the hex interior, i.e.
+     * `cross(e0, e1) == e2`, with all edges treated as outgoing from `v`.
      */
     constexpr std::array<std::array<GEO::index_t, 3>, 8> HEX_LV_INCIDENT_LE = {
         {
             {0, 3, 8},
-            {0, 1, 9},
-            {2, 3, 11},
-            {1, 2, 10},
-            {4, 7, 8},
+            {0, 9, 1},
+            {2, 11, 3},
+            {1, 10, 2},
+            {4, 8, 7},
             {4, 5, 9},
             {6, 7, 11},
             {5, 6, 10},
@@ -52,8 +58,9 @@ namespace GEO::MeshUtils
      * Local-vertex to incident-local-face table for a hexahedron.
      *
      * `HEX_LV_INCIDENT_LF[lv]` lists the three local faces (LF, 0-5)
-     * incident to local vertex `lv`. The order follows the inward orientation
-     * convention (i.e., ordered toward the interior of the hex).
+     * incident to local vertex `lv`.
+     * @note The order follows the inward orientation convention
+     * (i.e., ordered toward the interior of the hex, cross(f0's normal, f1's normal) == -f2's normal ).
      */
     constexpr std::array<std::array<GEO::index_t, 3>, 8> HEX_LV_INCIDENT_LF = {
         {
@@ -85,6 +92,9 @@ namespace GEO::MeshUtils
      *
      * `HEX_LE_INCIDENT_LF[le]` returns the two local faces (LF, 0-5)
      * sharing local edge `le`.
+     *
+     * @note Orientation is opposite to the edge direction, i.e.
+     * `cross(f0 normal, f1 normal) == -edge`.
      */
     constexpr std::array<std::array<GEO::index_t, 2>, 12> HEX_LE_INCIDENT_LF = {
         {
@@ -138,6 +148,8 @@ namespace GEO::MeshUtils
      *
      * `HEX_LF_INCIDENT_LE[lf]` returns the four local edges that bound
      * local face `lf`, in the face-edge ordering used by this project.
+     *
+     * @note Ordered consistently with the local vertex order of each face.
      */
     constexpr std::array<std::array<GEO::index_t, 4>, 6> HEX_LF_INCIDENT_LE = {
         {
