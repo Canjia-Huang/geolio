@@ -87,7 +87,7 @@ namespace GEO::MeshUtils
          *  |       / |         | \     / |
          *  |     /   |    ->   |   \ /   |
          *  |   /  f  |         |   / \ f |
-         *  | /       |         | / nf1 \ |
+         *  | /       |         | /newf0\ |
          *  v1 ------ v2        v1 ------ v2
          */
         const GEO::index_t lv0 = lv;
@@ -96,15 +96,15 @@ namespace GEO::MeshUtils
         // const GEO::index_t v0 = M.facets.vertex(f, lv0);
         const GEO::index_t v1 = M.facets.vertex(f, lv1);
         const GEO::index_t v2 = M.facets.vertex(f, lv2);
-        const GEO::index_t af0 = M.facets.adjacent(f, lv0);
-        const GEO::index_t af1 = M.facets.adjacent(f, lv1);
+        const GEO::index_t nf0 = M.facets.adjacent(f, lv0);
+        const GEO::index_t nf1 = M.facets.adjacent(f, lv1);
 
         /* Set new point */
         const auto& p0 = M.facets.point(f, lv0);
         const auto& p1 = M.facets.point(f, lv1);
         M.vertices.point(new_v) = (1-r)*p0 + r*p1;
 
-        /* == Set facet vertices  */
+        /* Set facet vertices  */
         M.facets.set_vertex(f, lv1, new_v);
         M.facets.set_vertex(new_f0, lv0, new_v);
         M.facets.set_vertex(new_f0, lv1, v1);
@@ -112,50 +112,50 @@ namespace GEO::MeshUtils
 
         /* Set facet adjacency */
         M.facets.set_adjacent(f, lv1, new_f0);
-        assert(M.facets.adjacent(new_f0, lv0) == GEO::NO_FACET); // will be set later
-        M.facets.set_adjacent(new_f0, lv1, af1);
+        assert(M.facets.adjacent(new_f0, lv0) == GEO::NO_FACET); // will set later
+        M.facets.set_adjacent(new_f0, lv1, nf1);
         M.facets.set_adjacent(new_f0, lv2, f);
-        if (af1 != GEO::NO_FACET) {
-            assert(M.facets.find_vertex(af1, v2) != GEO::NO_INDEX);
-            M.facets.set_adjacent(af1, M.facets.find_vertex(af1, v2), new_f0);
+        if (nf1 != GEO::NO_FACET) {
+            assert(M.facets.find_vertex(nf1, v2) != GEO::NO_INDEX);
+            M.facets.set_adjacent(nf1, M.facets.find_vertex(nf1, v2), new_f0);
         }
 
         /* == Split adjacent facet ================================================================================= */
-        if (af0 != GEO::NO_FACET) {
+        if (nf0 != GEO::NO_FACET) {
             assert(new_f1 < M.facets.nb());
 
             /*
-             *  v2 ------ v1        v2 ------ v1
-             *  |       / |         | \  af / |
-             *  | af  /   |    ->   |nf2\ /   |
-             *  |   /     |         |   / \   |
+             * nv2 ----- nv1       nv2 ----- nv1
+             *  |       / |         | \ nf0 / |
+             *  | nf0 /   |    ->   |new\ /   |
+             *  |   /     |         |f1 / \   |
              *  | /       |         | /     \ |
-             *  v0 -------+        v0 --------+
+             * nv0 -------+        nv0 -------+
              */
-            const GEO::index_t nlv0 = M.facets.find_vertex(af0, v1);
+            const GEO::index_t nlv0 = M.facets.find_vertex(nf0, v1);
             assert(nlv0 != GEO::NO_INDEX);
             const GEO::index_t nlv1 = (nlv0+1)%3;
             const GEO::index_t nlv2 = (nlv0+2)%3;
-            const GEO::index_t nv0 = M.facets.vertex(af0, nlv0);
+            const GEO::index_t nv0 = M.facets.vertex(nf0, nlv0);
             // const GEO::index_t nv1 = M.facets.vertex(af0, nlv1);
-            const GEO::index_t nv2 = M.facets.vertex(af0, nlv2);
-            const GEO::index_t naf2 = M.facets.adjacent(af0, nlv2);
+            const GEO::index_t nv2 = M.facets.vertex(nf0, nlv2);
+            const GEO::index_t nnf2 = M.facets.adjacent(nf0, nlv2);
 
-            /* == Set facet vertices */
-            M.facets.set_vertex(af0, nlv0, new_v);
+            /* Set facet vertices */
+            M.facets.set_vertex(nf0, nlv0, new_v);
             M.facets.set_vertex(new_f1, nlv0, nv0);
             M.facets.set_vertex(new_f1, nlv1, new_v);
             M.facets.set_vertex(new_f1, nlv2, nv2);
 
             /* Set facet adjacency */
             M.facets.set_adjacent(new_f0, lv0, new_f1);
-            M.facets.set_adjacent(af0, nlv2, new_f1);
+            M.facets.set_adjacent(nf0, nlv2, new_f1);
             M.facets.set_adjacent(new_f1, nlv0, new_f0);
-            M.facets.set_adjacent(new_f1, nlv1, af0);
-            M.facets.set_adjacent(new_f1, nlv2, naf2);
-            if (naf2 != GEO::NO_FACET) {
+            M.facets.set_adjacent(new_f1, nlv1, nf0);
+            M.facets.set_adjacent(new_f1, nlv2, nnf2);
+            if (nnf2 != GEO::NO_FACET) {
                 assert(M.facets.find_vertex(new_f1, nv0) != GEO::NO_INDEX);
-                M.facets.set_adjacent(naf2, M.facets.find_vertex(new_f1, nv0), new_f1);
+                M.facets.set_adjacent(nnf2, M.facets.find_vertex(nnf2, nv0), new_f1);
             }
         }
     }
