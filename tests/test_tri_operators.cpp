@@ -119,7 +119,8 @@ namespace GEO::MeshUtils::Test
             const GEO::Mesh& M,
             const GEO::index_t f,
             const GEO::index_t lv) {
-            EXPECT_TRUE(GEO::mesh_save(M, get_current_test_name()
+            EXPECT_TRUE(GEO::mesh_save(M, "TriangleOperatorsTest/"
+                                        + get_current_test_name()
                                         + "_" + std::to_string(f)
                                         + "_" + std::to_string(lv)
                                         + ".geogram"));
