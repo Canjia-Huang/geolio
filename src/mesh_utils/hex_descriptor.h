@@ -60,7 +60,7 @@ namespace GEO::MeshUtils
      * `HEX_LV_INCIDENT_LF[lv]` lists the three local faces (LF, 0-5)
      * incident to local vertex `lv`.
      * @note The order follows the inward orientation convention
-     * (i.e., ordered toward the interior of the hex, cross(f0's normal, f1's normal) == -f2's normal ).
+     * (i.e., ordered toward the interior of the hex, cross(f0's outward normal, f1's outward normal) == -f2's outward normal ).
      */
     constexpr std::array<std::array<GEO::index_t, 3>, 8> HEX_LV_INCIDENT_LF = {
         {

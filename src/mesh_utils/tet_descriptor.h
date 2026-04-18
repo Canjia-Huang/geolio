@@ -15,6 +15,8 @@ namespace GEO::MeshUtils
      *
      * Each local vertex (LV, 0-3) has exactly three adjacent vertices.
      * `TET_LV_ADJACENT_LV[lv]` returns those three adjacent LV indices.
+     *
+     * @note The ordering matches the corresponding face-vertex order.
      */
     constexpr std::array<std::array<GEO::index_t, 3>, 4> TET_LV_ADJACENT_LV = {
         {
@@ -46,7 +48,9 @@ namespace GEO::MeshUtils
      *
      * `TET_LV_INCIDENT_LF[lv]` lists the three local faces (LF, 0-3)
      * incident to local vertex `lv`.
-     * The order follows the inward orientation convention.
+     *
+     * @note The order follows the inward orientation convention, i.e.
+     * `dot(cross(f0's outward normal, f1's outward normal), f2's outward normal) < 0`.
      */
     constexpr std::array<std::array<GEO::index_t, 3>, 4> TET_LV_INCIDENT_LF = {
         {
@@ -84,6 +88,9 @@ namespace GEO::MeshUtils
      *
      * `TET_LE_INCIDENT_LF[le]` returns the two local faces (LF, 0-3)
      * sharing local edge `le`.
+     *
+     * @note Orientation is opposite to the edge direction, i.e.
+     * `cross(f0 normal, f1 normal) == -edge`.
      */
     constexpr std::array<std::array<GEO::index_t, 2>, 6> TET_LE_INCIDENT_LF = {
         {

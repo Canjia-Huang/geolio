@@ -49,6 +49,16 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(TetDescriptorTest, TET_LV_ADJACENT_LV_orientation) {
+        ASSERT_EQ(M.cells.nb_vertices(c), TET_LV_ADJACENT_LV.size());
+
+        for (GEO::index_t lv = 0; lv < M.cells.nb_vertices(c); ++lv) {
+            const auto lf = lv;
+            for (GEO::index_t i = 0; i < 3; ++i)
+                EXPECT_EQ(TET_LV_ADJACENT_LV[lv][i], M.cells.facet_vertex(c, lf, i));
+        }
+    }
+
     TEST_F(TetDescriptorTest, TET_LV_INCIDENT_LE) {
         ASSERT_EQ(M.cells.nb_vertices(c), TET_LV_INCIDENT_LE.size());
 
@@ -88,6 +98,30 @@ namespace GEO::MeshUtils::Test
             EXPECT_EQ(adj_facets.size(), TET_LV_INCIDENT_LF[lv].size());
             for (const auto& adj_f : TET_LV_INCIDENT_LF[lv])
                 EXPECT_TRUE(adj_facets.contains(adj_f));
+        }
+    }
+
+    TEST_F(TetDescriptorTest, TET_LV_INCIDENT_LF_orientation) {
+        ASSERT_EQ(M.cells.nb_vertices(c), TET_LV_INCIDENT_LF.size());
+
+        for (GEO::index_t lv = 0; lv < M.cells.nb_vertices(c); ++lv) {
+            ASSERT_EQ(TET_LV_INCIDENT_LF[lv].size(), 3);
+            const auto& lf0 = TET_LV_INCIDENT_LF[lv][0];
+            const auto& lf1 = TET_LV_INCIDENT_LF[lv][1];
+            const auto& lf2 = TET_LV_INCIDENT_LF[lv][2];
+            const auto n0 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf0, 2))));
+            const auto n1 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf1, 2))));
+            const auto n2 = -GEO::normalize(GEO::Geom::triangle_normal(
+                M.vertices.point(M.cells.facet_vertex(c, lf2, 0)),
+                M.vertices.point(M.cells.facet_vertex(c, lf2, 1)),
+                M.vertices.point(M.cells.facet_vertex(c, lf2, 2))));
+            EXPECT_LE(GEO::Geom::cos_angle(GEO::cross(n0, n1), n2), 0);
         }
     }
 
