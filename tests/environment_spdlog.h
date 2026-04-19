@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/12.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef PROGRESSIVEMESHOPT_ENVIRONMENT_SPDLOG_H
-#define PROGRESSIVEMESHOPT_ENVIRONMENT_SPDLOG_H
+#ifndef GEOGRAM_MESH_UTILS_ENVIRONMENT_SPDLOG_H
+#define GEOGRAM_MESH_UTILS_ENVIRONMENT_SPDLOG_H
 
 #include <gtest/gtest.h>
 #include "common/log.h"
@@ -15,4 +15,4 @@ public:
     }
 };
 
-#endif //PROGRESSIVEMESHOPT_ENVIRONMENT_SPDLOG_H
+#endif //GEOGRAM_MESH_UTILS_ENVIRONMENT_SPDLOG_H
