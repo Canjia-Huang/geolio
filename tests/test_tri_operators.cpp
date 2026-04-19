@@ -11,91 +11,79 @@
 #include "utils.h"
 #include "common/log.h"
 
-namespace GEO::MeshUtils::Test
+namespace
 {
-    using namespace GEO::MeshUtils;
+    void build_tri_mesh(
+        GEO::Mesh& M
+        ) {
+        M.clear();
 
-    class TriangleOperatorsTest : public ::testing::TestWithParam<std::pair<GEO::index_t, GEO::index_t>> {
-    protected:
-        void SetUp() override {
-            /* Build mesh */
-            GEO::index_t new_v = M_.vertices.create_vertices(16);
-            for (GEO::index_t i = 0; i < 4; ++i) {
-                for (GEO::index_t j = 0; j < 4; ++j)
-                    M_.vertices.point(new_v++) = GEO::vec3(j, i, 0);
+        GEO::index_t new_v = M.vertices.create_vertices(16);
+        for (GEO::index_t i = 0; i < 4; ++i) {
+            for (GEO::index_t j = 0; j < 4; ++j)
+                M.vertices.point(new_v++) = GEO::vec3(j, i, 0);
+        }
+        M.vertices.point(5).z += 0.5;
+        M.vertices.point(10).z += 0.5;
+
+        GEO::index_t new_f = M.facets.create_triangles(18);
+        for (GEO::index_t i = 0; i < 3; ++i) {
+            for (GEO::index_t j = 0; j < 3; ++j) {
+                const GEO::index_t v = 4 * i + j;
+                M.facets.set_vertex(new_f, 0, v);
+                M.facets.set_vertex(new_f, 1, v + 1);
+                M.facets.set_vertex(new_f, 2, v + 4);
+                M.facets.set_vertex(new_f + 1, 0, v + 5);
+                M.facets.set_vertex(new_f + 1, 1, v + 4);
+                M.facets.set_vertex(new_f + 1, 2, v + 1);
+                new_f += 2;
             }
-            ASSERT_EQ(M_.vertices.nb(), 16);
-            M_.vertices.point(5).z += 0.5;
-            M_.vertices.point(10).z += 0.5;
+        }
+        M.facets.connect();
+    }
 
-            GEO::index_t new_f = M_.facets.create_triangles(18);
-            for (GEO::index_t i = 0; i < 3; ++i) {
-                for (GEO::index_t j = 0; j < 3; ++j) {
-                    const GEO::index_t v = 4*i+j;
-                    M_.facets.set_vertex(new_f, 0, v);
-                    M_.facets.set_vertex(new_f, 1, v+1);
-                    M_.facets.set_vertex(new_f, 2, v+4);
-                    M_.facets.set_vertex(new_f+1, 0, v+5);
-                    M_.facets.set_vertex(new_f+1, 1, v+4);
-                    M_.facets.set_vertex(new_f+1, 2, v+1);
-                    new_f += 2;
+    void get_mesh_f_lv(
+        const GEO::Mesh& M,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& interior_vertices_f_lv,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& border_vertices_f_lv,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& interior_edges_f_lv,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& border_edges_f_lv
+        ) {
+        /* Find all interior and border f_lv pair */
+        std::vector<bool> M_v_border(M.vertices.nb(), false);
+        for (const auto& f : M.facets) {
+            for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                if (M.facets.adjacent(f, lv) == GEO::NO_FACET) {
+                    border_edges_f_lv.emplace_back(f, lv);
+                    M_v_border[M.facets.vertex(f, lv)] = true;
+                    M_v_border[M.facets.vertex(f, (lv+1)%3)] = true;
                 }
+                else
+                    interior_edges_f_lv.emplace_back(f, lv);
             }
-            ASSERT_EQ(new_f, 18);
-
-            GEO::Attribute<GEO::index_t> M_v_idx(M_.vertices.attributes(), "idx");
-            for (const auto& v : M_.vertices)
-                M_v_idx[v] = v;
-
-            GEO::Attribute<GEO::index_t> M_f_idx(M_.facets.attributes(), "idx");
-            for (const auto& f : M_.facets)
-                M_f_idx[f] = f;
-
-            M_.facets.connect();
-
-            LOG::DEBUG("M #V:{}, #F: {}", M_.vertices.nb(), M_.facets.nb());
-
-            /* Find all interior and border f_lv pair */
-            std::vector<bool> M_v_border(M_.vertices.nb(), false);
-            for (const auto& f : M_.facets) {
+        }
+        for (const auto& f : M.facets) {
                 for (GEO::index_t lv = 0; lv < 3; ++lv) {
-                    if (M_.facets.adjacent(f, lv) == GEO::NO_FACET) {
-                        border_edges_f_lv.emplace_back(f, lv);
-                        M_v_border[M_.facets.vertex(f, lv)] = true;
-                        M_v_border[M_.facets.vertex(f, (lv+1)%3)] = true;
-                    }
-                    else
-                        interior_edges_f_lv.emplace_back(f, lv);
-                }
-            }
-            for (const auto& f : M_.facets) {
-                for (GEO::index_t lv = 0; lv < 3; ++lv) {
-                    if (M_v_border[M_.facets.vertex(f, lv)])
+                    if (M_v_border[M.facets.vertex(f, lv)])
                         border_vertices_f_lv.emplace_back(f, lv);
                     else
                         interior_vertices_f_lv.emplace_back(f, lv);
                 }
             }
-        }
+    }
+}
 
-        GEO::Mesh M_;
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> interior_vertices_f_lv;
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> border_vertices_f_lv;
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> interior_edges_f_lv;
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> border_edges_f_lv;
+namespace GEO::MeshUtils::Test
+{
+    using namespace GEO::MeshUtils;
+
+    class TriangleOperatorsTest : public ::testing::TestWithParam<std::pair<GEO::index_t, GEO::index_t>> {
+        void SetUp() override {
+            build_tri_mesh(M);
+        }
 
     public:
-        static void clean_delete_elements(
-            GEO::Mesh& M,
-            GEO::vector<GEO::index_t>& facets_to_delete
-            ) {
-            ASSERT_EQ(facets_to_delete.size(), M.facets.nb());
-            M.facets.delete_elements(facets_to_delete);
-        }
-
-        static void check_connections(
-            GEO::Mesh& M
-            ) {
+        void check_connections() {
             std::vector<GEO::index_t> current_connections(3*M.facets.nb(), GEO::NO_FACET);
             for (const auto& f : M.facets) {
                 for (GEO::index_t lv = 0; lv < 3; ++lv)
@@ -115,123 +103,179 @@ namespace GEO::MeshUtils::Test
             }
         }
 
-        static void save_results(
-            const GEO::Mesh& M,
+        void save_results(
             const GEO::index_t f,
-            const GEO::index_t lv) {
-            EXPECT_TRUE(GEO::mesh_save(M, "TriangleOperatorsTest/"
-                                        + get_current_test_name()
-                                        + "_" + std::to_string(f)
-                                        + "_" + std::to_string(lv)
-                                        + ".geogram"));
+            const GEO::index_t lv
+            ) const {
+            EXPECT_TRUE(GEO::mesh_save(M, get_current_test_name() +
+                                            "_f" + std::to_string(f) +
+                                            "_lv" + std::to_string(lv) +
+                                            ".geogram"));
         }
+
+        GEO::Mesh M;
+    };
+
+    /* == For INSTANTIATE_TEST_SUITE =============================================================================== */
+
+    enum TEST_F_LV_TYPE {
+        INTERIOR_VERTICES_F_LV,
+        BORDER_VERTICES_F_LV,
+        INTERIOR_EDGES_F_LV,
+        BORDER_EDGES_F_LV
+    };
+
+    const auto GET_TEST_PARAMS = [](
+        const TEST_F_LV_TYPE type
+        ) {
+        GEO::Mesh M;
+        build_tri_mesh(M);
+
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> interior_vertices_f_lv;
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> border_vertices_f_lv;
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> interior_edges_f_lv;
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> border_edges_f_lv;
+
+        get_mesh_f_lv(
+            M,
+            interior_vertices_f_lv,
+            border_vertices_f_lv,
+            interior_edges_f_lv,
+            border_edges_f_lv
+        );
+
+        if (type == INTERIOR_VERTICES_F_LV)
+            return interior_vertices_f_lv;
+        if (type == BORDER_VERTICES_F_LV)
+            return border_vertices_f_lv;
+        if (type == INTERIOR_EDGES_F_LV)
+            return interior_edges_f_lv;
+        if (type == BORDER_EDGES_F_LV)
+            return border_edges_f_lv;
+        assert(0);
     };
 
     /* == GetIncidentTrianglesTest ================================================================================= */
+
     class GetIncidentTrianglesTest : public TriangleOperatorsTest {
     public:
         bool compute(
-            const GEO::Mesh& M_out,
             const GEO::index_t start_f,
             const GEO::index_t start_lv
             ) {
-            start_f_ = start_f;
-            start_lv_ = start_lv;
-            return get_vertex_incident_triangles(M_out, start_f_, start_lv_, ordered_f_and_lv);
+            return get_vertex_incident_triangles(M, start_f, start_lv, ordered_f_and_lv);
         }
 
         void check_incident(
-            const GEO::Mesh& M_out
+            const GEO::index_t start_f,
+            const GEO::index_t start_lv
             ) {
-            const GEO::index_t v = M_out.facets.vertex(start_f_, start_lv_);
+            const GEO::index_t v = M.facets.vertex(start_f, start_lv);
             for (const auto& [f, lv] : ordered_f_and_lv)
-                EXPECT_EQ(M_out.facets.vertex(f, lv), v);
+                EXPECT_EQ(M.facets.vertex(f, lv), v);
         }
 
-        void check_loop(
-            const GEO::Mesh& M_out
-            ) {
+        virtual void check_loop() = 0;
+
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_and_lv;
+    };
+
+    class GetInteriorIncidentTrianglesTest : public GetIncidentTrianglesTest {
+    public:
+        void check_loop() override {
             for (GEO::index_t i = 0, i_end = ordered_f_and_lv.size(); i < i_end; ++i) {
                 const auto& [f, lv] =  ordered_f_and_lv[i];
-                EXPECT_EQ(M_out.facets.adjacent(f, lv), ordered_f_and_lv[(i+1)%i_end].first);
+                EXPECT_EQ(M.facets.adjacent(f, lv), ordered_f_and_lv[(i+1)%i_end].first);
             }
         }
+    };
 
-        void check_loop_on_border(
-            const GEO::Mesh& M_out
-            ) {
+    class GetBorderIncidentTrianglesTest : public GetIncidentTrianglesTest {
+    public:
+        void check_loop() override {
             for (GEO::index_t i = 0, i_end = ordered_f_and_lv.size(); i < i_end; ++i) {
                 const auto& [f, lv] =  ordered_f_and_lv[i];
                 if (i == 0)
-                    EXPECT_EQ(M_out.facets.adjacent(f, (lv+2)%3), GEO::NO_FACET);
+                    EXPECT_EQ(M.facets.adjacent(f, (lv+2)%3), GEO::NO_FACET);
                 else if (i == i_end-1)
-                    EXPECT_EQ(M_out.facets.adjacent(f, lv), GEO::NO_FACET);
+                    EXPECT_EQ(M.facets.adjacent(f, lv), GEO::NO_FACET);
                 else
-                    EXPECT_EQ(M_out.facets.adjacent(f, lv), ordered_f_and_lv[i+1].first);
+                    EXPECT_EQ(M.facets.adjacent(f, lv), ordered_f_and_lv[i+1].first);
             }
         }
-
-
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_and_lv;
-        GEO::index_t start_f_{};
-        GEO::index_t start_lv_{};
     };
 
-    TEST_F(GetIncidentTrianglesTest, interior_vertex) {
-        for (const auto& [f, lv] : interior_vertices_f_lv) {
-            GEO::Mesh M_out;
-            M_out.copy(M_);
+    TEST_P(GetInteriorIncidentTrianglesTest, each_vertex) {
+        auto [f, lv] = GetParam();
 
-            EXPECT_FALSE(compute(M_out, f, lv));
-            check_incident(M_out);
-            check_loop(M_out);
-        }
+        EXPECT_FALSE(compute(f, lv));
+        check_incident(f, lv);
+        check_loop();
     }
 
-    TEST_F(GetIncidentTrianglesTest, border_vertex) {
-        for (const auto& [f, lv] : border_vertices_f_lv) {
-            GEO::Mesh M_out;
-            M_out.copy(M_);
+    TEST_P(GetBorderIncidentTrianglesTest, each_vertex) {
+        auto [f, lv] = GetParam();
 
-            EXPECT_TRUE(compute(M_out, f, lv));
-            check_incident(M_out);
-            check_loop_on_border(M_out);
-        }
+        EXPECT_TRUE(compute(f, lv));
+        check_incident(f, lv);
+        check_loop();
     }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperatorsTest,
+        GetInteriorIncidentTrianglesTest,
+        ::testing::ValuesIn(GET_TEST_PARAMS(INTERIOR_VERTICES_F_LV))
+    );
+
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperatorsTest,
+        GetBorderIncidentTrianglesTest,
+        ::testing::ValuesIn(GET_TEST_PARAMS(BORDER_VERTICES_F_LV))
+    );
 
     /* == SplitEdgeTest ============================================================================================ */
+
     class SplitEdgeTest : public TriangleOperatorsTest {
     public:
-        static void compute(
-            GEO::Mesh& M_out,
+        virtual void compute(
+            GEO::index_t f,
+            GEO::index_t lv,
+            double r) = 0;
+    };
+
+    class SplitInteriorEdgeTest : public SplitEdgeTest {
+    public:
+        void compute(
             const GEO::index_t f,
             const GEO::index_t lv,
             const double r
-            ) {
-            ASSERT_NE(M_out.facets.adjacent(f, lv), GEO::NO_FACET);
-            const GEO::index_t new_v = M_out.vertices.create_vertices(1);
-            const GEO::index_t new_f = M_out.facets.create_triangles(2);
+            ) override {
+            ASSERT_NE(M.facets.adjacent(f, lv), GEO::NO_FACET);
+            const GEO::index_t new_v = M.vertices.create_vertices(1);
+            const GEO::index_t new_f = M.facets.create_triangles(2);
 
             edge_split(
-                M_out,
+                M,
                 f, lv,
                 r,
                 new_v,
                 new_f, new_f+1);
         }
+    };
 
-        static void compute_on_border(
-            GEO::Mesh& M_out,
+    class SplitBorderEdgeTest : public SplitEdgeTest {
+    public:
+        void compute(
             const GEO::index_t f,
             const GEO::index_t lv,
             const double r
-            ) {
-            ASSERT_EQ(M_out.facets.adjacent(f, lv), GEO::NO_FACET);
-            const GEO::index_t new_v = M_out.vertices.create_vertices(1);
-            const GEO::index_t new_f = M_out.facets.create_triangles(1);
+            ) override {
+            ASSERT_EQ(M.facets.adjacent(f, lv), GEO::NO_FACET);
+            const GEO::index_t new_v = M.vertices.create_vertices(1);
+            const GEO::index_t new_f = M.facets.create_triangles(1);
 
             edge_split(
-                M_out,
+                M,
                 f, lv,
                 r,
                 new_v,
@@ -239,118 +283,151 @@ namespace GEO::MeshUtils::Test
         }
     };
 
-    TEST_F(SplitEdgeTest, interior_edges) {
-        for (const auto& [f, lv] : interior_edges_f_lv) {
-            GEO::Mesh M_out;
-            M_out.copy(M_);
+    TEST_P(SplitInteriorEdgeTest, each_edge) {
+        auto [f, lv] = GetParam();
 
-            compute(M_out, f, lv, GEO::Numeric::random_float32());
-            check_connections(M_out);
-            save_results(M_out, f, lv);
-        }
+        compute(f, lv, GEO::Numeric::random_float32());
+        check_connections();
+        save_results(f, lv);
     }
 
-    TEST_F(SplitEdgeTest, border_edges) {
-        for (const auto& [f, lv] : border_edges_f_lv) {
-            GEO::Mesh M_out;
-            M_out.copy(M_);
+    TEST_P(SplitBorderEdgeTest, each_edge) {
+        auto [f, lv] = GetParam();
 
-            compute_on_border(M_out, f, lv, GEO::Numeric::random_float32());
-            check_connections(M_out);
-            save_results(M_out, f, lv);
-        }
+        compute(f, lv, GEO::Numeric::random_float32());
+        check_connections();
+        save_results(f, lv);
     }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperatorsTest,
+        SplitInteriorEdgeTest,
+        ::testing::ValuesIn(GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
+    );
+
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperatorsTest,
+        SplitBorderEdgeTest,
+        ::testing::ValuesIn(GET_TEST_PARAMS(BORDER_EDGES_F_LV))
+    );
 
     /* == CollapseEdgeTest ========================================================================================= */
+
     class CollapseEdgeTest : public TriangleOperatorsTest {
     public:
-        static void compute(
-            GEO::Mesh& M_out,
+        virtual void compute(
+            GEO::index_t f,
+            GEO::index_t lv,
+            double r) = 0;
+    };
+
+    class CollapseInteriorEdgeTest : public CollapseEdgeTest {
+    public:
+        void compute(
             const GEO::index_t f,
             const GEO::index_t lv,
             const double r
-            ) {
+            ) override {
             GEO::index_t disuse_v, disuse_f0, disuse_f1;
 
             edge_collapse(
-                M_out,
+                M,
                 f, lv,
                 r,
                 disuse_v,
                 disuse_f0, disuse_f1);
 
             /* Clean disuse vertices and facets */
-            GEO::vector<GEO::index_t> facets_to_delete(M_out.facets.nb(), 0);
+            GEO::vector<GEO::index_t> facets_to_delete(M.facets.nb(), 0);
             facets_to_delete[disuse_f0] = 1;
             EXPECT_NE(disuse_f1, GEO::NO_FACET);
             facets_to_delete[disuse_f1] = 1;
-            M_out.facets.delete_elements(facets_to_delete);
+            M.facets.delete_elements(facets_to_delete);
         }
+    };
 
-        static void compute_on_border(
-            GEO::Mesh& M_out,
+    class CollapseBorderEdgeTest : public CollapseEdgeTest {
+    public:
+        void compute(
             const GEO::index_t f,
             const GEO::index_t lv,
             const double r
-            ) {
+            ) override {
             GEO::index_t disuse_v, disuse_f0, disuse_f1;
 
             edge_collapse(
-                M_out,
+                M,
                 f, lv,
                 r,
                 disuse_v,
                 disuse_f0, disuse_f1);
 
             /* Clean disuse vertices and facets */
-            GEO::vector<GEO::index_t> facets_to_delete(M_out.facets.nb(), 0);
+            GEO::vector<GEO::index_t> facets_to_delete(M.facets.nb(), 0);
             facets_to_delete[disuse_f0] = 1;
-            M_out.facets.delete_elements(facets_to_delete);
+            EXPECT_EQ(disuse_f1, GEO::NO_FACET);
+            M.facets.delete_elements(facets_to_delete);
         }
     };
 
-    TEST_F(CollapseEdgeTest, interior_edges) {
-        for (const auto& [f, lv] : interior_edges_f_lv) {
-            GEO::Mesh M_out;
-            M_out.copy(M_);
+    TEST_P(CollapseInteriorEdgeTest, each_edge) {
+        auto [f, lv] = GetParam();
 
-            compute(M_out, f, lv, GEO::Numeric::random_float32());
-            check_connections(M_out);
-            save_results(M_out, f, lv);
-        }
+        compute(f, lv, GEO::Numeric::random_float32());
+        check_connections();
+        save_results(f, lv);
     }
 
-    TEST_F(CollapseEdgeTest, border_edges) {
-        for (const auto& [f, lv] : border_edges_f_lv) {
-            GEO::Mesh M_out;
-            M_out.copy(M_);
+    TEST_P(CollapseBorderEdgeTest, each_edge) {
+        auto [f, lv] = GetParam();
 
-            compute_on_border(M_out, f, lv, GEO::Numeric::random_float32());
-            check_connections(M_out);
-            save_results(M_out, f, lv);
-        }
+        compute(f, lv, GEO::Numeric::random_float32());
+        check_connections();
+        save_results(f, lv);
     }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperatorsTest,
+        CollapseInteriorEdgeTest,
+        ::testing::ValuesIn(GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
+    );
+
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperatorsTest,
+        CollapseBorderEdgeTest,
+        ::testing::ValuesIn(GET_TEST_PARAMS(BORDER_EDGES_F_LV))
+    );
 
     /* == FlipEdgeTest ============================================================================================= */
+
     class FlipEdgeTest : public TriangleOperatorsTest {
     public:
-        static void compute(
-            GEO::Mesh& M_out,
+        virtual void compute(
+            GEO::index_t f,
+            GEO::index_t lv) = 0;
+    };
+
+    class FlipInteriorEdgeTest : public FlipEdgeTest {
+    public:
+        void compute(
             const GEO::index_t f,
             const GEO::index_t lv
-            ) {
-            edge_swap(M_out, f, lv);
+            ) override {
+            edge_swap(M, f, lv);
         }
     };
 
-    TEST_F(FlipEdgeTest, interior_edges) {
-        for (const auto& [f, lv] : interior_edges_f_lv) {
-            GEO::Mesh M_out;
-            M_out.copy(M_);
+    TEST_P(FlipInteriorEdgeTest, each_edge) {
+        auto [f, lv] = GetParam();
 
-            compute(M_out, f, lv);
-            check_connections(M_out);
-            save_results(M_out, f, lv);
-        }
+        compute(f, lv);
+        check_connections();
+        save_results(f, lv);
     }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperatorsTest,
+        FlipInteriorEdgeTest,
+        ::testing::ValuesIn(GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
+    );
 }
