@@ -4,6 +4,7 @@
 //
 
 #include <random>
+#include <ranges>
 #include <geogram/basic/command_line_args.h>
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_io.h>
@@ -181,6 +182,32 @@ namespace GEO::MeshUtils::Test
                  EXPECT_EQ(M.facets.vertex(f, lv), v);
          }
 
+         void check_complete(
+             const GEO::index_t start_f,
+             const GEO::index_t start_lv
+             ) {
+             const GEO::index_t v = M.facets.vertex(start_f, start_lv);
+
+             std::unordered_map<GEO::index_t, bool> incident_facets; // (facet, found)
+             for (const auto& f : M.facets) {
+                 for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                     if (M.facets.vertex(f, lv) == v) {
+                         incident_facets.emplace(f, false);
+                         break;
+                     }
+                 }
+             }
+
+             for (const auto &f: ordered_f_and_lv | std::views::keys) {
+                 auto it = incident_facets.find(f);
+                 EXPECT_FALSE(it == incident_facets.end());
+                 it->second = true;
+             }
+
+             for (const auto &found: incident_facets | std::views::values)
+                 EXPECT_TRUE(found);
+         }
+
          virtual void check_loop() = 0;
 
          std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_and_lv;
@@ -216,6 +243,7 @@ namespace GEO::MeshUtils::Test
 
          EXPECT_FALSE(compute(f, lv));
          check_incident(f, lv);
+         check_complete(f, lv);
          check_loop();
      }
 
@@ -224,6 +252,7 @@ namespace GEO::MeshUtils::Test
 
          EXPECT_TRUE(compute(f, lv));
          check_incident(f, lv);
+         check_complete(f, lv);
          check_loop();
      }
 
