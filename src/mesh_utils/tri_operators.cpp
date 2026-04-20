@@ -56,7 +56,7 @@ namespace GEO::MeshUtils
         }
 
         /* Output */
-        std::vector<std::pair<GEO::index_t, GEO::index_t>>().swap(ordered_f_and_lv);
+        ordered_f_and_lv.clear();
         ordered_f_and_lv.reserve(next_ordered_f_and_lv.size() + prev_ordered_f_and_lv.size());
         for (GEO::index_t i = 0, i_end = prev_ordered_f_and_lv.size(); i < i_end; ++i)
             ordered_f_and_lv.push_back(prev_ordered_f_and_lv[i_end-i-1]);
