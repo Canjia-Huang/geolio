@@ -122,18 +122,18 @@ namespace GEO::MeshUtils::Test
         GEO::Mesh M;
     };
 
-     /* == For INSTANTIATE_TEST_SUITE =============================================================================== */
+    /* == For INSTANTIATE_TEST_SUITE =============================================================================== */
 
-     enum TRIANGLE_MESH_TEST_TYPE {
+    enum TRIANGLE_MESH_TEST_TYPE {
          INTERIOR_VERTICES_F_LV,
          BORDER_VERTICES_F_LV,
          INTERIOR_EDGES_F_LV,
          BORDER_EDGES_F_LV
      };
 
-     const auto TRIANGLE_MESH_GET_TEST_PARAMS = [](
-         const TRIANGLE_MESH_TEST_TYPE type
-         ) {
+    const auto TRIANGLE_MESH_GET_TEST_PARAMS = [](
+        const TRIANGLE_MESH_TEST_TYPE type
+        ) {
          GEO::initialize(GEO::GEOGRAM_INSTALL_ALL);
 
          GEO::Mesh M;
@@ -162,9 +162,9 @@ namespace GEO::MeshUtils::Test
          assert(0);
      };
 
-     /* == GetIncidentTrianglesTest ================================================================================= */
+    /* == GetIncidentTrianglesTest ================================================================================= */
 
-     class GetIncidentTrianglesTest : public TriangleOperationsTest {
+    class GetIncidentTrianglesTest : public TriangleOperationsTest {
      public:
          bool compute(
              const GEO::index_t start_f,
@@ -213,7 +213,7 @@ namespace GEO::MeshUtils::Test
          std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_and_lv;
      };
 
-     class GetInteriorIncidentTrianglesTest : public GetIncidentTrianglesTest {
+    class GetInteriorIncidentTrianglesTest : public GetIncidentTrianglesTest {
      public:
          void check_loop() override {
              for (GEO::index_t i = 0, i_end = ordered_f_and_lv.size(); i < i_end; ++i) {
@@ -223,7 +223,7 @@ namespace GEO::MeshUtils::Test
          }
      };
 
-     class GetBorderIncidentTrianglesTest : public GetIncidentTrianglesTest {
+    class GetBorderIncidentTrianglesTest : public GetIncidentTrianglesTest {
      public:
          void check_loop() override {
              for (GEO::index_t i = 0, i_end = ordered_f_and_lv.size(); i < i_end; ++i) {
@@ -238,7 +238,7 @@ namespace GEO::MeshUtils::Test
          }
      };
 
-     TEST_P(GetInteriorIncidentTrianglesTest, each_vertex) {
+    TEST_P(GetInteriorIncidentTrianglesTest, each_vertex) {
          auto [f, lv] = GetParam();
 
          EXPECT_FALSE(compute(f, lv));
@@ -247,7 +247,12 @@ namespace GEO::MeshUtils::Test
          check_loop();
      }
 
-     TEST_P(GetBorderIncidentTrianglesTest, each_vertex) {
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperationsTest,
+        GetInteriorIncidentTrianglesTest,
+        ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_VERTICES_F_LV)));
+
+    TEST_P(GetBorderIncidentTrianglesTest, each_vertex) {
          auto [f, lv] = GetParam();
 
          EXPECT_TRUE(compute(f, lv));
@@ -256,21 +261,14 @@ namespace GEO::MeshUtils::Test
          check_loop();
      }
 
-     INSTANTIATE_TEST_SUITE_P(
-         TriangleOperationsTest,
-         GetInteriorIncidentTrianglesTest,
-         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_VERTICES_F_LV))
-     );
-
-     INSTANTIATE_TEST_SUITE_P(
+    INSTANTIATE_TEST_SUITE_P(
          TriangleOperationsTest,
          GetBorderIncidentTrianglesTest,
-         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_VERTICES_F_LV))
-     );
+         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_VERTICES_F_LV)));
 
-     /* == SplitEdgeTest ============================================================================================ */
+    /* == SplitEdgeTest ============================================================================================ */
 
-     class SplitEdgeTest : public TriangleOperationsTest {
+    class SplitEdgeTest : public TriangleOperationsTest {
      public:
          virtual void compute(
              GEO::index_t f,
@@ -278,7 +276,7 @@ namespace GEO::MeshUtils::Test
              double r) = 0;
      };
 
-     class SplitInteriorEdgeTest : public SplitEdgeTest {
+    class SplitInteriorEdgeTest : public SplitEdgeTest {
      public:
          void compute(
              const GEO::index_t f,
@@ -298,7 +296,7 @@ namespace GEO::MeshUtils::Test
          }
      };
 
-     class SplitBorderEdgeTest : public SplitEdgeTest {
+    class SplitBorderEdgeTest : public SplitEdgeTest {
      public:
          void compute(
              const GEO::index_t f,
@@ -318,7 +316,7 @@ namespace GEO::MeshUtils::Test
          }
      };
 
-     TEST_P(SplitInteriorEdgeTest, each_edge) {
+    TEST_P(SplitInteriorEdgeTest, each_edge) {
          auto [f, lv] = GetParam();
 
          compute(f, lv, GEO::Numeric::random_float32());
@@ -326,29 +324,27 @@ namespace GEO::MeshUtils::Test
          save_results(f, lv);
      }
 
-     TEST_P(SplitBorderEdgeTest, each_edge) {
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperationsTest,
+        SplitInteriorEdgeTest,
+        ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV)));
+
+    TEST_P(SplitBorderEdgeTest, each_edge) {
          auto [f, lv] = GetParam();
 
          compute(f, lv, GEO::Numeric::random_float32());
          check_connections();
          save_results(f, lv);
      }
-
-     INSTANTIATE_TEST_SUITE_P(
-         TriangleOperationsTest,
-         SplitInteriorEdgeTest,
-         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
-     );
 
     INSTANTIATE_TEST_SUITE_P(
         TriangleOperationsTest,
         SplitBorderEdgeTest,
-        ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_EDGES_F_LV))
-    );
+        ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_EDGES_F_LV)));
 
-     /* == CollapseEdgeTest ========================================================================================= */
+    /* == CollapseEdgeTest ========================================================================================= */
 
-     class CollapseEdgeTest : public TriangleOperationsTest {
+    class CollapseEdgeTest : public TriangleOperationsTest {
      public:
          virtual void compute(
              GEO::index_t f,
@@ -356,7 +352,7 @@ namespace GEO::MeshUtils::Test
              double r) = 0;
      };
 
-     class CollapseInteriorEdgeTest : public CollapseEdgeTest {
+    class CollapseInteriorEdgeTest : public CollapseEdgeTest {
      public:
          void compute(
              const GEO::index_t f,
@@ -381,7 +377,7 @@ namespace GEO::MeshUtils::Test
          }
      };
 
-     class CollapseBorderEdgeTest : public CollapseEdgeTest {
+    class CollapseBorderEdgeTest : public CollapseEdgeTest {
      public:
          void compute(
              const GEO::index_t f,
@@ -405,7 +401,7 @@ namespace GEO::MeshUtils::Test
          }
      };
 
-     TEST_P(CollapseInteriorEdgeTest, each_edge) {
+    TEST_P(CollapseInteriorEdgeTest, each_edge) {
          auto [f, lv] = GetParam();
 
          compute(f, lv, GEO::Numeric::random_float32());
@@ -413,7 +409,12 @@ namespace GEO::MeshUtils::Test
          save_results(f, lv);
      }
 
-     TEST_P(CollapseBorderEdgeTest, each_edge) {
+    INSTANTIATE_TEST_SUITE_P(
+        TriangleOperationsTest,
+        CollapseInteriorEdgeTest,
+        ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV)));
+
+    TEST_P(CollapseBorderEdgeTest, each_edge) {
          auto [f, lv] = GetParam();
 
          compute(f, lv, GEO::Numeric::random_float32());
@@ -421,28 +422,21 @@ namespace GEO::MeshUtils::Test
          save_results(f, lv);
      }
 
-     INSTANTIATE_TEST_SUITE_P(
-         TriangleOperationsTest,
-         CollapseInteriorEdgeTest,
-         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
-     );
-
-     INSTANTIATE_TEST_SUITE_P(
+    INSTANTIATE_TEST_SUITE_P(
          TriangleOperationsTest,
          CollapseBorderEdgeTest,
-         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_EDGES_F_LV))
-     );
+         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_EDGES_F_LV)));
 
-     /* == FlipEdgeTest ============================================================================================= */
+    /* == FlipEdgeTest ============================================================================================= */
 
-     class FlipEdgeTest : public TriangleOperationsTest {
+    class FlipEdgeTest : public TriangleOperationsTest {
      public:
          virtual void compute(
              GEO::index_t f,
              GEO::index_t lv) = 0;
      };
 
-     class FlipInteriorEdgeTest : public FlipEdgeTest {
+    class FlipInteriorEdgeTest : public FlipEdgeTest {
      public:
          void compute(
              const GEO::index_t f,
@@ -452,7 +446,7 @@ namespace GEO::MeshUtils::Test
          }
      };
 
-     TEST_P(FlipInteriorEdgeTest, each_edge) {
+    TEST_P(FlipInteriorEdgeTest, each_edge) {
          auto [f, lv] = GetParam();
 
          compute(f, lv);
@@ -460,9 +454,8 @@ namespace GEO::MeshUtils::Test
          save_results(f, lv);
      }
 
-     INSTANTIATE_TEST_SUITE_P(
+    INSTANTIATE_TEST_SUITE_P(
          TriangleOperationsTest,
          FlipInteriorEdgeTest,
-         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
-     );
+         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV)));
 }
