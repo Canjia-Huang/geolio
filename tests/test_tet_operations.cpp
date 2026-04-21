@@ -462,7 +462,7 @@ namespace GEO::MeshUtils::Test
             M_c_processed[new_c+1] = 1;
             M_c_processed[new_c+2] = 1;
 
-            cell_split(
+            cell_split_1_4(
                 M,
                 c,
                 new_v,
