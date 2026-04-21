@@ -8,7 +8,6 @@
 #include <ranges>
 #include <unordered_set>
 #include "tet_descriptor.h"
-#include "common/log.h"
 
 namespace
 {

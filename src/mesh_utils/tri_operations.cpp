@@ -4,7 +4,8 @@
 //
 
 #include "tri_operations.h"
-#include "common/log.h"
+
+#include <cassert>
 
 namespace GEO::MeshUtils::Tri
 {
@@ -14,7 +15,6 @@ namespace GEO::MeshUtils::Tri
         const GEO::index_t start_lv,
         std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_f_and_lv
         ) {
-        // LOG::TRACE("{}({}, {})", __FUNCTION__, f, v);
         assert(start_f < M.facets.nb());
         assert(start_lv < 3);
 
@@ -67,15 +67,14 @@ namespace GEO::MeshUtils::Tri
     }
 
     void edge_split(
-       GEO::Mesh& M,
-       const GEO::index_t f,
-       const GEO::index_t lv,
-       const double r,
-       const GEO::index_t new_v,
-       const GEO::index_t new_f0,
-       const GEO::index_t new_f1
-       ) {
-        // LOG::TRACE("{}({}, {}, {}, {}, {}, {})", __FUNCTION__, f, lv, r, new_v, new_f0, new_f1);
+        GEO::Mesh& M,
+        const GEO::index_t f,
+        const GEO::index_t lv,
+        const double r,
+        const GEO::index_t new_v,
+        const GEO::index_t new_f0,
+        const GEO::index_t new_f1
+        ) {
         assert(f < M.facets.nb());
         assert(lv < 3);
         assert(r >= 0 && r <= 1);
@@ -169,7 +168,6 @@ namespace GEO::MeshUtils::Tri
         GEO::index_t* disuse_f0,
         GEO::index_t* disuse_f1
         ) {
-        // LOG::TRACE("{}({}, {}, {})", __FUNCTION__, f, lv, r);
         assert(f < M.facets.nb());
         assert(lv < 3);
         assert(r >= 0 && r <= 1);
@@ -265,7 +263,6 @@ namespace GEO::MeshUtils::Tri
         const GEO::index_t f,
         const GEO::index_t lv
         ) {
-        LOG::TRACE("{}({}, {})", __FUNCTION__, f, lv);
         assert(f < M.facets.nb());
         assert(lv < 3);
 
