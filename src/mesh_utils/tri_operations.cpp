@@ -6,7 +6,7 @@
 #include "tri_operations.h"
 #include "common/log.h"
 
-namespace GEO::MeshUtils
+namespace GEO::MeshUtils::Tri
 {
     bool get_vertex_incident_triangles(
         const GEO::Mesh& M,

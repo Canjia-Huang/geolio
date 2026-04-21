@@ -5,7 +5,7 @@
 #include "hex_operations.h"
 #include "hex_descriptor.h"
 
-namespace GEO::MeshUtils
+namespace GEO::MeshUtils::Hex
 {
     GEO::index_t find_hex_edge_from_local_vertices(
         const GEO::index_t lv0,

@@ -39,7 +39,7 @@ namespace
     }
 }
 
-namespace GEO::MeshUtils
+namespace GEO::MeshUtils::Tet
 {
     bool get_edge_incident_tetrahedra(
         const GEO::Mesh& M,

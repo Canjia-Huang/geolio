@@ -7,7 +7,7 @@
 #include <geogram/mesh/mesh.h>
 #include <cassert>
 
-namespace GEO::MeshUtils
+namespace GEO::MeshUtils::Hex
 {
     /**
      * Finds the local vertex index in a hexahedron from a global vertex index.

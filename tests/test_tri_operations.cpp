@@ -81,7 +81,7 @@ namespace
 
 namespace GEO::MeshUtils::Test
 {
-    using namespace GEO::MeshUtils;
+    using namespace GEO::MeshUtils::Tri;
 
     class TriangleOperationsTest : public ::testing::TestWithParam<std::pair<GEO::index_t, GEO::index_t>> {
         void SetUp() override {

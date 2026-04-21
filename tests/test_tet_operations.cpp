@@ -118,7 +118,7 @@ namespace
 
 namespace GEO::MeshUtils::Test
 {
-    using namespace GEO::MeshUtils;
+    using namespace GEO::MeshUtils::Tet;
 
     class TetrahedronOperationsTest : public ::testing::TestWithParam<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> {
         void SetUp() override {

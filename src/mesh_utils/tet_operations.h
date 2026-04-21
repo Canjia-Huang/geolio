@@ -7,7 +7,7 @@
 
 #include <geogram/mesh/mesh.h>
 
-namespace GEO::MeshUtils
+namespace GEO::MeshUtils::Tet
 {
     /**
      * Collects tetrahedra incident to a mesh edge in traversal order.

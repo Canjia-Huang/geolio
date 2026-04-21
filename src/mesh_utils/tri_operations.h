@@ -7,7 +7,7 @@
 
 #include <geogram/mesh/mesh.h>
 
-namespace GEO::MeshUtils
+namespace GEO::MeshUtils::Tri
 {
     /**
      * @brief Collect triangles incident to a vertex in one-ring order.
