@@ -80,9 +80,9 @@ namespace GEO::MeshUtils::Tri
         GEO::index_t f,
         GEO::index_t lv,
         double r,
-        GEO::index_t& disuse_v,
-        GEO::index_t& disuse_f0,
-        GEO::index_t& disuse_f1);
+        GEO::index_t* disuse_v = nullptr,
+        GEO::index_t* disuse_f0 = nullptr,
+        GEO::index_t* disuse_f1 = nullptr);
 
     /**
      * @brief Swap an interior edge shared by two triangles.
