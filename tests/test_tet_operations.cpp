@@ -5,262 +5,15 @@
 
 #include <ranges>
 #include <unordered_set>
-#include <geogram/basic/command_line_args.h>
-#include <geogram/mesh/mesh.h>
-#include <geogram/mesh/mesh_io.h>
-#include <gtest/gtest.h>
-#include "utils.h"
-#include "common/log.h"
-#include "mesh_utils/pair_hash.h"
+#include "test_tet_opeartions.h"
 #include "mesh_utils/tet_operations.h"
 
-namespace
-{
-    void build_tet_mesh(
-        GEO::Mesh& M
-        ) {
-        M.clear();
+using namespace GEO::MeshUtils::Tet;
 
-        GEO::index_t new_v = M.vertices.create_vertices(4*4*4);
-        for (GEO::index_t i = 0; i < 4; ++i) {
-            for (GEO::index_t j = 0; j < 4; ++j) {
-                for (GEO::index_t k = 0; k < 4; ++k)
-                    M.vertices.point(new_v++) = GEO::vec3(i, j, k);
-            }
-        }
-
-        GEO::index_t new_c = M.cells.create_tets(3*3*3*6);
-        for (GEO::index_t i = 0; i < 3; ++i) {
-            for (GEO::index_t j = 0; j < 3; ++j) {
-                for (GEO::index_t k = 0; k < 3; ++k) {
-                    const GEO::index_t v0 = 16*i+4*j+k;
-                    const GEO::index_t v1 = v0+16;
-                    const GEO::index_t v2 = v0+4;
-                    const GEO::index_t v3 = v2+16;
-                    const GEO::index_t v4 = v0+1;
-                    const GEO::index_t v5 = v4+16;
-                    const GEO::index_t v6 = v4+4;
-                    const GEO::index_t v7 = v6+16;
-                    M.cells.set_vertex(new_c+0, 0, v4); M.cells.set_vertex(new_c+0, 1, v6); M.cells.set_vertex(new_c+0, 2, v5); M.cells.set_vertex(new_c+0, 3, v1);
-                    M.cells.set_vertex(new_c+1, 0, v0); M.cells.set_vertex(new_c+1, 1, v6); M.cells.set_vertex(new_c+1, 2, v4); M.cells.set_vertex(new_c+1, 3, v1);
-                    M.cells.set_vertex(new_c+2, 0, v0); M.cells.set_vertex(new_c+2, 1, v1); M.cells.set_vertex(new_c+2, 2, v2); M.cells.set_vertex(new_c+2, 3, v6);
-                    M.cells.set_vertex(new_c+3, 0, v1); M.cells.set_vertex(new_c+3, 1, v3); M.cells.set_vertex(new_c+3, 2, v2); M.cells.set_vertex(new_c+3, 3, v6);
-                    M.cells.set_vertex(new_c+4, 0, v1); M.cells.set_vertex(new_c+4, 1, v7); M.cells.set_vertex(new_c+4, 2, v3); M.cells.set_vertex(new_c+4, 3, v6);
-                    M.cells.set_vertex(new_c+5, 0, v1); M.cells.set_vertex(new_c+5, 1, v6); M.cells.set_vertex(new_c+5, 2, v5); M.cells.set_vertex(new_c+5, 3, v7);
-                    new_c += 6;
-                }
-            }
-        }
-
-        M.cells.connect();
-    }
-
-    void get_mesh_c_lf(
-        const GEO::Mesh& M,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_vertex_c_lv,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_vertex_c_lv,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_edge_c_lf_lv,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_edge_c_lf_lv,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_edge_c_le,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_edge_c_le,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_facet_c_lf,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_facet_c_lf
-        ) {
-        /* Find all border vertices and edges */
-        std::unordered_set<GEO::index_t> border_vertices;
-        std::unordered_set<std::pair<GEO::index_t, GEO::index_t>, GEO::MeshUtils::PairHash> border_edges;
-        for (const auto& c : M.cells) {
-            for (GEO::index_t lf = 0; lf < 4; ++lf) {
-                if (M.cells.adjacent(c, lf) != GEO::NO_CELL)
-                    continue;
-                for (GEO::index_t lv = 0; lv < 3; ++lv) {
-                    border_vertices.insert(M.cells.facet_vertex(c, lf, lv));
-
-                    const std::pair<GEO::index_t, GEO::index_t> edge = std::minmax(
-                        M.cells.facet_vertex(c, lf, lv), M.cells.facet_vertex(c, lf, (lv+1)%3));
-                    border_edges.insert(edge);
-                }
-            }
-        }
-
-        /* Get interior/border vertex (c, lv) */
-        for (const auto& c : M.cells) {
-            for (GEO::index_t lv = 0; lv < 4; ++lv) {
-                if (border_vertices.contains(M.cells.vertex(c, lv)))
-                    border_vertex_c_lv.emplace_back(c, lv, GEO::NO_INDEX);
-                else
-                    interior_vertex_c_lv.emplace_back(c, lv, GEO::NO_INDEX);
-            }
-        }
-
-        /* Get interior/border edge (c, lf, lv) */
-        for (const auto& c : M.cells) {
-            for (GEO::index_t lf = 0; lf < 4; ++lf) {
-                for (GEO::index_t lv = 0; lv < 3; ++lv) {
-                    const std::pair<GEO::index_t, GEO::index_t> edge = std::minmax(
-                            M.cells.facet_vertex(c, lf, lv), M.cells.facet_vertex(c, lf, (lv+1)%3));
-                    if (border_edges.contains(edge))
-                        border_edge_c_lf_lv.emplace_back(c, lf, lv);
-                    else
-                        interior_edge_c_lf_lv.emplace_back(c, lf, lv);
-                }
-            }
-        }
-
-        /* Get interior/border edge (c, le) */
-        for (const auto& c : M.cells) {
-            for (GEO::index_t le = 0; le < 6; ++le) {
-                const std::pair<GEO::index_t, GEO::index_t> edge = std::minmax(
-                    M.cells.edge_vertex(c, le, 0), M.cells.edge_vertex(c, le, 1));
-                if (border_edges.contains(edge))
-                    border_edge_c_le.emplace_back(c, le, GEO::NO_INDEX);
-                else
-                    interior_edge_c_le.emplace_back(c, le, GEO::NO_INDEX);
-            }
-        }
-
-        /* Get interior/border facet (c, lf) */
-        for (const auto& c : M.cells) {
-            for (GEO::index_t lf = 0; lf < 4; ++lf) {
-                if (M.cells.adjacent(c, lf) == GEO::NO_CELL)
-                    border_facet_c_lf.emplace_back(c, lf, GEO::NO_INDEX);
-                else
-                    interior_facet_c_lf.emplace_back(c, lf, GEO::NO_INDEX);
-            }
-        }
-    }
-}
+/* == GetVertexIncidentTetrahedraTest ============================================================================== */
 
 namespace GEO::MeshUtils::Test
 {
-    using namespace GEO::MeshUtils::Tet;
-
-    class TetrahedronOperationsTest : public ::testing::TestWithParam<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> {
-        void SetUp() override {
-            build_tet_mesh(M);
-            M_c_processed.bind(M.cells.attributes(), "processed");
-        }
-
-    public:
-        void check_connections() {
-            std::vector<GEO::index_t> current_connections(4*M.cells.nb(), GEO::NO_CELL);
-            for (const auto& c : M.cells) {
-                for (GEO::index_t lf = 0; lf < 4; ++lf)
-                    current_connections[4*c+lf] = M.cells.adjacent(c, lf);
-            }
-
-            M.cells.connect();
-            for (const auto& c : M.cells) {
-                for (GEO::index_t lf = 0; lf < 4; ++lf)
-                    EXPECT_EQ(current_connections[4*c+lf], M.cells.adjacent(c, lf));
-            }
-
-            /* Rollback adjacency */
-            for (const auto& c : M.cells) {
-                for (GEO::index_t lf = 0; lf < 4; ++lf)
-                    M.cells.set_adjacent(c, lf, current_connections[4*c+lf]);
-            }
-        }
-
-        void save_results_c(
-            const GEO::index_t c
-            ) const {
-            EXPECT_TRUE(GEO::mesh_save(M, get_current_test_name() +
-                                            "_c" + std::to_string(c) +
-                                            ".geogram"));
-        }
-
-        void save_results_c_lf_lv(
-            const GEO::index_t c,
-            const GEO::index_t lf,
-            const GEO::index_t lv
-            ) const {
-            EXPECT_TRUE(GEO::mesh_save(M, get_current_test_name() +
-                                            "_c" + std::to_string(c) +
-                                            "_lf" + std::to_string(lf) +
-                                            "_lv" + std::to_string(lv) +
-                                            ".geogram"));
-        }
-
-        void save_results_c_le(
-            const GEO::index_t c,
-            const GEO::index_t le
-            ) const {
-            EXPECT_TRUE(GEO::mesh_save(M, get_current_test_name() +
-                                            "_c" + std::to_string(c) +
-                                            "_le" + std::to_string(le) +
-                                            ".geogram"));
-        }
-
-        void save_results_c_lf(
-            const GEO::index_t c,
-            const GEO::index_t lf
-            ) const {
-            EXPECT_TRUE(GEO::mesh_save(M, get_current_test_name() +
-                                            "_c" + std::to_string(c) +
-                                            "_lf" + std::to_string(lf) +
-                                            ".geogram"));
-        }
-
-        GEO::Mesh M;
-        GEO::Attribute<GEO::index_t> M_c_processed;
-    };
-
-    /* == For INSTANTIATE_TEST_SUITE =============================================================================== */
-
-    enum TETRAHEDRAL_MESH_TEST_TYPE {
-        INTERIOR_VERTEX_C_LV,
-        BORDER_VERTEX_C_LV,
-        INTERIOR_EDGE_C_LF_LV,
-        BORDER_EDGE_C_LF_LV,
-        INTERIOR_EDGE_C_LE,
-        BORDER_EDGE_C_LE,
-        INTERIOR_FACET_C_LF,
-        BORDER_FACET_C_LF
-    };
-
-    const auto TETRAHEDRON_MESH_GET_TEST_PARAMS = [](
-        const TETRAHEDRAL_MESH_TEST_TYPE type
-        ) {
-        GEO::initialize(GEO::GEOGRAM_INSTALL_ALL);
-
-        GEO::Mesh M;
-        build_tet_mesh(M);
-
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_vertex_c_lv;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_vertex_c_lv;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_edge_c_lf_lv;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_edge_c_lf_lv;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_edge_c_le;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_edge_c_le;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_facet_c_lf;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_facet_c_lf;
-        get_mesh_c_lf(
-            M,
-            interior_vertex_c_lv,
-            border_vertex_c_lv,
-            interior_edge_c_lf_lv,
-            border_edge_c_lf_lv,
-            interior_edge_c_le,
-            border_edge_c_le,
-            interior_facet_c_lf,
-            border_facet_c_lf);
-
-        switch (type) {
-            case INTERIOR_VERTEX_C_LV: return interior_vertex_c_lv;
-            case BORDER_VERTEX_C_LV: return border_vertex_c_lv;
-            case INTERIOR_EDGE_C_LE: return interior_edge_c_le;
-            case BORDER_EDGE_C_LE: return border_edge_c_le;
-            case INTERIOR_EDGE_C_LF_LV: return interior_edge_c_lf_lv;
-            case BORDER_EDGE_C_LF_LV: return border_edge_c_lf_lv;
-            case INTERIOR_FACET_C_LF: return interior_facet_c_lf;
-            case BORDER_FACET_C_LF: return border_facet_c_lf;
-        }
-        assert(0);
-    };
-
-    /* == GetVertexIncidentTetrahedraTest ========================================================================== */
-
     class GetVertexIncidentTetrahedraTest : public TetrahedronOperationsTest {
     public:
         bool compute(
@@ -333,9 +86,12 @@ namespace GEO::MeshUtils::Test
         TetrahedronOperationsTest,
         GetBorderVertexIncidentTetrahedraTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_VERTEX_C_LV)));
+}
 
-    /* == GetEdgeIncidentTetrahedraTest ============================================================================ */
+/* == GetEdgeIncidentTetrahedraTest ================================================================================ */
 
+namespace GEO::MeshUtils::Test
+{
     class GetEdgeIncidentTetrahedraTest : public TetrahedronOperationsTest {
     public:
         bool compute(
@@ -367,7 +123,7 @@ namespace GEO::MeshUtils::Test
                         ) {
                         incident = true;
                         break;
-                    }
+                        }
                 }
                 EXPECT_TRUE(incident);
             }
@@ -403,7 +159,6 @@ namespace GEO::MeshUtils::Test
 
         std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_c_and_lf;
     };
-
 
     class GetInteriorEdgeIncidentTetrahedraTest : public GetEdgeIncidentTetrahedraTest {
     public:
@@ -446,7 +201,6 @@ namespace GEO::MeshUtils::Test
         TetrahedronOperationsTest,
         GetInteriorEdgeIncidentTetrahedraTest_c_le,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LE)));
-
 
     class GetBorderEdgeIncidentTetrahedraTest : public GetEdgeIncidentTetrahedraTest {
     public:
@@ -492,9 +246,12 @@ namespace GEO::MeshUtils::Test
         TetrahedronOperationsTest,
         GetBorderEdgeIncidentTetrahedraTest_c_le,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE)));
+}
 
-    /* == CellSplit14Test ========================================================================================== */
+/* == CellSplit14Test ============================================================================================== */
 
+namespace GEO::MeshUtils::Test
+{
     class CellSplit14Test : public TetrahedronOperationsTest {
     public:
         void compute(
@@ -503,10 +260,10 @@ namespace GEO::MeshUtils::Test
             const GEO::index_t new_v = M.vertices.create_vertices(1);
             const GEO::index_t new_c = M.cells.create_tets(3);
 
-            M_c_processed[c] = 1;
-            M_c_processed[new_c] = 1;
-            M_c_processed[new_c+1] = 1;
-            M_c_processed[new_c+2] = 1;
+            M_c_affected[c] = 1;
+            M_c_affected[new_c] = 1;
+            M_c_affected[new_c+1] = 1;
+            M_c_affected[new_c+2] = 1;
 
             cell_split_1_4(
                 M,
@@ -517,8 +274,6 @@ namespace GEO::MeshUtils::Test
     };
 
     class InteriorCellSplit14Test : public CellSplit14Test {};
-
-    class BorderCellSplit14Test : public CellSplit14Test {};
 
     TEST_P(InteriorCellSplit14Test, each_cell) {
         auto [c, _, __] = GetParam();
@@ -533,6 +288,8 @@ namespace GEO::MeshUtils::Test
         InteriorCellSplit14Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_FACET_C_LF)));
 
+    class BorderCellSplit14Test : public CellSplit14Test {};
+
     TEST_P(BorderCellSplit14Test, each_cell) {
         auto [c, _, __] = GetParam();
 
@@ -545,9 +302,12 @@ namespace GEO::MeshUtils::Test
         TetrahedronOperationsTest,
         BorderCellSplit14Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF)));
+}
 
-    /* == EdgeCollapseTest ========================================================================================= */
+/* == EdgeCollapseTest ============================================================================================= */
 
+namespace GEO::MeshUtils::Test
+{
     class EdgeCollapseTest : public TetrahedronOperationsTest {
     public:
         void compute(
@@ -572,7 +332,7 @@ namespace GEO::MeshUtils::Test
             for (const auto& cc : M.cells) {
                 for (GEO::index_t lv = 0; lv < 4; ++lv) {
                     if (M.cells.vertex(cc, lv) == ev0) {
-                        M_c_processed[cc] = 1;
+                        M_c_affected[cc] = 1;
                         break;
                     }
                 }
@@ -615,50 +375,31 @@ namespace GEO::MeshUtils::Test
         TetrahedronOperationsTest,
         BorderEdgeCollapseTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE)));
+}
 
-    /* == EdgeSwap23Test =========================================================================================== */
+/* == EdgeSwap23Test =========================================================================================== */
 
-    class EdgeSwap23Test : public TetrahedronOperationsTest {
-    public:
-        virtual void compute(
-            GEO::index_t c,
-            GEO::index_t lf) = 0;
-    };
+namespace GEO::MeshUtils::Test
+{
+    class EdgeSwap23Test : public TetrahedronOperationsTest {};
 
     class InteriorEdgeSwap23Test : public EdgeSwap23Test {
     public:
         void compute(
             const GEO::index_t c,
             const GEO::index_t lf
-            ) override {
+            ) {
             ASSERT_NE(M.cells.adjacent(c, lf), GEO::NO_CELL);
             const GEO::index_t new_c = M.cells.create_tets(1);
 
-            M_c_processed[c] = 1;
-            M_c_processed[M.cells.adjacent(c, lf)] = 1;
-            M_c_processed[new_c] = 1;
+            M_c_affected[c] = 1;
+            M_c_affected[M.cells.adjacent(c, lf)] = 1;
+            M_c_affected[new_c] = 1;
 
             edge_swap_2_3(
                 M,
                 c, lf,
                 new_c);
-        }
-    };
-
-    class BorderEdgeSwap23Test : public EdgeSwap23Test {
-    public:
-        void compute(
-            const GEO::index_t c,
-            const GEO::index_t lf
-            ) override {
-            ASSERT_EQ(M.cells.adjacent(c, lf), GEO::NO_CELL);
-
-            M_c_processed[c] = 1;
-
-            edge_swap_2_3(
-                M,
-                c, lf,
-                GEO::NO_CELL);
         }
     };
 
@@ -674,6 +415,23 @@ namespace GEO::MeshUtils::Test
         TetrahedronOperationsTest,
         InteriorEdgeSwap23Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_FACET_C_LF)));
+
+    class BorderEdgeSwap23Test : public EdgeSwap23Test {
+    public:
+        void compute(
+            const GEO::index_t c,
+            const GEO::index_t lf
+            ) {
+            ASSERT_EQ(M.cells.adjacent(c, lf), GEO::NO_CELL);
+
+            M_c_affected[c] = 1;
+
+            edge_swap_2_3(
+                M,
+                c, lf,
+                GEO::NO_CELL);
+        }
+    };
 
     TEST_P(BorderEdgeSwap23Test, each_facet) {
         auto [c, lf, _] = GetParam();
