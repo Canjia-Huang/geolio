@@ -5,6 +5,8 @@
 
 #include "tet_operations.h"
 #include <cassert>
+#include <ranges>
+
 #include "tet_descriptor.h"
 #include "common/log.h"
 
@@ -211,6 +213,72 @@ namespace GEO::MeshUtils::Tet
         if (nc2 != GEO::NO_CELL) {
             assert(M.cells.find_tet_facet(nc2, v0, v1, v3) != GEO::NO_INDEX);
             M.cells.set_adjacent(nc2, M.cells.find_tet_facet(nc2, v0, v1, v3), new_c2);
+        }
+    }
+
+    void edge_collapse(
+        GEO::Mesh& M,
+        const GEO::index_t c,
+        const GEO::index_t le,
+        const double r,
+        GEO::index_t* disuse_v,
+        std::vector<GEO::index_t>* disuse_cs
+        ) {
+        assert(c < M.cells.nb());
+        assert(le < 6);
+
+        const auto& ev0 = M.cells.edge_vertex(c, le, 0);
+        const auto& ev1 = M.cells.edge_vertex(c, le, 1);
+
+        /* Move vertex */
+        auto& ep0 = M.vertices.point(ev0);
+        const auto& ep1 = M.vertices.point(ev1);
+        ep0 = (1-r)*ep0 + r*ep1;
+        if (disuse_v != nullptr)
+            *disuse_v = ev1;
+
+        /* Find all adjacent tets */
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_c_and_lf;
+        get_edge_incident_tetrahedra(M, c, le, ordered_c_and_lf);
+
+        /* Collapse */
+        for (const auto& cc: ordered_c_and_lf | std::views::keys) {
+            const auto lf0 = M.cells.find_tet_vertex(cc, ev0);
+            const auto lf1 = M.cells.find_tet_vertex(cc, ev1);
+            const auto nc0 = M.cells.adjacent(cc, lf0);
+            const auto nc1 = M.cells.adjacent(cc, lf1);
+
+            if (nc0 != GEO::NO_CELL) {
+                /* Set adjacent */
+                const auto nlf = M.cells.find_tet_facet(
+                    nc0,
+                    M.cells.facet_vertex(cc, lf0, 2),
+                    M.cells.facet_vertex(cc, lf0, 1),
+                    M.cells.facet_vertex(cc, lf0, 0));
+                assert(nlf != GEO::NO_INDEX);
+                M.cells.set_adjacent(nc0, nlf, nc1);
+            }
+            if (nc1 != GEO::NO_CELL) {
+                /* Set adjacent */
+                const auto nlf = M.cells.find_tet_facet(
+                    nc1,
+                    M.cells.facet_vertex(cc, lf1, 2),
+                    M.cells.facet_vertex(cc, lf1, 1),
+                    M.cells.facet_vertex(cc, lf1, 0));
+                assert(nlf != GEO::NO_INDEX);
+                M.cells.set_adjacent(nc1, nlf, nc0);
+            }
+
+            if (disuse_cs != nullptr)
+                disuse_cs->push_back(cc);
+        }
+
+        /* Update vertex of other cells */
+        for (const auto& cc : M.cells) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                if (M.cells.vertex(cc, lv) == ev1)
+                    M.cells.set_vertex(cc, lv, ev0);
+            }
         }
     }
 

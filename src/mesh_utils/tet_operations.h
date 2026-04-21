@@ -74,6 +74,30 @@ namespace GEO::MeshUtils::Tet
         GEO::index_t new_c2);
 
     /**
+     * Collapses a tetrahedral edge by moving one endpoint along the edge and
+     * updating the local cavity connectivity.
+     *
+     * The edge is identified by local edge index @p le in cell @p c.
+     * Parameter @p r controls the new endpoint position by interpolation on the
+     * edge segment (`0` keeps the first endpoint, `1` keeps the second endpoint).
+     * Collapsed cells/vertices are reported through optional output arguments.
+     *
+     * @param[in,out] M         The tetrahedral mesh to modify.
+     * @param[in]     c         Index of a cell containing the target edge.
+     * @param[in]     le        Local edge index (0-5) in cell @p c.
+     * @param[in]     r         Interpolation ratio for the kept vertex position on the edge.
+     * @param[out]    disuse_v  Optional; receives the removed vertex index when non-null.
+     * @param[out]    disuse_cs Optional; receives indices of cells removed by the collapse when non-null.
+     */
+    void edge_collapse(
+        GEO::Mesh& M,
+        GEO::index_t c,
+        GEO::index_t le,
+        double r,
+        GEO::index_t* disuse_v = nullptr,
+        std::vector<GEO::index_t>* disuse_cs = nullptr);
+
+    /**
      * Performs a 2-3 edge swap operation on a tetrahedral mesh.
      *
      * This operation replaces 2 tetrahedra sharing a common facet with 3 tetrahedra
