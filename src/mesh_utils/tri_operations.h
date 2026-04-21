@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/13.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
-#define GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
+#ifndef GEOGRAM_MESH_UTILS_TRIANGLE_OPERATIONS_H
+#define GEOGRAM_MESH_UTILS_TRIANGLE_OPERATIONS_H
 
 #include <geogram/mesh/mesh.h>
 
@@ -105,5 +105,5 @@ namespace GEO::MeshUtils
         GEO::index_t lv);
 }
 
-#endif //GEOGRAM_MESH_UTILS_TRIANGLE_OPERATORS_H
+#endif //GEOGRAM_MESH_UTILS_TRIANGLE_OPERATIONS_H
 

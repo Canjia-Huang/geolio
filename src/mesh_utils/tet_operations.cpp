@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 
-#include "tet_operators.h"
+#include "tet_operations.h"
 #include <cassert>
 #include "tet_descriptor.h"
 #include "common/log.h"
@@ -141,7 +141,7 @@ namespace GEO::MeshUtils
         }
         assert(0);
     }
-    
+
     void edge_swap_2_3(
         GEO::Mesh& M,
         const GEO::index_t c,

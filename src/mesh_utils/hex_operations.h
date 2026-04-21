@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/3/31.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef GEOGRAM_MESH_UTILS_HEXAHEDRON_OPERATORS_H
-#define GEOGRAM_MESH_UTILS_HEXAHEDRON_OPERATORS_H
+#ifndef GEOGRAM_MESH_UTILS_HEXAHEDRON_OPERATIONS_H
+#define GEOGRAM_MESH_UTILS_HEXAHEDRON_OPERATIONS_H
 #include <geogram/mesh/mesh.h>
 #include <cassert>
 
@@ -133,4 +133,4 @@ namespace GEO::MeshUtils
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& ordered_c_le_lf);
 }
 
-#endif //GEOGRAM_MESH_UTILS_HEXAHEDRON_OPERATORS_H
+#endif //GEOGRAM_MESH_UTILS_HEXAHEDRON_OPERATIONS_H

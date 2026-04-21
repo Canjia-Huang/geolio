@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 
-#include "tri_operators.h"
+#include "tri_operations.h"
 #include "common/log.h"
 
 namespace GEO::MeshUtils

@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include "utils.h"
 #include "common/log.h"
-#include "mesh_utils/tri_operators.h"
+#include "mesh_utils/tri_operations.h"
 
 namespace
 {
@@ -83,7 +83,7 @@ namespace GEO::MeshUtils::Test
 {
     using namespace GEO::MeshUtils;
 
-    class TriangleOperatorsTest : public ::testing::TestWithParam<std::pair<GEO::index_t, GEO::index_t>> {
+    class TriangleOperationsTest : public ::testing::TestWithParam<std::pair<GEO::index_t, GEO::index_t>> {
         void SetUp() override {
             build_tri_mesh(M);
         }
@@ -164,7 +164,7 @@ namespace GEO::MeshUtils::Test
 
      /* == GetIncidentTrianglesTest ================================================================================= */
 
-     class GetIncidentTrianglesTest : public TriangleOperatorsTest {
+     class GetIncidentTrianglesTest : public TriangleOperationsTest {
      public:
          bool compute(
              const GEO::index_t start_f,
@@ -257,20 +257,20 @@ namespace GEO::MeshUtils::Test
      }
 
      INSTANTIATE_TEST_SUITE_P(
-         TriangleOperatorsTest,
+         TriangleOperationsTest,
          GetInteriorIncidentTrianglesTest,
          ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_VERTICES_F_LV))
      );
 
      INSTANTIATE_TEST_SUITE_P(
-         TriangleOperatorsTest,
+         TriangleOperationsTest,
          GetBorderIncidentTrianglesTest,
          ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_VERTICES_F_LV))
      );
 
      /* == SplitEdgeTest ============================================================================================ */
 
-     class SplitEdgeTest : public TriangleOperatorsTest {
+     class SplitEdgeTest : public TriangleOperationsTest {
      public:
          virtual void compute(
              GEO::index_t f,
@@ -335,20 +335,20 @@ namespace GEO::MeshUtils::Test
      }
 
      INSTANTIATE_TEST_SUITE_P(
-         TriangleOperatorsTest,
+         TriangleOperationsTest,
          SplitInteriorEdgeTest,
          ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
      );
 
     INSTANTIATE_TEST_SUITE_P(
-        TriangleOperatorsTest,
+        TriangleOperationsTest,
         SplitBorderEdgeTest,
         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_EDGES_F_LV))
     );
 
      /* == CollapseEdgeTest ========================================================================================= */
 
-     class CollapseEdgeTest : public TriangleOperatorsTest {
+     class CollapseEdgeTest : public TriangleOperationsTest {
      public:
          virtual void compute(
              GEO::index_t f,
@@ -422,20 +422,20 @@ namespace GEO::MeshUtils::Test
      }
 
      INSTANTIATE_TEST_SUITE_P(
-         TriangleOperatorsTest,
+         TriangleOperationsTest,
          CollapseInteriorEdgeTest,
          ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
      );
 
      INSTANTIATE_TEST_SUITE_P(
-         TriangleOperatorsTest,
+         TriangleOperationsTest,
          CollapseBorderEdgeTest,
          ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_EDGES_F_LV))
      );
 
      /* == FlipEdgeTest ============================================================================================= */
 
-     class FlipEdgeTest : public TriangleOperatorsTest {
+     class FlipEdgeTest : public TriangleOperationsTest {
      public:
          virtual void compute(
              GEO::index_t f,
@@ -461,7 +461,7 @@ namespace GEO::MeshUtils::Test
      }
 
      INSTANTIATE_TEST_SUITE_P(
-         TriangleOperatorsTest,
+         TriangleOperationsTest,
          FlipInteriorEdgeTest,
          ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV))
      );

@@ -12,7 +12,7 @@
 #include "utils.h"
 #include "common/log.h"
 #include "mesh_utils/pair_hash.h"
-#include "mesh_utils/tet_operators.h"
+#include "mesh_utils/tet_operations.h"
 
 namespace
 {
@@ -120,7 +120,7 @@ namespace GEO::MeshUtils::Test
 {
     using namespace GEO::MeshUtils;
 
-    class TetrahedronOperatorsTest : public ::testing::TestWithParam<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> {
+    class TetrahedronOperationsTest : public ::testing::TestWithParam<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> {
         void SetUp() override {
             build_tet_mesh(M);
             M_c_processed.bind(M.cells.attributes(), "processed");
@@ -212,7 +212,7 @@ namespace GEO::MeshUtils::Test
 
     /* == GetIncidentTetrahedraTest ================================================================================ */
 
-    class GetIncidentTetrahedraTest : public TetrahedronOperatorsTest {
+    class GetIncidentTetrahedraTest : public TetrahedronOperationsTest {
     public:
         bool compute(
             const GEO::index_t start_c,
@@ -303,7 +303,7 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         GetInteriorIncidentTetrahedraTest_c_lf_lv,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LF_LV))
     );
@@ -320,7 +320,7 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         GetInteriorIncidentTetrahedraTest_c_le,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LE))
     );
@@ -351,7 +351,7 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         GetBorderIncidentTetrahedraTest_c_lf_lv,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LF_LV))
     );
@@ -368,14 +368,14 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         GetBorderIncidentTetrahedraTest_c_le,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE))
     );
 
     /* == EdgeSwap23Test =========================================================================================== */
 
-    class EdgeSwap23Test : public TetrahedronOperatorsTest {
+    class EdgeSwap23Test : public TetrahedronOperationsTest {
     public:
         virtual void compute(
             GEO::index_t c,
@@ -428,7 +428,7 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         InteriorEdgeSwap23Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_FACET_C_LF))
     );
@@ -442,14 +442,14 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         BorderEdgeSwap23Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF))
     );
 
     /* == CellSplit ================================================================================================ */
 
-    class CellSplitTest : public TetrahedronOperatorsTest {
+    class CellSplitTest : public TetrahedronOperationsTest {
     public:
         void compute(
             const GEO::index_t c
@@ -483,7 +483,7 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         InteriorCellSplitTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_FACET_C_LF))
     );
@@ -497,7 +497,7 @@ namespace GEO::MeshUtils::Test
     }
 
     INSTANTIATE_TEST_SUITE_P(
-        TetrahedronOperatorsTest,
+        TetrahedronOperationsTest,
         BorderCellSplitTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF))
     );
