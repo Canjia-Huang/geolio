@@ -5,6 +5,8 @@
 #ifndef GEOGRAMMESHUTILS_TEST_TRI_OPERATIONS_H
 #define GEOGRAMMESHUTILS_TEST_TRI_OPERATIONS_H
 
+#include <geogram/mesh/mesh.h>
+#include <geogram/mesh/mesh_io.h>
 #include <gtest/gtest.h>
 #include "utils.h"
 
@@ -121,7 +123,7 @@ namespace GEO::MeshUtils::Test
                 }
                 break;
             default:
-                assert(0);
+                throw std::runtime_error("Invalid type!");
         }
 
         return output;
@@ -133,6 +135,7 @@ namespace GEO::MeshUtils::Test
          */
         void SetUp() override {
             build_tri_mesh(M);
+            M_c_affected.bind(M.cells.attributes(), "affected");
         }
 
     protected:
@@ -176,6 +179,7 @@ namespace GEO::MeshUtils::Test
         }
 
         GEO::Mesh M;
+        GEO::Attribute<GEO::index_t> M_c_affected;
     };
 }
 
