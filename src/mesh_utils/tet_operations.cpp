@@ -6,7 +6,7 @@
 #include "tet_operations.h"
 #include <cassert>
 #include <ranges>
-
+#include <unordered_set>
 #include "tet_descriptor.h"
 #include "common/log.h"
 
@@ -43,24 +43,66 @@ namespace
 
 namespace GEO::MeshUtils::Tet
 {
+    bool get_vertex_incident_tetrahedra(
+        const GEO::Mesh& M,
+        const GEO::index_t _c,
+        const GEO::index_t _lv,
+        std::vector<std::pair<GEO::index_t, GEO::index_t>>& c_and_lv
+        ) {
+        assert(_c < M.cells.nb());
+        assert(_lv < 4);
+
+        c_and_lv.clear();
+
+        const auto v = M.cells.vertex(_c, _lv);
+
+        std::unordered_set<GEO::index_t> processed_cells;
+        bool is_on_border = false;
+
+        std::stack<std::pair<GEO::index_t, GEO::index_t>> stack;
+        stack.emplace(_c, _lv);
+        while (!stack.empty()) {
+            const auto [c, lv] = stack.top();
+            stack.pop();
+
+            if (!processed_cells.insert(c).second)
+                continue;
+            c_and_lv.emplace_back(c, lv);
+
+            for (const auto& lf : TET_LV_INCIDENT_LF[lv]) {
+                if (const auto nc = M.cells.adjacent(c, lf);
+                    nc != GEO::NO_CELL
+                    ) {
+                    const auto nlv = M.cells.find_tet_vertex(nc, v);
+                    assert(nlv != GEO::NO_INDEX);
+                    stack.emplace(nc, nlv);
+                }
+                else
+                    is_on_border = true;
+            }
+        }
+
+        return is_on_border;
+    }
+
     bool get_edge_incident_tetrahedra(
         const GEO::Mesh& M,
-        const GEO::index_t start_c,
-        const GEO::index_t start_le,
+        const GEO::index_t _c,
+        const GEO::index_t _le,
         std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_c_and_lf
         ) {
-        assert(start_c < M.cells.nb());
-        assert(start_le < 6);
+        assert(_c < M.cells.nb());
+        assert(_le < 6);
 
-        const auto ev0 = M.cells.edge_vertex(start_c, start_le, 0);
-        const auto ev1 = M.cells.edge_vertex(start_c, start_le, 1);
+        const auto ev0 = M.cells.edge_vertex(_c, _le, 0);
+        const auto ev1 = M.cells.edge_vertex(_c, _le, 1);
         bool is_on_border = false;
 
         std::vector<std::pair<GEO::index_t, GEO::index_t>> next_ordered_c_and_lf;
         std::vector<std::pair<GEO::index_t, GEO::index_t>> prev_ordered_c_and_lf;
         {
-            GEO::index_t c = start_c;
-            GEO::index_t lf = M.cells.edge_adjacent_facet(start_c, start_le, 0);
+            GEO::index_t c = _c;
+            GEO::index_t lf = M.cells.edge_adjacent_facet(_c, _le, 0);
             for (;;) {
                 next_ordered_c_and_lf.emplace_back(c, lf);
 
@@ -69,7 +111,7 @@ namespace GEO::MeshUtils::Tet
                     is_on_border = true;
                     break;
                 }
-                if (nc == start_c) // a loop
+                if (nc == _c) // a loop
                     break;
 
                 /* Get next lf */
@@ -83,8 +125,8 @@ namespace GEO::MeshUtils::Tet
         }
 
         if (is_on_border) {
-            GEO::index_t c = start_c;
-            GEO::index_t lf = M.cells.edge_adjacent_facet(start_c, start_le, 1);
+            GEO::index_t c = _c;
+            GEO::index_t lf = M.cells.edge_adjacent_facet(_c, _le, 1);
             for (;;) {
                 const GEO::index_t nc = M.cells.adjacent(c, lf);
                 if (nc == GEO::NO_CELL)
@@ -122,24 +164,24 @@ namespace GEO::MeshUtils::Tet
 
     bool get_edge_incident_tetrahedra(
         const GEO::Mesh& M,
-        const GEO::index_t start_c,
-        const GEO::index_t start_lf,
-        const GEO::index_t start_lv,
+        const GEO::index_t _c,
+        const GEO::index_t _lf,
+        const GEO::index_t _lv,
         std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_c_and_lf
         ) {
-        assert(start_c < M.cells.nb());
-        assert(start_lf < 4);
-        assert(start_lv < 3);
+        assert(_c < M.cells.nb());
+        assert(_lf < 4);
+        assert(_lv < 3);
 
-        const auto ev0 = M.cells.facet_vertex(start_c, start_lf, start_lv);
-        const auto ev1 = M.cells.facet_vertex(start_c, start_lf, (start_lv+1)%3);
+        const auto ev0 = M.cells.facet_vertex(_c, _lf, _lv);
+        const auto ev1 = M.cells.facet_vertex(_c, _lf, (_lv+1)%3);
 
-        for (const auto& start_le : TET_LF_INCIDENT_LE[start_lf]) {
-            const auto cev0 = M.cells.edge_vertex(start_c, start_le, 0);
-            const auto cev1 = M.cells.edge_vertex(start_c, start_le, 1);
+        for (const auto& start_le : TET_LF_INCIDENT_LE[_lf]) {
+            const auto cev0 = M.cells.edge_vertex(_c, start_le, 0);
+            const auto cev1 = M.cells.edge_vertex(_c, start_le, 1);
             if ((cev0 == ev0 && cev1 == ev1) ||
                 (cev0 == ev1 && cev1 == ev0))
-                return get_edge_incident_tetrahedra(M, start_c, start_le, ordered_c_and_lf);
+                return get_edge_incident_tetrahedra(M, _c, start_le, ordered_c_and_lf);
         }
         assert(0);
     }
@@ -241,6 +283,9 @@ namespace GEO::MeshUtils::Tet
         std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_c_and_lf;
         get_edge_incident_tetrahedra(M, c, le, ordered_c_and_lf);
 
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> ev1_incident_c_and_lv;
+        get_vertex_incident_tetrahedra(M, c, TET_LE_INCIDENT_LV[le][1], ev1_incident_c_and_lv);
+
         /* Collapse */
         for (const auto& cc: ordered_c_and_lf | std::views::keys) {
             const auto lf0 = M.cells.find_tet_vertex(cc, ev0);
@@ -274,12 +319,8 @@ namespace GEO::MeshUtils::Tet
         }
 
         /* Update vertex of other cells */
-        for (const auto& cc : M.cells) {
-            for (GEO::index_t lv = 0; lv < 4; ++lv) {
-                if (M.cells.vertex(cc, lv) == ev1)
-                    M.cells.set_vertex(cc, lv, ev0);
-            }
-        }
+        for (const auto& [cc, lv] :ev1_incident_c_and_lv)
+            M.cells.set_vertex(cc, lv, ev0);
     }
 
     void edge_swap_2_3(

@@ -57,20 +57,25 @@ namespace
 
     void get_mesh_c_lf(
         const GEO::Mesh& M,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_facet_c_lf,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_facet_c_lf,
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_vertex_c_lv,
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_vertex_c_lv,
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_edge_c_lf_lv,
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_edge_c_lf_lv,
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_edge_c_le,
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_edge_c_le
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_edge_c_le,
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& interior_facet_c_lf,
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& border_facet_c_lf
         ) {
-        /* Find all border edges */
+        /* Find all border vertices and edges */
+        std::unordered_set<GEO::index_t> border_vertices;
         std::unordered_set<std::pair<GEO::index_t, GEO::index_t>, GEO::MeshUtils::PairHash> border_edges;
         for (const auto& c : M.cells) {
             for (GEO::index_t lf = 0; lf < 4; ++lf) {
                 if (M.cells.adjacent(c, lf) != GEO::NO_CELL)
                     continue;
                 for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    border_vertices.insert(M.cells.facet_vertex(c, lf, lv));
+
                     const std::pair<GEO::index_t, GEO::index_t> edge = std::minmax(
                         M.cells.facet_vertex(c, lf, lv), M.cells.facet_vertex(c, lf, (lv+1)%3));
                     border_edges.insert(edge);
@@ -78,13 +83,13 @@ namespace
             }
         }
 
-        /* Get interior/border facet (c, lf) */
+        /* Get interior/border vertex (c, lv) */
         for (const auto& c : M.cells) {
-            for (GEO::index_t lf = 0; lf < 4; ++lf) {
-                if (M.cells.adjacent(c, lf) == GEO::NO_CELL)
-                    border_facet_c_lf.emplace_back(c, lf, GEO::NO_INDEX);
+            for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                if (border_vertices.contains(M.cells.vertex(c, lv)))
+                    border_vertex_c_lv.emplace_back(c, lv, GEO::NO_INDEX);
                 else
-                    interior_facet_c_lf.emplace_back(c, lf, GEO::NO_INDEX);
+                    interior_vertex_c_lv.emplace_back(c, lv, GEO::NO_INDEX);
             }
         }
 
@@ -111,6 +116,16 @@ namespace
                     border_edge_c_le.emplace_back(c, le, GEO::NO_INDEX);
                 else
                     interior_edge_c_le.emplace_back(c, le, GEO::NO_INDEX);
+            }
+        }
+
+        /* Get interior/border facet (c, lf) */
+        for (const auto& c : M.cells) {
+            for (GEO::index_t lf = 0; lf < 4; ++lf) {
+                if (M.cells.adjacent(c, lf) == GEO::NO_CELL)
+                    border_facet_c_lf.emplace_back(c, lf, GEO::NO_INDEX);
+                else
+                    interior_facet_c_lf.emplace_back(c, lf, GEO::NO_INDEX);
             }
         }
     }
@@ -194,12 +209,14 @@ namespace GEO::MeshUtils::Test
     /* == For INSTANTIATE_TEST_SUITE =============================================================================== */
 
     enum TETRAHEDRAL_MESH_TEST_TYPE {
-        INTERIOR_FACET_C_LF,
-        BORDER_FACET_C_LF,
+        INTERIOR_VERTEX_C_LV,
+        BORDER_VERTEX_C_LV,
         INTERIOR_EDGE_C_LF_LV,
         BORDER_EDGE_C_LF_LV,
         INTERIOR_EDGE_C_LE,
         BORDER_EDGE_C_LE,
+        INTERIOR_FACET_C_LF,
+        BORDER_FACET_C_LF
     };
 
     const auto TETRAHEDRON_MESH_GET_TEST_PARAMS = [](
@@ -210,53 +227,130 @@ namespace GEO::MeshUtils::Test
         GEO::Mesh M;
         build_tet_mesh(M);
 
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_facet_c_lf;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_facet_c_lf;
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_vertex_c_lv;
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_vertex_c_lv;
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_edge_c_lf_lv;
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_edge_c_lf_lv;
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_edge_c_le;
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_edge_c_le;
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> interior_facet_c_lf;
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> border_facet_c_lf;
         get_mesh_c_lf(
             M,
-            interior_facet_c_lf,
-            border_facet_c_lf,
+            interior_vertex_c_lv,
+            border_vertex_c_lv,
             interior_edge_c_lf_lv,
             border_edge_c_lf_lv,
             interior_edge_c_le,
-            border_edge_c_le);
+            border_edge_c_le,
+            interior_facet_c_lf,
+            border_facet_c_lf);
 
-        if (type == INTERIOR_FACET_C_LF)
-            return interior_facet_c_lf;
-        if (type == BORDER_FACET_C_LF)
-            return border_facet_c_lf;
-        if (type == INTERIOR_EDGE_C_LF_LV)
-            return interior_edge_c_lf_lv;
-        if (type == BORDER_EDGE_C_LF_LV)
-            return border_edge_c_lf_lv;
-        if (type == INTERIOR_EDGE_C_LE)
-            return interior_edge_c_le;
-        if (type == BORDER_EDGE_C_LE)
-            return border_edge_c_le;
+        switch (type) {
+            case INTERIOR_VERTEX_C_LV: return interior_vertex_c_lv;
+            case BORDER_VERTEX_C_LV: return border_vertex_c_lv;
+            case INTERIOR_EDGE_C_LE: return interior_edge_c_le;
+            case BORDER_EDGE_C_LE: return border_edge_c_le;
+            case INTERIOR_EDGE_C_LF_LV: return interior_edge_c_lf_lv;
+            case BORDER_EDGE_C_LF_LV: return border_edge_c_lf_lv;
+            case INTERIOR_FACET_C_LF: return interior_facet_c_lf;
+            case BORDER_FACET_C_LF: return border_facet_c_lf;
+        }
         assert(0);
     };
 
-    /* == GetIncidentTetrahedraTest ================================================================================ */
+    /* == GetVertexIncidentTetrahedraTest ========================================================================== */
 
-    class GetIncidentTetrahedraTest : public TetrahedronOperationsTest {
+    class GetVertexIncidentTetrahedraTest : public TetrahedronOperationsTest {
     public:
         bool compute(
-            const GEO::index_t start_c,
-            const GEO::index_t start_lf,
-            const GEO::index_t start_lv
+            const GEO::index_t _c,
+            const GEO::index_t _lv
             ) {
-            return get_edge_incident_tetrahedra(M, start_c, start_lf, start_lv, ordered_c_and_lf);
+            return get_vertex_incident_tetrahedra(M, _c, _lv, c_and_lv);
+        }
+
+        void check_incident(
+            const GEO::index_t v
+            ) {
+            for (const auto& [c, lv] : c_and_lv)
+                EXPECT_EQ(M.cells.vertex(c, lv), v);
+        }
+
+        void check_complete(
+            const GEO::index_t v
+            ) const {
+            std::unordered_map<std::pair<GEO::index_t, GEO::index_t>, bool, PairHash> incident_cells; // (c, lv) -> found
+            for (const auto& c : M.cells) {
+                for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                    if (M.cells.vertex(c, lv) == v) {
+                        incident_cells.emplace(std::pair(c, lv), false);
+                        break;
+                    }
+                }
+            }
+
+            for (const auto& c_lv : c_and_lv) {
+                auto it = incident_cells.find(c_lv);
+                ASSERT_FALSE(it == incident_cells.end());
+                EXPECT_FALSE(it->second);
+                it->second = true;
+            }
+
+            for (const auto &found: incident_cells | std::views::values)
+                EXPECT_TRUE(found);
+        }
+
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> c_and_lv;
+    };
+
+    class GetInteriorVertexIncidentTetrahedraTest : public GetVertexIncidentTetrahedraTest {};
+
+    TEST_P(GetInteriorVertexIncidentTetrahedraTest, each_vertex) {
+        auto [c, lv, _] = GetParam();
+
+        EXPECT_FALSE(compute(c, lv));
+        check_incident(M.cells.vertex(c, lv));
+        check_complete(M.cells.vertex(c, lv));
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        GetInteriorVertexIncidentTetrahedraTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_VERTEX_C_LV)));
+
+    class GetBorderVertexIncidentTetrahedraTest : public GetVertexIncidentTetrahedraTest {};
+
+    TEST_P(GetBorderVertexIncidentTetrahedraTest, each_vertex) {
+        auto [c, lv, _] = GetParam();
+
+        EXPECT_TRUE(compute(c, lv));
+        check_incident(M.cells.vertex(c, lv));
+        check_complete(M.cells.vertex(c, lv));
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        GetBorderVertexIncidentTetrahedraTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_VERTEX_C_LV)));
+
+    /* == GetEdgeIncidentTetrahedraTest ============================================================================ */
+
+    class GetEdgeIncidentTetrahedraTest : public TetrahedronOperationsTest {
+    public:
+        bool compute(
+            const GEO::index_t _c,
+            const GEO::index_t _lf,
+            const GEO::index_t _lv
+            ) {
+            return get_edge_incident_tetrahedra(M, _c, _lf, _lv, ordered_c_and_lf);
         }
 
         bool compute(
-            const GEO::index_t start_c,
-            const GEO::index_t start_le
+            const GEO::index_t _c,
+            const GEO::index_t _le
             ) {
-            return get_edge_incident_tetrahedra(M, start_c, start_le, ordered_c_and_lf);
+            return get_edge_incident_tetrahedra(M, _c, _le, ordered_c_and_lf);
         }
 
         void check_incident(
@@ -311,7 +405,7 @@ namespace GEO::MeshUtils::Test
     };
 
 
-    class GetInteriorIncidentTetrahedraTest : public GetIncidentTetrahedraTest {
+    class GetInteriorEdgeIncidentTetrahedraTest : public GetEdgeIncidentTetrahedraTest {
     public:
         void check_loop() override {
             for (GEO::index_t i = 0, i_end = ordered_c_and_lf.size(); i < i_end; ++i) {
@@ -321,9 +415,9 @@ namespace GEO::MeshUtils::Test
         }
     };
 
-    class GetInteriorIncidentTetrahedraTest_c_lf_lv : public GetInteriorIncidentTetrahedraTest {};
+    class GetInteriorEdgeIncidentTetrahedraTest_c_lf_lv : public GetInteriorEdgeIncidentTetrahedraTest {};
 
-    TEST_P(GetInteriorIncidentTetrahedraTest_c_lf_lv, each_edge) {
+    TEST_P(GetInteriorEdgeIncidentTetrahedraTest_c_lf_lv, each_edge) {
         auto [c, lf, lv] = GetParam();
 
         EXPECT_FALSE(compute(c, lf, lv));
@@ -334,12 +428,12 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        GetInteriorIncidentTetrahedraTest_c_lf_lv,
+        GetInteriorEdgeIncidentTetrahedraTest_c_lf_lv,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LF_LV)));
 
-    class GetInteriorIncidentTetrahedraTest_c_le : public GetInteriorIncidentTetrahedraTest {};
+    class GetInteriorEdgeIncidentTetrahedraTest_c_le : public GetInteriorEdgeIncidentTetrahedraTest {};
 
-    TEST_P(GetInteriorIncidentTetrahedraTest_c_le, each_edge) {
+    TEST_P(GetInteriorEdgeIncidentTetrahedraTest_c_le, each_edge) {
         auto [c, le, _] = GetParam();
 
         EXPECT_FALSE(compute(c, le));
@@ -350,11 +444,11 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        GetInteriorIncidentTetrahedraTest_c_le,
+        GetInteriorEdgeIncidentTetrahedraTest_c_le,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LE)));
 
 
-    class GetBorderIncidentTetrahedraTest : public GetIncidentTetrahedraTest {
+    class GetBorderEdgeIncidentTetrahedraTest : public GetEdgeIncidentTetrahedraTest {
     public:
         void check_loop() override {
             for (GEO::index_t i = 0, i_end = ordered_c_and_lf.size(); i < i_end; ++i) {
@@ -367,9 +461,9 @@ namespace GEO::MeshUtils::Test
         }
     };
 
-    class GetBorderIncidentTetrahedraTest_c_lf_lv : public GetBorderIncidentTetrahedraTest {};
+    class GetBorderEdgeIncidentTetrahedraTest_c_lf_lv : public GetBorderEdgeIncidentTetrahedraTest {};
 
-    TEST_P(GetBorderIncidentTetrahedraTest_c_lf_lv, each_c_lf_lv) {
+    TEST_P(GetBorderEdgeIncidentTetrahedraTest_c_lf_lv, each_c_lf_lv) {
         auto [c, lf, lv] = GetParam();
 
         EXPECT_TRUE(compute(c, lf, lv));
@@ -380,12 +474,12 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        GetBorderIncidentTetrahedraTest_c_lf_lv,
+        GetBorderEdgeIncidentTetrahedraTest_c_lf_lv,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LF_LV)));
 
-    class GetBorderIncidentTetrahedraTest_c_le : public GetBorderIncidentTetrahedraTest {};
+    class GetBorderEdgeIncidentTetrahedraTest_c_le : public GetBorderEdgeIncidentTetrahedraTest {};
 
-    TEST_P(GetBorderIncidentTetrahedraTest_c_le, each_c_le) {
+    TEST_P(GetBorderEdgeIncidentTetrahedraTest_c_le, each_c_le) {
         auto [c, le, _] = GetParam();
 
         EXPECT_TRUE(compute(c, le));
@@ -396,7 +490,7 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        GetBorderIncidentTetrahedraTest_c_le,
+        GetBorderEdgeIncidentTetrahedraTest_c_le,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE)));
 
     /* == CellSplit14Test ========================================================================================== */
