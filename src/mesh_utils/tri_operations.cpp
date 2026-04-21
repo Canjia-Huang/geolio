@@ -11,21 +11,21 @@ namespace GEO::MeshUtils::Tri
 {
     bool get_vertex_incident_triangles(
         const GEO::Mesh& M,
-        const GEO::index_t start_f,
-        const GEO::index_t start_lv,
+        const GEO::index_t _f,
+        const GEO::index_t _lv,
         std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_f_and_lv
         ) {
-        assert(start_f < M.facets.nb());
-        assert(start_lv < 3);
+        assert(_f < M.facets.nb());
+        assert(_lv < 3);
 
-        const GEO::index_t v = M.facets.vertex(start_f, start_lv);
+        const GEO::index_t v = M.facets.vertex(_f, _lv);
         bool is_on_border = false;
 
         std::vector<std::pair<GEO::index_t, GEO::index_t>> next_ordered_f_and_lv;
         std::vector<std::pair<GEO::index_t, GEO::index_t>> prev_ordered_f_and_lv;
         {
-            GEO::index_t f = start_f;
-            GEO::index_t lv = start_lv;
+            GEO::index_t f = _f;
+            GEO::index_t lv = _lv;
             do {
                 next_ordered_f_and_lv.emplace_back(f, lv);
 
@@ -37,12 +37,12 @@ namespace GEO::MeshUtils::Tri
                 f = next_f;
                 lv = M.facets.find_vertex(f, v);
                 assert(lv != GEO::NO_INDEX);
-            } while (f != start_f);
+            } while (f != _f);
         }
 
         if (is_on_border) { // inverse travel
-            GEO::index_t f = start_f;
-            GEO::index_t lv = (start_lv+2)%3;
+            GEO::index_t f = _f;
+            GEO::index_t lv = (_lv+2)%3;
 
             for (;;) {
                 const GEO::index_t next_f = M.facets.adjacent(f, lv);
