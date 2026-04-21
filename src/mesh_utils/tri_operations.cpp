@@ -165,9 +165,9 @@ namespace GEO::MeshUtils::Tri
         const GEO::index_t f,
         const GEO::index_t lv,
         const double r,
-        GEO::index_t& disuse_v,
-        GEO::index_t& disuse_f0,
-        GEO::index_t& disuse_f1
+        GEO::index_t* disuse_v,
+        GEO::index_t* disuse_f0,
+        GEO::index_t* disuse_f1
         ) {
         // LOG::TRACE("{}({}, {}, {})", __FUNCTION__, f, lv, r);
         assert(f < M.facets.nb());
@@ -197,9 +197,10 @@ namespace GEO::MeshUtils::Tri
         const auto& p0 = M.facets.point(f, lv0);
         const auto& p1 = M.facets.point(f, lv1);
         M.vertices.point(v0) = (1-r)*p0 + r*p1;
-        disuse_v = v1;
-
-        disuse_f0 = f;
+        if (disuse_v != nullptr)
+            *disuse_v = v1;
+        if (disuse_f0 != nullptr)
+            *disuse_f0 = f;
 
         /* Find all (f, lv) that incident to v1 */
         std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_and_lv;
@@ -236,7 +237,8 @@ namespace GEO::MeshUtils::Tri
             const GEO::index_t naf1 = M.facets.adjacent(af0, nlv1);
             const GEO::index_t naf2 = M.facets.adjacent(af0, nlv2);
 
-            disuse_f1 = af0;
+            if (disuse_f1 != nullptr)
+                *disuse_f1 = af0;
 
             /* Set facet adjacency */
             if (naf1 != GEO::NO_FACET) {
@@ -248,8 +250,10 @@ namespace GEO::MeshUtils::Tri
                 M.facets.set_adjacent(naf2, M.facets.find_vertex(naf2, nv0), naf1);
             }
         }
-        else
-            disuse_f1 = GEO::NO_FACET;
+        else {
+            if (disuse_f1 != nullptr)
+                *disuse_f1 = GEO::NO_FACET;
+        }
 
         /* Set facet vertices */
         for (const auto& [adj_f, adj_lv] : ordered_f_and_lv)
