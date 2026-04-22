@@ -185,7 +185,7 @@ namespace GEO::MeshUtils::Tet
         assert(0);
     }
 
-    void cell_split_1_4(
+    void cell_split(
         GEO::Mesh& M,
         const GEO::index_t c,
         const GEO::index_t new_v,

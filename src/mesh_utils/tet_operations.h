@@ -84,7 +84,7 @@ namespace GEO::MeshUtils::Tet
      * @param[in]     new_c1 Index of the second pre-allocated tetrahedron created by the split
      * @param[in]     new_c2 Index of the third pre-allocated tetrahedron created by the split
      */
-    void cell_split_1_4(
+    void cell_split(
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t new_v,

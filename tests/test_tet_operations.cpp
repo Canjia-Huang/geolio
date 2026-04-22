@@ -265,7 +265,7 @@ namespace GEO::MeshUtils::Test
             M_c_affected[new_c+1] = 1;
             M_c_affected[new_c+2] = 1;
 
-            cell_split_1_4(
+            cell_split(
                 M,
                 c,
                 new_v,
