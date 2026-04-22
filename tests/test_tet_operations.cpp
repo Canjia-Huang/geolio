@@ -376,6 +376,85 @@ namespace GEO::MeshUtils::Test
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF)));
 }
 
+/* == CellEdgeSplitTest ============================================================================================ */
+
+namespace GEO::MeshUtils::Test
+{
+    class CellEdgeSplitTest : public TetrahedronOperationsTest {
+    public:
+        void compute(
+            const GEO::index_t c,
+            const GEO::index_t le
+            ) {
+            const GEO::index_t ev0 = M.cells.edge_vertex(c, le, 0);
+            const GEO::index_t ev1 = M.cells.edge_vertex(c, le, 1);
+            for (const auto& cc : M.cells) {
+                for (GEO::index_t lle = 0; lle < 6; ++lle) {
+                    const GEO::index_t eev0 = M.cells.edge_vertex(cc, lle, 0);
+                    const GEO::index_t eev1 = M.cells.edge_vertex(cc, lle, 1);
+                    if ((eev0 == ev0 && eev1 == ev1) || (eev0 == ev1 && eev1 == ev0)) {
+                        M_c_affected[cc] = 1;
+                        break;
+                    }
+                }
+            }
+
+            const GEO::index_t new_v = M.vertices.create_vertices(1);
+            const GEO::index_t new_cells_nb = 10.0*GEO::Numeric::random_float32();
+            const GEO::index_t new_c = M.cells.create_tets(new_cells_nb);
+
+            std::vector<GEO::index_t> new_cs;
+            for (GEO::index_t cc = new_c; cc < M.cells.nb(); ++cc) {
+                new_cs.push_back(cc);
+                M_c_affected[cc] = 1;
+            }
+
+            cell_edge_split(M, c, le, new_v, new_cs, GEO::Numeric::random_float32());
+
+            /* Delete unuse cells */
+            GEO::vector<GEO::index_t> cells_to_delete(M.cells.nb(), 0);
+            for (const auto& cc : new_cs) {
+                if (cc != GEO::NO_CELL) {
+                    for (GEO::index_t lv = 0; lv < 4; ++lv)
+                        EXPECT_TRUE(M.cells.vertex(cc, lv) == GEO::NO_VERTEX);
+                    cells_to_delete[cc] = 1;
+                }
+            }
+            M.cells.delete_elements(cells_to_delete);
+        }
+    };
+
+    class InteriorCellEdgeSplitTest : public CellEdgeSplitTest {};
+
+    TEST_P(InteriorCellEdgeSplitTest, each_edge) {
+        auto [c, le, __] = GetParam();
+
+        compute(c, le);
+        check_connections();
+        save_results_c_le(c, le);
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        InteriorCellEdgeSplitTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LE)));
+
+    class BorderCellEdgeSplitTest : public CellEdgeSplitTest {};
+
+    TEST_P(BorderCellEdgeSplitTest, each_edge) {
+        auto [c, le, __] = GetParam();
+
+        compute(c, le);
+        check_connections();
+        save_results_c_le(c, le);
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        BorderCellEdgeSplitTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE)));
+}
+
 /* == CellEdgeCollapseTest ========================================================================================= */
 
 namespace GEO::MeshUtils::Test

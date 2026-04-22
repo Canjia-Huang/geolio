@@ -418,6 +418,84 @@ namespace GEO::MeshUtils::Tet
         }
     }
 
+    void cell_edge_split(
+        GEO::Mesh& M,
+        const GEO::index_t _c,
+        const GEO::index_t le,
+        const GEO::index_t new_v,
+        std::vector<GEO::index_t>& new_cs,
+        const double r
+        ) {
+        assert(_c < M.cells.nb());
+        assert(le < 6);
+        assert(new_v < M.vertices.nb());
+        assert(std::ranges::all_of(new_cs, [&](const GEO::index_t c){ return c < M.cells.nb(); }));
+
+        /* Find all adjacent cells */
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_c_and_lf;
+        get_edge_incident_tetrahedra(M, _c, le, ordered_c_and_lf);
+        if (new_cs.size() < ordered_c_and_lf.size()) {
+            const GEO::index_t new_cells_nb = ordered_c_and_lf.size()-new_cs.size();
+            GEO::index_t new_c = M.cells.create_tets(new_cells_nb);
+            for (GEO::index_t i = 0; i < new_cells_nb; ++i)
+                new_cs.push_back(new_c++);
+        }
+        assert(new_cs.size() >= ordered_c_and_lf.size());
+
+        const GEO::index_t ev0 = M.cells.edge_vertex(_c, le, 0);
+        const GEO::index_t ev1 = M.cells.edge_vertex(_c, le, 1);
+
+        /* Set new vertex */
+        M.vertices.point(new_v) = (1-r)*M.vertices.point(ev0) + r*M.vertices.point(ev1);
+
+        for (GEO::index_t i = 0, i_end = ordered_c_and_lf.size(); i < i_end; ++i) {
+            const auto& [c, lf0] = ordered_c_and_lf[i];
+            const auto& new_c = new_cs[i];
+
+            const GEO::index_t lv0 = M.cells.find_tet_vertex(c, ev0);
+            const GEO::index_t lv1 = M.cells.find_tet_vertex(c, ev1);
+            const GEO::index_t lv2 = TET_LF_INCIDENT_LV[lf0][0]^TET_LF_INCIDENT_LV[lf0][1]^TET_LF_INCIDENT_LV[lf0][2]^lv0^lv1;
+            assert(lv2 < 4 && lv2 != lv0 && lv2 != lv1);
+            const GEO::index_t lv3 = 0^1^2^3^lv0^lv1^lv2;
+            assert(lv3 < 4 && lv3 != lv0 && lv3 != lv1 && lv3 != lv2);
+
+            const GEO::index_t v2 = M.cells.vertex(c, lv2);
+            const GEO::index_t v3 = M.cells.vertex(c, lv3);
+
+            // const GEO::index_t nc0 = M.cells.adjacent(c, lv0);
+            const GEO::index_t nc1 = M.cells.adjacent(c, lv1);
+
+            /* Set cell vertices */
+            M.cells.set_vertex(c, lv0, new_v);
+            M.cells.set_vertex(new_c, lv0, ev0);
+            M.cells.set_vertex(new_c, lv1, new_v);
+            M.cells.set_vertex(new_c, lv2, v2);
+            M.cells.set_vertex(new_c, lv3, v3);
+
+            /* Set cell adjacent */
+            M.cells.set_adjacent(c, lv1, new_c);
+            M.cells.set_adjacent(new_c, lv0, c);
+            M.cells.set_adjacent(new_c, lv1, nc1);
+            if (M.cells.adjacent(c, lv2) != GEO::NO_CELL)
+                M.cells.set_adjacent(new_c, lv2, new_cs[(i+i_end-1)%i_end]);
+            if (M.cells.adjacent(c, lv3) != GEO::NO_CELL)
+                M.cells.set_adjacent(new_c, lv3, new_cs[(i+1)%i_end]);
+            if (nc1 != GEO::NO_CELL) {
+                const GEO::index_t nlf = M.cells.find_tet_facet(
+                    nc1,
+                    M.cells.facet_vertex(new_c, lv1, 2),
+                    M.cells.facet_vertex(new_c, lv1, 1),
+                    M.cells.facet_vertex(new_c, lv1, 0));
+                assert(nlf != GEO::NO_INDEX);
+                M.cells.set_adjacent(nc1, nlf, new_c);
+            }
+        }
+
+        /* Label used cell to GEO::NO_CELL */
+        for (GEO::index_t i = 0, i_end = ordered_c_and_lf.size(); i < i_end; ++i)
+            new_cs[i] = GEO::NO_CELL;
+    }
+
     void cell_edge_collapse(
         GEO::Mesh& M,
         const GEO::index_t c,

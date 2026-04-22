@@ -121,6 +121,33 @@ namespace GEO::MeshUtils::Tet
         GEO::index_t new_c3 = GEO::NO_CELL);
 
     /**
+     * Splits a tetrahedral edge by inserting one vertex and splitting all incident cells.
+     *
+     * The edge is identified by local edge index @p le in cell @p _c. The function
+     * traverses all tetrahedra incident to that edge, places @p new_v on the edge,
+     * and splits each incident tetrahedron into two tetrahedra while updating
+     * local adjacencies.
+     *
+     * Vector @p new_cs provides pre-allocated cell indices for the new tetrahedra,
+     * one per incident cell. If it contains fewer indices than required, additional
+     * tetrahedra are created internally, which is slower.
+     *
+     * @param[in,out] M      The tetrahedral mesh to modify.
+     * @param[in]     _c     Index of a seed cell containing the target edge.
+     * @param[in]     le     Local edge index (0-5) in cell @p _c.
+     * @param[in]     new_v  Index of a pre-allocated vertex used as the split vertex.
+     * @param[in,out] new_cs Pre-allocated cell indices for split results; consumed entries are set to @c GEO::NO_CELL.
+     * @param[in]     r      Interpolation ratio for placing @p new_v on the edge (`0` at the first endpoint, `1` at the second).
+     */
+    void cell_edge_split(
+        GEO::Mesh& M,
+        GEO::index_t _c,
+        GEO::index_t le,
+        GEO::index_t new_v,
+        std::vector<GEO::index_t>& new_cs,
+        double r = 0.5);
+
+    /**
      * Collapses a tetrahedral edge by moving one endpoint along the edge and
      * updating the local cavity connectivity.
      *
