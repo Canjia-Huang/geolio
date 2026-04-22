@@ -35,7 +35,7 @@ target_link_libraries(${PROJECT_NAME}_TESTS
         GTest::gtest_main
 )
 
-add_compile_definitions(TEST_DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/")
+#add_compile_definitions(TEST_DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/")
 
 include(GoogleTest)
 gtest_discover_tests(${PROJECT_NAME}_TESTS)

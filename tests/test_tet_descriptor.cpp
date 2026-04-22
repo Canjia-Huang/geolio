@@ -8,10 +8,10 @@
 #include <geogram/mesh/mesh.h>
 #include <unordered_set>
 
+using namespace GEO::MeshUtils;
+
 namespace GEO::MeshUtils::Test
 {
-    using namespace GEO::MeshUtils;
-
     class TetDescriptorTest : public ::testing::Test {
     public:
         void SetUp() override {

@@ -18,8 +18,8 @@ namespace GEO::MeshUtils::Tri
      * from one border side to the other.
      *
      * @param[in] M Input triangle mesh.
-     * @param[in] start_f Seed facet index incident to the target vertex.
-     * @param[in] start_lv Local vertex index (0, 1, or 2) of the target vertex in @p start_f.
+     * @param[in] _f Seed facet index incident to the target vertex.
+     * @param[in] _lv Local vertex index (0, 1, or 2) of the target vertex in @p start_f.
      * @param[out] ordered_f_and_lv Output ordered one-ring list. Each element is (f, lv), where
      *                              @p f is an incident facet and @p lv is the local index of the target
      *                              vertex inside that facet. Existing contents are cleared.
@@ -27,8 +27,8 @@ namespace GEO::MeshUtils::Tri
      */
     bool get_vertex_incident_triangles(
         const GEO::Mesh& M,
-        GEO::index_t start_f,
-        GEO::index_t start_lv,
+        GEO::index_t _f,
+        GEO::index_t _lv,
         std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_f_and_lv);
 
     /**
