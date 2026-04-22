@@ -167,7 +167,7 @@ namespace GEO::MeshUtils::Tet
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t le,
-        double r,
+        double r = 0.5,
         GEO::index_t* disuse_v = nullptr,
         std::vector<GEO::index_t>* disuse_cs = nullptr);
 
