@@ -53,10 +53,10 @@ namespace GEO::MeshUtils::Tri
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
-        double r,
         GEO::index_t new_v,
         GEO::index_t new_f0,
-        GEO::index_t new_f1);
+        GEO::index_t new_f1,
+        double r = 0.5);
 
     /**
      * @brief Collapse an edge of a triangle and update local connectivity.
@@ -79,7 +79,7 @@ namespace GEO::MeshUtils::Tri
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
-        double r,
+        double r = 0.5,
         GEO::index_t* disuse_v = nullptr,
         GEO::index_t* disuse_f0 = nullptr,
         GEO::index_t* disuse_f1 = nullptr);

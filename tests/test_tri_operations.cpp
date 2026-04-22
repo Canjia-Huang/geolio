@@ -137,9 +137,9 @@ namespace GEO::MeshUtils::Test
             edge_split(
                 M,
                 f, lv,
-                r,
                 new_v,
-                new_f, new_f+1);
+                new_f, new_f+1,
+                r);
         }
     };
 
@@ -170,9 +170,9 @@ namespace GEO::MeshUtils::Test
             edge_split(
                 M,
                 f, lv,
-                r,
                 new_v,
-                new_f, GEO::NO_FACET);
+                new_f, GEO::NO_FACET,
+                r);
         }
     };
 
