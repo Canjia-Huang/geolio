@@ -66,14 +66,14 @@ namespace GEO::MeshUtils::Tri
         return is_on_border;
     }
 
-    void edge_split(
+    void facet_edge_split(
         GEO::Mesh& M,
         const GEO::index_t f,
         const GEO::index_t lv,
-        const double r,
         const GEO::index_t new_v,
         const GEO::index_t new_f0,
-        const GEO::index_t new_f1
+        const GEO::index_t new_f1,
+        const double r
         ) {
         assert(f < M.facets.nb());
         assert(lv < 3);
@@ -159,7 +159,7 @@ namespace GEO::MeshUtils::Tri
         }
     }
 
-    void edge_collapse(
+    void facet_edge_collapse(
         GEO::Mesh& M,
         const GEO::index_t f,
         const GEO::index_t lv,
@@ -258,7 +258,7 @@ namespace GEO::MeshUtils::Tri
             M.facets.set_vertex(adj_f, adj_lv, v0);
     }
 
-    void edge_swap(
+    void facet_edge_swap(
         GEO::Mesh& M,
         const GEO::index_t f,
         const GEO::index_t lv

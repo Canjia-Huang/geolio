@@ -49,14 +49,14 @@ namespace GEO::MeshUtils::Tri
      * @param[in] new_f1 Index of the pre-allocated new facet produced by splitting the adjacent facet @p af.
      * Ignored when @p af does not exist (NO_FACET).
      */
-     void edge_split(
+     void facet_edge_split(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
-        double r,
         GEO::index_t new_v,
         GEO::index_t new_f0,
-        GEO::index_t new_f1);
+        GEO::index_t new_f1,
+        double r = 0.5);
 
     /**
      * @brief Collapse an edge of a triangle and update local connectivity.
@@ -75,11 +75,11 @@ namespace GEO::MeshUtils::Tri
      * @param[out] disuse_f1 Index of the second unused facet across the collapsed edge;
      *                       set to GEO::NO_FACET when the edge is on the border.
      */
-    void edge_collapse(
+    void facet_edge_collapse(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv,
-        double r,
+        double r = 0.5,
         GEO::index_t* disuse_v = nullptr,
         GEO::index_t* disuse_f0 = nullptr,
         GEO::index_t* disuse_f1 = nullptr);
@@ -99,7 +99,7 @@ namespace GEO::MeshUtils::Tri
      *               (@c M.facets.adjacent(f, lv) != GEO::NO_FACET).
      * @pre the edge to flip is a border edge
      */
-    void edge_swap(
+    void facet_edge_swap(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv);

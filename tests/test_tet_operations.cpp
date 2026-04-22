@@ -248,11 +248,11 @@ namespace GEO::MeshUtils::Test
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE)));
 }
 
-/* == CellSplit14Test ============================================================================================== */
+/* == CellSplitTest ================================================================================================ */
 
 namespace GEO::MeshUtils::Test
 {
-    class CellSplit14Test : public TetrahedronOperationsTest {
+    class CellSplitTest : public TetrahedronOperationsTest {
     public:
         void compute(
             const GEO::index_t c
@@ -265,7 +265,7 @@ namespace GEO::MeshUtils::Test
             M_c_affected[new_c+1] = 1;
             M_c_affected[new_c+2] = 1;
 
-            cell_split_1_4(
+            cell_split(
                 M,
                 c,
                 new_v,
@@ -273,9 +273,9 @@ namespace GEO::MeshUtils::Test
         }
     };
 
-    class InteriorCellSplit14Test : public CellSplit14Test {};
+    class InteriorCellSplitTest : public CellSplitTest {};
 
-    TEST_P(InteriorCellSplit14Test, each_cell) {
+    TEST_P(InteriorCellSplitTest, each_cell) {
         auto [c, _, __] = GetParam();
 
         compute(c);
@@ -285,12 +285,12 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        InteriorCellSplit14Test,
+        InteriorCellSplitTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_FACET_C_LF)));
 
-    class BorderCellSplit14Test : public CellSplit14Test {};
+    class BorderCellSplitTest : public CellSplitTest {};
 
-    TEST_P(BorderCellSplit14Test, each_cell) {
+    TEST_P(BorderCellSplitTest, each_cell) {
         auto [c, _, __] = GetParam();
 
         compute(c);
@@ -300,15 +300,166 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        BorderCellSplit14Test,
+        BorderCellSplitTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF)));
 }
 
-/* == EdgeCollapseTest ============================================================================================= */
+/* == CellFacetSplit =============================================================================================== */
 
 namespace GEO::MeshUtils::Test
 {
-    class EdgeCollapseTest : public TetrahedronOperationsTest {
+    class CellFacetSplitTest : public TetrahedronOperationsTest {};
+
+    class InteriorCellFacetSplitTest : public CellFacetSplitTest {
+    public:
+        void compute(
+            const GEO::index_t c,
+            const GEO::index_t lf
+            ) {
+            ASSERT_FALSE(M.cells.adjacent(c, lf) == GEO::NO_CELL);
+            const GEO::index_t new_v = M.vertices.create_vertices(1);
+            const GEO::index_t new_c = M.cells.create_tets(4);
+
+            M_c_affected[c] = 1;
+            M_c_affected[M.cells.adjacent(c, lf)] = 1;
+            M_c_affected[new_c] = 1;
+            M_c_affected[new_c+1] = 1;
+            M_c_affected[new_c+2] = 1;
+            M_c_affected[new_c+3] = 1;
+
+            cell_facet_split(M, c, lf, new_v, new_c, new_c+1, new_c+2, new_c+3);
+        }
+    };
+
+    TEST_P(InteriorCellFacetSplitTest, each_facet) {
+        auto [c, lf, __] = GetParam();
+
+        compute(c, lf);
+        check_connections();
+        save_results_c_lf(c, lf);
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        InteriorCellFacetSplitTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_FACET_C_LF)));
+
+    class BorderCellFacetSplitTest : public CellFacetSplitTest {
+    public:
+        void compute(
+            const GEO::index_t c,
+            const GEO::index_t lf
+            ) {
+            ASSERT_TRUE(M.cells.adjacent(c, lf) == GEO::NO_CELL);
+            const GEO::index_t new_v = M.vertices.create_vertices(1);
+            const GEO::index_t new_c = M.cells.create_tets(2);
+
+            M_c_affected[c] = 1;
+            M_c_affected[new_c] = 1;
+            M_c_affected[new_c+1] = 1;
+
+            cell_facet_split(M, c, lf, new_v, new_c, new_c+1);
+        }
+    };
+
+    TEST_P(BorderCellFacetSplitTest, each_facet) {
+        auto [c, lf, __] = GetParam();
+
+        compute(c, lf);
+        check_connections();
+        save_results_c_lf(c, lf);
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        BorderCellFacetSplitTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF)));
+}
+
+/* == CellEdgeSplitTest ============================================================================================ */
+
+namespace GEO::MeshUtils::Test
+{
+    class CellEdgeSplitTest : public TetrahedronOperationsTest {
+    public:
+        void compute(
+            const GEO::index_t c,
+            const GEO::index_t le
+            ) {
+            const GEO::index_t ev0 = M.cells.edge_vertex(c, le, 0);
+            const GEO::index_t ev1 = M.cells.edge_vertex(c, le, 1);
+            for (const auto& cc : M.cells) {
+                for (GEO::index_t lle = 0; lle < 6; ++lle) {
+                    const GEO::index_t eev0 = M.cells.edge_vertex(cc, lle, 0);
+                    const GEO::index_t eev1 = M.cells.edge_vertex(cc, lle, 1);
+                    if ((eev0 == ev0 && eev1 == ev1) || (eev0 == ev1 && eev1 == ev0)) {
+                        M_c_affected[cc] = 1;
+                        break;
+                    }
+                }
+            }
+
+            const GEO::index_t new_v = M.vertices.create_vertices(1);
+            const GEO::index_t new_cells_nb = 10.0*GEO::Numeric::random_float32();
+            const GEO::index_t new_c = M.cells.create_tets(new_cells_nb);
+
+            std::vector<GEO::index_t> new_cs;
+            for (GEO::index_t cc = new_c; cc < M.cells.nb(); ++cc) {
+                new_cs.push_back(cc);
+                M_c_affected[cc] = 1;
+            }
+
+            cell_edge_split(M, c, le, new_v, new_cs, GEO::Numeric::random_float32());
+
+            /* Delete unuse cells */
+            GEO::vector<GEO::index_t> cells_to_delete(M.cells.nb(), 0);
+            for (const auto& cc : new_cs) {
+                if (cc != GEO::NO_CELL) {
+                    for (GEO::index_t lv = 0; lv < 4; ++lv)
+                        EXPECT_TRUE(M.cells.vertex(cc, lv) == GEO::NO_VERTEX);
+                    cells_to_delete[cc] = 1;
+                }
+            }
+            M.cells.delete_elements(cells_to_delete);
+        }
+    };
+
+    class InteriorCellEdgeSplitTest : public CellEdgeSplitTest {};
+
+    TEST_P(InteriorCellEdgeSplitTest, each_edge) {
+        auto [c, le, __] = GetParam();
+
+        compute(c, le);
+        check_connections();
+        save_results_c_le(c, le);
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        InteriorCellEdgeSplitTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LE)));
+
+    class BorderCellEdgeSplitTest : public CellEdgeSplitTest {};
+
+    TEST_P(BorderCellEdgeSplitTest, each_edge) {
+        auto [c, le, __] = GetParam();
+
+        compute(c, le);
+        check_connections();
+        save_results_c_le(c, le);
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        BorderCellEdgeSplitTest,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE)));
+}
+
+/* == CellEdgeCollapseTest ========================================================================================= */
+
+namespace GEO::MeshUtils::Test
+{
+    class CellEdgeCollapseTest : public TetrahedronOperationsTest {
     public:
         void compute(
             const GEO::index_t c,
@@ -320,7 +471,7 @@ namespace GEO::MeshUtils::Test
 
             const GEO::index_t ev0 = M.cells.edge_vertex(c, le, 0);
 
-            edge_collapse(
+            cell_edge_collapse(
                 M,
                 c,
                 le,
@@ -346,9 +497,9 @@ namespace GEO::MeshUtils::Test
         }
     };
 
-    class InteriorEdgeCollapseTest : public EdgeCollapseTest {};
+    class InteriorCellEdgeCollapseTest : public CellEdgeCollapseTest {};
 
-    TEST_P(InteriorEdgeCollapseTest, each_edge) {
+    TEST_P(InteriorCellEdgeCollapseTest, each_edge) {
         auto [c, le, _] = GetParam();
 
         compute(c, le, GEO::Numeric::random_float32());
@@ -358,12 +509,12 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        InteriorEdgeCollapseTest,
+        InteriorCellEdgeCollapseTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LE)));
 
-    class BorderEdgeCollapseTest : public EdgeCollapseTest {};
+    class BorderCellEdgeCollapseTest : public CellEdgeCollapseTest {};
 
-    TEST_P(BorderEdgeCollapseTest, each_edge) {
+    TEST_P(BorderCellEdgeCollapseTest, each_edge) {
         auto [c, le, _] = GetParam();
 
         compute(c, le, GEO::Numeric::random_float32());
@@ -373,17 +524,17 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        BorderEdgeCollapseTest,
+        BorderCellEdgeCollapseTest,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_EDGE_C_LE)));
 }
 
-/* == EdgeSwap23Test =========================================================================================== */
+/* == CellEdgeSwap23Test =========================================================================================== */
 
 namespace GEO::MeshUtils::Test
 {
-    class EdgeSwap23Test : public TetrahedronOperationsTest {};
+    class CellEdgeSwap23Test : public TetrahedronOperationsTest {};
 
-    class InteriorEdgeSwap23Test : public EdgeSwap23Test {
+    class InteriorCellEdgeSwap23Test : public CellEdgeSwap23Test {
     public:
         void compute(
             const GEO::index_t c,
@@ -396,14 +547,14 @@ namespace GEO::MeshUtils::Test
             M_c_affected[M.cells.adjacent(c, lf)] = 1;
             M_c_affected[new_c] = 1;
 
-            edge_swap_2_3(
+            cell_edge_swap_2_3(
                 M,
                 c, lf,
                 new_c);
         }
     };
 
-    TEST_P(InteriorEdgeSwap23Test, each_facet) {
+    TEST_P(InteriorCellEdgeSwap23Test, each_facet) {
         auto [c, lf, _] = GetParam();
 
         compute(c, lf);
@@ -413,10 +564,10 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        InteriorEdgeSwap23Test,
+        InteriorCellEdgeSwap23Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_FACET_C_LF)));
 
-    class BorderEdgeSwap23Test : public EdgeSwap23Test {
+    class BorderCellEdgeSwap23Test : public CellEdgeSwap23Test {
     public:
         void compute(
             const GEO::index_t c,
@@ -426,14 +577,14 @@ namespace GEO::MeshUtils::Test
 
             M_c_affected[c] = 1;
 
-            edge_swap_2_3(
+            cell_edge_swap_2_3(
                 M,
                 c, lf,
                 GEO::NO_CELL);
         }
     };
 
-    TEST_P(BorderEdgeSwap23Test, each_facet) {
+    TEST_P(BorderCellEdgeSwap23Test, each_facet) {
         auto [c, lf, _] = GetParam();
 
         compute(c, lf);
@@ -443,6 +594,6 @@ namespace GEO::MeshUtils::Test
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
-        BorderEdgeSwap23Test,
+        BorderCellEdgeSwap23Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF)));
 }
