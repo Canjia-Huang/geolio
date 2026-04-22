@@ -257,7 +257,7 @@ namespace GEO::MeshUtils::Tet
         }
     }
 
-    void facet_split(
+    void cell_facet_split(
         GEO::Mesh& M,
         const GEO::index_t c,
         const GEO::index_t lf,
@@ -418,7 +418,7 @@ namespace GEO::MeshUtils::Tet
         }
     }
 
-    void edge_collapse(
+    void cell_edge_collapse(
         GEO::Mesh& M,
         const GEO::index_t c,
         const GEO::index_t le,
@@ -483,7 +483,7 @@ namespace GEO::MeshUtils::Tet
             M.cells.set_vertex(cc, lv, ev0);
     }
 
-    void edge_swap_2_3(
+    void cell_edge_swap_2_3(
         GEO::Mesh& M,
         const GEO::index_t c,
         const GEO::index_t lf,

@@ -110,7 +110,7 @@ namespace GEO::MeshUtils::Tet
      * @param[in]     new_c2 Optional; index of the third pre-allocated tetrahedron used for interior facets.
      * @param[in]     new_c3 Optional; index of the fourth pre-allocated tetrahedron used for interior facets.
      */
-    void facet_split(
+    void cell_facet_split(
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t lf,
@@ -136,7 +136,7 @@ namespace GEO::MeshUtils::Tet
      * @param[out]    disuse_v  Optional; receives the removed vertex index when non-null.
      * @param[out]    disuse_cs Optional; receives indices of cells removed by the collapse when non-null.
      */
-    void edge_collapse(
+    void cell_edge_collapse(
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t le,
@@ -157,7 +157,7 @@ namespace GEO::MeshUtils::Tet
      * @param[in]     lf         Local facet index (0-3) of cell @p c defining the swap edge
      * @param[in,out] new_c      Index of the newly created cell for the 2-3 swap
      */
-    void edge_swap_2_3(
+    void cell_edge_swap_2_3(
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t lf,
