@@ -93,29 +93,32 @@ namespace GEO::MeshUtils::Tet
         GEO::index_t new_c2);
 
     /**
-     * Splits a tetrahedron on one border facet by inserting a facet-center vertex.
+     * Splits a tetrahedral facet by inserting a new vertex on the facet.
      *
-     * The target facet is identified by local facet index @p lf in cell @p c and
-     * is expected to be a boundary facet (`M.cells.adjacent(c, lf) == GEO::NO_CELL`).
-     * A new vertex @p new_v is placed at the centroid of that triangular facet.
-     * The original cell is then replaced by three tetrahedra: cell @p c (updated
-     * in place) plus two additional cells (@p new_c0 and @p new_c1), with
-     * adjacency updated accordingly.
+     * The vertex index @p new_v is expected to be pre-allocated. Its position will be set
+     * to the barycenter of facet @p lf in cell @p c. The incident tetrahedral connectivity
+     * is updated, and the resulting tetrahedra are written into the pre-allocated cells.
+     * For a boundary facet, only @p new_c0 and @p new_c1 are used. For an interior facet,
+     * @p new_c2 and @p new_c3 are also used.
      *
      * @param[in,out] M      The tetrahedral mesh to modify.
-     * @param[in]     c      Index of the tetrahedron that contains the border facet.
-     * @param[in]     lf     Local facet index (0-3) of the border facet in cell @p c.
-     * @param[in]     new_v  Index of a pre-allocated vertex used as the inserted facet-center vertex.
+     * @param[in]     c      Index of the tetrahedron that owns the target facet.
+     * @param[in]     lf     Local facet index (0-3) in cell @p c.
+     * @param[in]     new_v  Index of a pre-allocated vertex used as the split vertex.
      * @param[in]     new_c0 Index of the first pre-allocated tetrahedron created by the split.
      * @param[in]     new_c1 Index of the second pre-allocated tetrahedron created by the split.
+     * @param[in]     new_c2 Optional; index of the third pre-allocated tetrahedron used for interior facets.
+     * @param[in]     new_c3 Optional; index of the fourth pre-allocated tetrahedron used for interior facets.
      */
-    void border_facet_split(
+    void facet_split(
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t lf,
         GEO::index_t new_v,
         GEO::index_t new_c0,
-        GEO::index_t new_c1);
+        GEO::index_t new_c1,
+        GEO::index_t new_c2 = GEO::NO_CELL,
+        GEO::index_t new_c3 = GEO::NO_CELL);
 
     /**
      * Collapses a tetrahedral edge by moving one endpoint along the edge and

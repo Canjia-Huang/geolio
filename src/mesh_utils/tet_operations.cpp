@@ -257,17 +257,18 @@ namespace GEO::MeshUtils::Tet
         }
     }
 
-    void border_facet_split(
+    void facet_split(
         GEO::Mesh& M,
         const GEO::index_t c,
         const GEO::index_t lf,
         const GEO::index_t new_v,
         const GEO::index_t new_c0,
-        const GEO::index_t new_c1
+        const GEO::index_t new_c1,
+        const GEO::index_t new_c2,
+        const GEO::index_t new_c3
         ) {
         assert(c < M.cells.nb());
         assert(lf < 4);
-        assert(M.cells.adjacent(c, lf) == GEO::NO_CELL);
         assert(new_v < M.vertices.nb());
         assert(new_c0 < M.cells.nb());
         assert(new_c1 < M.cells.nb());
@@ -277,67 +278,143 @@ namespace GEO::MeshUtils::Tet
                                     M.vertices.point(M.cells.facet_vertex(c, lf, 1)) +
                                     M.vertices.point(M.cells.facet_vertex(c, lf, 2))) / 3;
 
-        const GEO::index_t lv0 = TET_LF_INCIDENT_LV[lf][0];
-        const GEO::index_t lv1 = TET_LF_INCIDENT_LV[lf][1];
-        const GEO::index_t lv2 = TET_LF_INCIDENT_LV[lf][2];
-        const GEO::index_t lv3 = 0^1^2^3^lv0^lv1^lv2;
-        assert(lv3 < 4 && lv3 != lv0 && lv3 != lv1 && lv3 != lv2);
-        const GEO::index_t v0 = M.cells.vertex(c, lv0);
-        const GEO::index_t v1 = M.cells.vertex(c, lv1);
-        const GEO::index_t v2 = M.cells.vertex(c, lv2);
-        const GEO::index_t v3 = M.cells.vertex(c, lv3);
-        const GEO::index_t nc0 = M.cells.adjacent(c, lv0);
-        const GEO::index_t nc1 = M.cells.adjacent(c, lv1);
-        // const GEO::index_t nc2 = M.cells.adjacent(c, lv2);
 
-        /*
-         *               1
-         *            /  |   \
-         *          /    |     \
-         *        /    new_v     \
-         *      /        /\       \
-         *    / new_c2 /    \ new_c0 \
-         *  /        / new_c1 \        \
-         * 0 -------------------------- 2
-         */
+        const GEO::index_t v0 = M.cells.vertex(c, TET_LF_INCIDENT_LV[lf][0]);
+        const GEO::index_t v1 = M.cells.vertex(c, TET_LF_INCIDENT_LV[lf][1]);
+        const GEO::index_t v2 = M.cells.vertex(c, TET_LF_INCIDENT_LV[lf][2]);
+        {
+            const GEO::index_t lv0 = TET_LF_INCIDENT_LV[lf][0];
+            const GEO::index_t lv1 = TET_LF_INCIDENT_LV[lf][1];
+            const GEO::index_t lv2 = TET_LF_INCIDENT_LV[lf][2];
+            const GEO::index_t lv3 = (0^1^2^3)^lv0^lv1^lv2;
+            assert(lv3 < 4 && lv3 != lv0 && lv3 != lv1 && lv3 != lv2);
 
-        /* Set cells vertices */
-        M.cells.set_vertex(c, lv2, new_v);
-        M.cells.set_vertex(new_c0, lv0, new_v);
-        M.cells.set_vertex(new_c0, lv1, v1);
-        M.cells.set_vertex(new_c0, lv2, v2);
-        M.cells.set_vertex(new_c0, lv3, v3);
-        M.cells.set_vertex(new_c1, lv0, v0);
-        M.cells.set_vertex(new_c1, lv1, new_v);
-        M.cells.set_vertex(new_c1, lv2, v2);
-        M.cells.set_vertex(new_c1, lv3, v3);
+            const GEO::index_t v3 = M.cells.vertex(c, lv3);
 
-        /* Set cells adjacent */
-        M.cells.set_adjacent(c, lv0, new_c0);
-        M.cells.set_adjacent(c, lv1, new_c1);
-        M.cells.set_adjacent(new_c0, lv0, nc0);
-        M.cells.set_adjacent(new_c0, lv1, new_c1);
-        M.cells.set_adjacent(new_c0, lv2, c);
-        M.cells.set_adjacent(new_c1, lv0, new_c0);
-        M.cells.set_adjacent(new_c1, lv1, nc1);
-        M.cells.set_adjacent(new_c1, lv2, c);
-        if (nc0 != GEO::NO_CELL) {
-            const GEO::index_t nlf = M.cells.find_tet_facet(
-                nc0,
-                M.cells.facet_vertex(new_c0, lv0, 2),
-                M.cells.facet_vertex(new_c0, lv0, 1),
-                M.cells.facet_vertex(new_c0, lv0, 0));
-            assert(nlf != GEO::NO_INDEX);
-            M.cells.set_adjacent(nc0, nlf, new_c0);
+            const GEO::index_t nc0 = M.cells.adjacent(c, lv0);
+            const GEO::index_t nc1 = M.cells.adjacent(c, lv1);
+
+            /*
+             *            lv1 (v1)
+             *            /  |   \
+             *          /    |     \
+             *        /    new_v     \
+             *      /        /\        \
+             *    /   c   /      \ new_c0\
+             *  /      /   new_c1   \      \
+             * lv0 (v0) ------------- lv2 (v2)
+             */
+
+            /* Set cells vertices */
+            M.cells.set_vertex(c, lv2, new_v);
+            M.cells.set_vertex(new_c0, lv0, new_v);
+            M.cells.set_vertex(new_c0, lv1, v1);
+            M.cells.set_vertex(new_c0, lv2, v2);
+            M.cells.set_vertex(new_c0, lv3, v3);
+            M.cells.set_vertex(new_c1, lv0, v0);
+            M.cells.set_vertex(new_c1, lv1, new_v);
+            M.cells.set_vertex(new_c1, lv2, v2);
+            M.cells.set_vertex(new_c1, lv3, v3);
+
+            /* Set cells adjacent */
+            M.cells.set_adjacent(c, lv0, new_c0);
+            M.cells.set_adjacent(c, lv1, new_c1);
+            M.cells.set_adjacent(new_c0, lv0, nc0);
+            M.cells.set_adjacent(new_c0, lv1, new_c1);
+            M.cells.set_adjacent(new_c0, lv2, c);
+            M.cells.set_adjacent(new_c0, lv3, new_c2);
+            M.cells.set_adjacent(new_c1, lv0, new_c0);
+            M.cells.set_adjacent(new_c1, lv1, nc1);
+            M.cells.set_adjacent(new_c1, lv2, c);
+            M.cells.set_adjacent(new_c1, lv3, new_c3);
+            if (nc0 != GEO::NO_CELL) {
+                const GEO::index_t nlf = M.cells.find_tet_facet(
+                    nc0,
+                    M.cells.facet_vertex(new_c0, lv0, 2),
+                    M.cells.facet_vertex(new_c0, lv0, 1),
+                    M.cells.facet_vertex(new_c0, lv0, 0));
+                assert(nlf != GEO::NO_INDEX);
+                M.cells.set_adjacent(nc0, nlf, new_c0);
+            }
+            if (nc1 != GEO::NO_CELL) {
+                const GEO::index_t nlf = M.cells.find_tet_facet(
+                    nc1,
+                    M.cells.facet_vertex(new_c1, lv1, 2),
+                    M.cells.facet_vertex(new_c1, lv1, 1),
+                    M.cells.facet_vertex(new_c1, lv1, 0));
+                assert(nlf != GEO::NO_INDEX);
+                M.cells.set_adjacent(nc1, nlf, new_c1);
+            }
         }
-        if (nc1 != GEO::NO_CELL) {
-            const GEO::index_t nlf = M.cells.find_tet_facet(
-                nc1,
-                M.cells.facet_vertex(new_c1, lv1, 2),
-                M.cells.facet_vertex(new_c1, lv1, 1),
-                M.cells.facet_vertex(new_c1, lv1, 0));
-            assert(nlf != GEO::NO_INDEX);
-            M.cells.set_adjacent(nc1, nlf, new_c1);
+
+        if (const auto& ac = M.cells.adjacent(c, lf);
+            ac != GEO::NO_CELL
+            ) {
+            assert(new_c2 < M.cells.nb());
+            assert(new_c3 < M.cells.nb());
+
+            const GEO::index_t lv0 = M.cells.find_tet_vertex(ac, v0);
+            const GEO::index_t lv1 = M.cells.find_tet_vertex(ac, v2);
+            const GEO::index_t lv2 = M.cells.find_tet_vertex(ac, v1);
+            const GEO::index_t lv3 = (0^1^2^3)^lv0^lv1^lv2;
+            assert(lv3 < 4 && lv3 != lv0 && lv3 != lv1 && lv3 != lv2);
+
+            const GEO::index_t v3 = M.cells.vertex(ac, lv3);
+
+            const GEO::index_t nc0 = M.cells.adjacent(ac, lv0);
+            const GEO::index_t nc2 = M.cells.adjacent(ac, lv2);
+
+            /*
+             *            lv2 (v1)
+             *            /  |   \
+             *          /    |     \
+             *        /    new_v     \
+             *      /        /\        \
+             *    /  ac   /      \ new_c2\
+             *  /      /   new_c3   \      \
+             * lv0 (v0) ------------- lv1 (v2)
+             */
+
+            /* Set cells vertices */
+            M.cells.set_vertex(ac, lv1, new_v);
+            M.cells.set_vertex(new_c2, lv0, new_v);
+            M.cells.set_vertex(new_c2, lv1, v2);
+            M.cells.set_vertex(new_c2, lv2, v1);
+            M.cells.set_vertex(new_c2, lv3, v3);
+            M.cells.set_vertex(new_c3, lv0, v0);
+            M.cells.set_vertex(new_c3, lv1, v2);
+            M.cells.set_vertex(new_c3, lv2, new_v);
+            M.cells.set_vertex(new_c3, lv3, v3);
+
+            /* Set cells adjacent */
+            M.cells.set_adjacent(ac, lv0, new_c2);
+            M.cells.set_adjacent(ac, lv2, new_c3);
+            M.cells.set_adjacent(new_c2, lv0, nc0);
+            M.cells.set_adjacent(new_c2, lv1, ac);
+            M.cells.set_adjacent(new_c2, lv2, new_c3);
+            M.cells.set_adjacent(new_c2, lv3, new_c0);
+            M.cells.set_adjacent(new_c3, lv0, new_c2);
+            M.cells.set_adjacent(new_c3, lv1, ac);
+            M.cells.set_adjacent(new_c3, lv2, nc2);
+            M.cells.set_adjacent(new_c3, lv3, new_c1);
+            if (nc0 != GEO::NO_CELL) {
+                const GEO::index_t nlf = M.cells.find_tet_facet(
+                    nc0,
+                    M.cells.facet_vertex(new_c2, lv0, 2),
+                    M.cells.facet_vertex(new_c2, lv0, 1),
+                    M.cells.facet_vertex(new_c2, lv0, 0));
+                assert(nlf != GEO::NO_INDEX);
+                M.cells.set_adjacent(nc0, nlf, new_c2);
+            }
+            if (nc2 != GEO::NO_CELL) {
+                const GEO::index_t nlf = M.cells.find_tet_facet(
+                    nc2,
+                    M.cells.facet_vertex(new_c3, lv2, 2),
+                    M.cells.facet_vertex(new_c3, lv2, 1),
+                    M.cells.facet_vertex(new_c3, lv2, 0));
+                assert(nlf != GEO::NO_INDEX);
+                M.cells.set_adjacent(nc2, nlf, new_c3);
+            }
         }
     }
 
