@@ -208,9 +208,9 @@ namespace GEO::MeshUtils::Test
             facet_edge_collapse(
                 M,
                 f, lv,
-                r,
-                &disuse_v,
-                &disuse_f0, &disuse_f1);
+                disuse_v,
+                disuse_f0, disuse_f1,
+                r);
 
             /* Clean disuse vertices and facets */
             GEO::vector<GEO::index_t> facets_to_delete(M.facets.nb(), 0);
@@ -246,9 +246,9 @@ namespace GEO::MeshUtils::Test
             facet_edge_collapse(
                 M,
                 f, lv,
-                r,
-                &disuse_v,
-                &disuse_f0, &disuse_f1);
+                disuse_v,
+                disuse_f0, disuse_f1,
+                r);
 
             /* Clean disuse vertices and facets */
             GEO::vector<GEO::index_t> facets_to_delete(M.facets.nb(), 0);
