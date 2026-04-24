@@ -160,16 +160,16 @@ namespace GEO::MeshUtils::Tet
      * @param[in]     c         Index of a cell containing the target edge.
      * @param[in]     le        Local edge index (0-5) in cell @p c.
      * @param[in]     r         Interpolation ratio for the kept vertex position on the edge.
-     * @param[out]    disuse_v  Optional; receives the removed vertex index when non-null.
-     * @param[out]    disuse_cs Optional; receives indices of cells removed by the collapse when non-null.
+     * @param[out]    disuse_v  Receives the removed vertex index.
+     * @param[out]    disuse_cs Receives indices of cells removed by the collapse.
      */
     void cell_edge_collapse(
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t le,
-        double r = 0.5,
-        GEO::index_t* disuse_v = nullptr,
-        std::vector<GEO::index_t>* disuse_cs = nullptr);
+        GEO::index_t& disuse_v,
+        std::vector<GEO::index_t>& disuse_cs,
+        double r = 0.5);
 
     /**
      * Performs a 2-3 edge swap operation on a tetrahedral mesh.
@@ -189,6 +189,12 @@ namespace GEO::MeshUtils::Tet
         GEO::index_t c,
         GEO::index_t lf,
         GEO::index_t new_c);
+
+    void cell_edge_swap_3_2(
+        GEO::Mesh& M,
+        GEO::index_t _c,
+        GEO::index_t _le,
+        GEO::index_t& disuse_c);
 }
 
 #endif //GEOGRAM_MESH_UTILS_TETRAHEDRON_OPERATIONS_H
