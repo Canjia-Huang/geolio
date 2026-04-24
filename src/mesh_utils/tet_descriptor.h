@@ -127,6 +127,23 @@ namespace GEO::MeshUtils
             {3, 0, 4}
         }
     };
+
+    /**
+     * Local-face pair to shared-local-edge lookup table for a tetrahedron.
+     *
+     * `TET_LF_LF_COMMON_LE[lf0][lf1]` gives the local edge (LE, 0-5)
+     * shared by local faces `lf0` and `lf1`.
+     *
+     * Diagonal entries (`lf0 == lf1`) are `GEO::NO_INDEX`.
+     */
+    constexpr std::array<std::array<GEO::index_t, 4>, 4> TET_LF_LF_COMMON_LE = {
+        {
+            {GEO::NO_INDEX, 1, 2, 0},
+            {1, GEO::NO_INDEX, 5, 4},
+            {2, 5, GEO::NO_INDEX, 3},
+            {0, 4, 3, GEO::NO_INDEX}
+        }
+    };
 }
 
 #endif //GEOGRAMMESHUTILS_TET_DESCRIPTOR_H
