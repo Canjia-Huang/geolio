@@ -25,7 +25,7 @@ add_executable(${PROJECT_NAME}_TESTS
 
 target_include_directories(${PROJECT_NAME}_TESTS
         PRIVATE
-        "${CMAKE_SOURCE_DIR}/src"
+        "${CMAKE_SOURCE_DIR}/include"
         "${CMAKE_SOURCE_DIR}/deps"
 )
 
