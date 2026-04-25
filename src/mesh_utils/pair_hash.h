@@ -11,7 +11,7 @@
 namespace GEO::MeshUtils
 {
     struct PairHash {
-        std::size_t operator () (std::pair<uint, uint> const& pair
+        std::size_t operator () (std::pair<uint32_t, uint32_t> const& pair
             ) const {
             const uint64_t key = (static_cast<uint64_t>(pair.first) << 32) | pair.second;
             return std::hash<uint64_t>{}(key);
