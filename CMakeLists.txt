@@ -18,20 +18,6 @@ list(PREPEND CMAKE_MODULE_PATH
         ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 ########################################################################################################################
-# Set variables
-########################################################################################################################
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin) # Set output path for the compiled files
-
-set(GEOGRAM_DIR "$ENV{GEOGRAM_DIR}" CACHE PATH "Directory where Geogram is installed")
-message(STATUS "GEOGRAM_DIR = ${GEOGRAM_DIR}")
-
-########################################################################################################################
-# Set options
-########################################################################################################################
-option(OPTION_BUILD_TESTS "Build tests" ON)
-message(STATUS "ENABLE_BUILD_TESTS = ${OPTION_BUILD_TESTS}")
-
-########################################################################################################################
 # Include 3rdParty
 ########################################################################################################################
 include(Dependencies)
@@ -39,7 +25,4 @@ include(Dependencies)
 ########################################################################################################################
 # Add subdirectories
 ########################################################################################################################
-add_subdirectory(app)
-if(OPTION_BUILD_TESTS)
-    add_subdirectory(tests)
-endif()
+add_subdirectory(tests)
