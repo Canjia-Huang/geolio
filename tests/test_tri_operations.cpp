@@ -276,22 +276,22 @@ namespace GEO::MeshUtils::Test
 
 namespace GEO::MeshUtils::Test
 {
-    class FlipFacetdgeTest : public TriangleOperationsTest {};
+    class FlipFacetdgeTest : public TriangleOperationsTest {
+    public:
+        bool compute(
+            const GEO::index_t f,
+            const GEO::index_t lv
+            ) {
+            return facet_edge_swap(M, f, lv);
+        }
+    };
 
-    class FlipInteriorFacetEdgeTest : public FlipFacetdgeTest {
-     public:
-         void compute(
-             const GEO::index_t f,
-             const GEO::index_t lv
-             ) {
-             facet_edge_swap(M, f, lv);
-         }
-     };
+    class FlipInteriorFacetEdgeTest : public FlipFacetdgeTest {};
 
     TEST_P(FlipInteriorFacetEdgeTest, each_edge) {
          auto [f, lv] = GetParam();
 
-         compute(f, lv);
+         EXPECT_TRUE(compute(f, lv));
          check_connections();
          save_results(f, lv);
      }
@@ -300,4 +300,18 @@ namespace GEO::MeshUtils::Test
          TriangleOperationsTest,
          FlipInteriorFacetEdgeTest,
          ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(INTERIOR_EDGES_F_LV)));
+
+    class FlipBorderFacetEdgeTest : public FlipFacetdgeTest {};
+
+    TEST_P(FlipBorderFacetEdgeTest, each_edge) {
+        auto [f, lv] = GetParam();
+
+        EXPECT_FALSE(compute(f, lv));
+        check_connections();
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+         TriangleOperationsTest,
+         FlipBorderFacetEdgeTest,
+         ::testing::ValuesIn(TRIANGLE_MESH_GET_TEST_PARAMS(BORDER_EDGES_F_LV)));
 }
