@@ -87,19 +87,19 @@ namespace GEO::MeshUtils::Tri
     /**
      * @brief Swap an interior edge shared by two triangles.
      *
-     * For facet @p f and local edge @p lv (between local vertices @c lv1 and @c lv2), this
-     * operation replaces the shared diagonal with the other diagonal of the local quadrilateral.
-     * The two incident facets keep their indices, while their vertex connectivity and adjacency
-     * links are updated in-place.
+     * For facet @p f and local edge @p lv, this operation replaces the shared diagonal of the
+     * two incident triangles with the other diagonal of the local quadrilateral. The two facet
+     * indices are kept unchanged, while their vertex connectivity and adjacency links are updated
+     * in-place.
      *
-     * @param[in, out] M Target triangle mesh whose facet connectivity/adjacency is modified.
+     * @param[in,out] M Target triangle mesh whose facet connectivity and adjacency are modified.
      * @param[in] f Index of one incident facet of the edge to flip.
      * @param[in] lv Local edge index (0, 1, or 2) in facet @p f identifying the edge opposite
-     *               local vertex @p lv. The edge must have a valid adjacent facet
-     *               (@c M.facets.adjacent(f, lv) != GEO::NO_FACET).
-     * @pre the edge to flip is a border edge
+     *               local vertex @p lv.
+     * @return true if the swap is performed successfully; false if the target edge is on the border
+     *         or the operation cannot be applied.
      */
-    void facet_edge_swap(
+    bool facet_edge_swap(
         GEO::Mesh& M,
         GEO::index_t f,
         GEO::index_t lv);

@@ -253,13 +253,17 @@ namespace GEO::MeshUtils::Tri
             M.facets.set_vertex(adj_f, adj_lv, v0);
     }
 
-    void facet_edge_swap(
+    bool facet_edge_swap(
         GEO::Mesh& M,
         const GEO::index_t f,
         const GEO::index_t lv
         ) {
         assert(f < M.facets.nb());
         assert(lv < 3);
+
+        const GEO::index_t af = M.facets.adjacent(f, lv);
+        if (af == GEO::NO_FACET)
+            return false;
 
         /*
          *          af0                            af0
@@ -277,9 +281,6 @@ namespace GEO::MeshUtils::Tri
         const GEO::index_t v1 = M.facets.vertex(f, lv1);
         const GEO::index_t v2 = M.facets.vertex(f, lv2);
 
-        const GEO::index_t af = M.facets.adjacent(f, lv);
-        if (af == GEO::NO_FACET)
-            return;
         const GEO::index_t af1 = M.facets.adjacent(f, lv1);
         // const GEO::index_t af2 = M.facets.adjacent(f, lv2);
 
@@ -309,5 +310,7 @@ namespace GEO::MeshUtils::Tri
             assert(M.facets.find_vertex(af1, v2) != GEO::NO_INDEX);
             M.facets.set_adjacent(af1, M.facets.find_vertex(af1, v2), af);
         }
+
+        return true;
     }
 }
