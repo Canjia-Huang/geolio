@@ -14,14 +14,14 @@
 namespace GEO::MeshUtils::Test
 {
     /**
-     * Build the reference tetrahedral test mesh used by tetrahedron operator tests.
+     * Build the Cartesian reference tetrahedral mesh used by operator tests.
      *
-     * The mesh is a 4x4x4 vertex lattice where each unit cube is decomposed into
-     * 6 tetrahedra, then cell adjacency is connected.
+     * The mesh is a 4x4x4 vertex lattice where each unit cube is decomposed
+     * into six tetrahedra, then cell adjacency is connected.
      *
      * @param[in,out] M The mesh to clear and rebuild.
      */
-    inline void build_tet_mesh(
+    inline void build_Cartesian_tet_mesh(
         GEO::Mesh& M
         ) {
         M.clear();
@@ -58,6 +58,150 @@ namespace GEO::MeshUtils::Test
         }
 
         M.cells.connect();
+    }
+
+    /**
+     * Build a regular tetrahedral reference mesh with layered planar samples.
+     *
+     * The mesh is assembled from predefined vertex layers and tetrahedral cell
+     * index tables, then connectivity is finalized with `M.cells.connect()`.
+     *
+     * @param[in,out] M The mesh to clear and rebuild.
+     */
+    inline void build_regular_tet_mesh(
+        GEO::Mesh& M
+        ) {
+        M.clear();
+
+        const double SQRT_3 = std::sqrt(3.0);
+
+        const std::array<GEO::vec2, 7> L0_VERTICES = {
+            {
+                GEO::vec2(-SQRT_3, 3), GEO::vec2(SQRT_3, 3),
+                GEO::vec2(-2*SQRT_3, 0), GEO::vec2(0, 0), GEO::vec2(2*SQRT_3, 0),
+                GEO::vec2(-SQRT_3, -3), GEO::vec2(SQRT_3, -3)
+            }
+        };
+        const std::array<GEO::vec2, 6> L1_VERTICES = {
+            {
+                GEO::vec2(-SQRT_3, 1), GEO::vec2(0, 2), GEO::vec2(SQRT_3, 1),
+                GEO::vec2(-SQRT_3, -1), GEO::vec2(0, -2), GEO::vec2(SQRT_3, -1)
+            }
+        };
+
+        GEO::index_t new_v = M.vertices.create_vertices(7+6+7+6+7);
+        for (const auto& p : L0_VERTICES)
+            M.vertices.point(new_v++) = GEO::vec3(p.x, p.y, 3);
+        for (const auto& p : L1_VERTICES)
+            M.vertices.point(new_v++) = GEO::vec3(p.x, p.y, 1);
+        for (const auto& p : L0_VERTICES)
+            M.vertices.point(new_v++) = GEO::vec3(p.x, p.y, 0);
+        for (const auto& p : L1_VERTICES)
+            M.vertices.point(new_v++) = GEO::vec3(p.x, p.y, -2);
+        for (const auto& p : L0_VERTICES)
+            M.vertices.point(new_v++) = GEO::vec3(p.x, p.y, -3);
+
+        constexpr std::array<GEO::index_t, 24> L0_CELLS = {
+            {
+                0, 3, 2, 7,
+                0, 1, 3, 8,
+                1, 4, 3, 9,
+                2, 3, 5, 10,
+                3, 6, 5, 11,
+                3, 4, 6, 12
+            }
+        };
+        constexpr std::array<GEO::index_t, 144> L1_CELLS = {
+            {
+                0, 2, 15, 7,    0, 15, 13, 7,
+                1, 0, 13, 8,    1, 13, 14, 8,
+                4, 1, 14, 9,    4, 14, 17, 9,
+                2, 5, 18, 10,   2, 18, 15, 10,
+                5, 6, 19, 11,   5, 19, 18, 11,
+                6, 4, 17, 12,   6, 17, 19, 12,
+                3, 0, 13, 7,    3, 13, 16, 7,   0, 3, 13, 8,    13, 3, 16, 8,
+                3, 1, 14, 8,    3, 14, 16, 8,   1, 3, 14, 9,    14, 3, 16, 9,
+                2, 3, 16, 7,    2, 16, 15, 7,   3, 2, 16, 10,   16, 2, 15, 10,
+                3, 4, 17, 9,    3, 17, 16, 9,   4, 3, 17, 12,   17, 3, 16, 12,
+                5, 3, 16, 10,   5, 16, 18, 10,  3, 5, 16, 11,   16, 5, 18, 11,
+                6, 3, 16, 11,   6, 16, 19, 11,  3, 6, 16, 12,   16, 6, 19, 12
+            }
+        };
+        constexpr std::array<GEO::index_t, 72> L2_CELLS = {
+            {
+                7, 15, 13, 20,      7, 13, 16, 20,      7, 16, 15, 20,
+                8, 13, 14, 21,      8, 14, 16, 21,      8, 16, 13, 21,
+                9, 16, 14, 22,      9, 14, 17, 22,      9, 17, 16, 22,
+                10, 18, 15, 23,     10, 15, 16, 23,     10, 16, 18, 23,
+                11, 18, 16, 24,     11, 16, 19, 24,     11, 19, 18, 24,
+                12, 16, 17, 25,     12, 17, 19, 25,     12, 19, 16, 25
+            }
+        };
+        constexpr std::array<GEO::index_t, 24> L3_CELLS = {
+            {
+                26, 28, 29, 20,
+                26, 29, 27, 21,
+                29, 30, 27, 22,
+                28, 31, 29, 23,
+                29, 31, 32, 24,
+                29, 32, 30, 25
+            }
+        };
+
+        GEO::index_t new_c = M.cells.create_tets((L0_CELLS.size()+L1_CELLS.size()+L2_CELLS.size()+L1_CELLS.size()+L3_CELLS.size())/4);
+        for (GEO::index_t i = 0, i_end = L0_CELLS.size(); i < i_end;) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv)
+                M.cells.set_vertex(new_c, lv, L0_CELLS[i++]);
+            ++new_c;
+        }
+        for (GEO::index_t i = 0, i_end = L1_CELLS.size(); i < i_end;) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv)
+                M.cells.set_vertex(new_c, lv, L1_CELLS[i++]);
+            ++new_c;
+        }
+        for (GEO::index_t i = 0, i_end = L2_CELLS.size(); i < i_end;) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv)
+                M.cells.set_vertex(new_c, lv, L2_CELLS[i++]);
+            ++new_c;
+        }
+        for (GEO::index_t i = 0, i_end = L1_CELLS.size(); i < i_end;) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv)
+                M.cells.set_vertex(new_c, lv, 13+L1_CELLS[i++]);
+            ++new_c;
+        }
+        for (GEO::index_t i = 0, i_end = L3_CELLS.size(); i < i_end;) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv)
+                M.cells.set_vertex(new_c, lv, L3_CELLS[i++]);
+            ++new_c;
+        }
+
+        M.cells.connect();
+    }
+
+    /**
+     * Build the active tetrahedral test mesh and validate cell orientation.
+     *
+     * This helper currently builds the Cartesian reference mesh (with an optional
+     * regular-mesh alternative kept in code comments) and asserts that all cells
+     * have non-negative signed volume.
+     *
+     * @param[in,out] M The mesh to clear and rebuild.
+     */
+    inline void build_tet_mesh(
+        GEO::Mesh& M
+        ) {
+        build_Cartesian_tet_mesh(M);
+        // build_regular_tet_mesh(M);
+
+        assert([&]() {
+            for (const auto& c : M.cells) {
+                if (GEO::Geom::tetra_signed_volume(
+                    M.cells.point(c, 0), M.cells.point(c, 1), M.cells.point(c, 2), M.cells.point(c, 3)
+                    ) < 0)
+                    return false;
+            }
+            return true;
+        }());
     }
 
     enum TETRAHEDRAL_MESH_TEST_PARAMS_TYPE {
@@ -203,9 +347,28 @@ namespace GEO::MeshUtils::Test
 
     public:
         /**
+         * Remove inverted tetrahedra from the current test mesh.
+         *
+         * A cell is marked for deletion when its signed volume is negative,
+         * then all marked cells are removed in one batch.
+         */
+        void clean_inverse_tets() {
+            GEO::vector<GEO::index_t> cells_to_delete(M.cells.nb(), 0);
+            for (const auto& c : M.cells) {
+                if (GEO::Geom::tetra_signed_volume(
+                    M.cells.point(c, 0), M.cells.point(c, 1), M.cells.point(c, 2), M.cells.point(c, 3)
+                    ) < 0)
+                    cells_to_delete[c] = 1;
+            }
+            M.cells.delete_elements(cells_to_delete);
+        }
+
+        /**
          * Verify that reconnecting the mesh preserves the current cell adjacency layout.
          */
         void check_connections() {
+            // clean_inverse_tets();
+
             std::vector<GEO::index_t> current_connections(4*M.cells.nb(), GEO::NO_CELL);
             for (const auto& c : M.cells) {
                 for (GEO::index_t lf = 0; lf < 4; ++lf)

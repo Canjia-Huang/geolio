@@ -475,9 +475,9 @@ namespace GEO::MeshUtils::Test
                 M,
                 c,
                 le,
-                r,
-                &disuse_v,
-                &disuse_cs);
+                disuse_v,
+                disuse_cs,
+                r);
 
             EXPECT_NE(disuse_v, ev0);
             for (const auto& cc : M.cells) {
@@ -536,28 +536,35 @@ namespace GEO::MeshUtils::Test
 
     class InteriorCellEdgeSwap23Test : public CellEdgeSwap23Test {
     public:
-        void compute(
+        bool compute(
             const GEO::index_t c,
             const GEO::index_t lf
             ) {
-            ASSERT_NE(M.cells.adjacent(c, lf), GEO::NO_CELL);
             const GEO::index_t new_c = M.cells.create_tets(1);
 
             M_c_affected[c] = 1;
             M_c_affected[M.cells.adjacent(c, lf)] = 1;
             M_c_affected[new_c] = 1;
 
-            cell_edge_swap_2_3(
+            return cell_edge_swap_2_3(
                 M,
                 c, lf,
                 new_c);
         }
     };
 
+    TEST_F(InteriorCellEdgeSwap23Test, test) {
+        const GEO::index_t c = 1;
+        const GEO::index_t lf = 1;
+        EXPECT_TRUE(compute(c, lf));
+        check_connections();
+        save_results_c_lf(c, lf);
+    }
+
     TEST_P(InteriorCellEdgeSwap23Test, each_facet) {
         auto [c, lf, _] = GetParam();
 
-        compute(c, lf);
+        EXPECT_TRUE(compute(c, lf));
         check_connections();
         save_results_c_lf(c, lf);
     }
@@ -569,15 +576,13 @@ namespace GEO::MeshUtils::Test
 
     class BorderCellEdgeSwap23Test : public CellEdgeSwap23Test {
     public:
-        void compute(
+        bool compute(
             const GEO::index_t c,
             const GEO::index_t lf
             ) {
-            ASSERT_EQ(M.cells.adjacent(c, lf), GEO::NO_CELL);
-
             M_c_affected[c] = 1;
 
-            cell_edge_swap_2_3(
+            return cell_edge_swap_2_3(
                 M,
                 c, lf,
                 GEO::NO_CELL);
@@ -587,13 +592,64 @@ namespace GEO::MeshUtils::Test
     TEST_P(BorderCellEdgeSwap23Test, each_facet) {
         auto [c, lf, _] = GetParam();
 
-        compute(c, lf);
+        EXPECT_FALSE(compute(c, lf));
         check_connections();
-        save_results_c_lf(c, lf);
     }
 
     INSTANTIATE_TEST_SUITE_P(
         TetrahedronOperationsTest,
         BorderCellEdgeSwap23Test,
         ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(BORDER_FACET_C_LF)));
+}
+
+/* == CellEdgeSwap32Test =========================================================================================== */
+
+namespace GEO::MeshUtils::Test
+{
+    class CellEdgeSwap32Test : public TetrahedronOperationsTest {
+    public:
+        void compute(
+            const GEO::index_t c,
+            const GEO::index_t le,
+            bool& processed
+            ) {
+            std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_c_and_lf;
+            get_edge_incident_tetrahedra(M, c, le, ordered_c_and_lf);
+            for (const auto &cc: ordered_c_and_lf | std::views::keys)
+                M_c_affected[cc] = 1;
+
+            GEO::index_t disuse_c = GEO::NO_CELL;
+
+            processed = cell_edge_swap_3_2(
+                M,
+                c,
+                le,
+                disuse_c);
+
+            if (processed) {
+                /* Clean disuse vertices and cells */
+                ASSERT_LT(disuse_c, M.cells.nb());
+                GEO::vector<GEO::index_t> cells_to_delete(M.cells.nb(), 0);
+                cells_to_delete[disuse_c] = 1;
+                M.cells.delete_elements(cells_to_delete);
+            }
+        }
+    };
+
+    TEST_P(CellEdgeSwap32Test, each_edge) {
+        auto [c, le, _] = GetParam();
+
+        bool processed;
+        compute(c, le, processed);
+
+        if (processed) {
+            check_connections();
+            save_results_c_le(c, le);
+        }
+    }
+
+    INSTANTIATE_TEST_SUITE_P(
+        TetrahedronOperationsTest,
+        CellEdgeSwap32Test,
+        ::testing::ValuesIn(TETRAHEDRON_MESH_GET_TEST_PARAMS(INTERIOR_EDGE_C_LE)));
 }
