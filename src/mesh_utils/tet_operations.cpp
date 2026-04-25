@@ -614,8 +614,11 @@ namespace GEO::MeshUtils::Tet
         assert(nlv0 != GEO::NO_INDEX && nlv1 != GEO::NO_INDEX && nlv2 != GEO::NO_INDEX);
         const GEO::index_t nv = M.cells.vertex(nc, nlf);
         const GEO::index_t nv0 = M.cells.vertex(nc, nlv0);
+        assert(nv0 == v0);
         const GEO::index_t nv1 = M.cells.vertex(nc, nlv1);
+        assert(nv1 == v2);
         const GEO::index_t nv2 = M.cells.vertex(nc, nlv2);
+        assert(nv2 == v1);
         const GEO::index_t nc_nc0 = M.cells.adjacent(nc, nlv0);
         const GEO::index_t nc_nc1 = M.cells.adjacent(nc, nlv1);
         const GEO::index_t nc_nc2 = M.cells.adjacent(nc, nlv2);
