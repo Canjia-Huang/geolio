@@ -6,7 +6,7 @@
 #define GEOGRAM_MESH_UTILS_ENVIRONMENT_SPDLOG_H
 
 #include <gtest/gtest.h>
-#include "common/log.h"
+#include "log.h"
 
 class SpdlogTestEnvironment final : public testing::Environment {
 public:

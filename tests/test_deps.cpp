@@ -7,7 +7,7 @@
 #include <geogram/mesh/mesh_io.h>
 #include <gtest/gtest.h>
 #include "utils.h"
-#include "common/log.h"
+#include "log.h"
 
 namespace GEO::MeshUtils::Test
 {

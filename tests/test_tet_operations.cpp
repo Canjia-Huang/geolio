@@ -553,14 +553,6 @@ namespace GEO::MeshUtils::Test
         }
     };
 
-    TEST_F(InteriorCellEdgeSwap23Test, test) {
-        const GEO::index_t c = 1;
-        const GEO::index_t lf = 1;
-        EXPECT_TRUE(compute(c, lf));
-        check_connections();
-        save_results_c_lf(c, lf);
-    }
-
     TEST_P(InteriorCellEdgeSwap23Test, each_facet) {
         auto [c, lf, _] = GetParam();
 
