@@ -30,7 +30,6 @@ target_include_directories(${PROJECT_NAME}_TESTS
 )
 
 target_link_libraries(${PROJECT_NAME}_TESTS
-        ${PROJECT_NAME}
         Geogram::geogram
         GTest::gtest_main
 )

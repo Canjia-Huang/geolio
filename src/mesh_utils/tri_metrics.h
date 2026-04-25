@@ -6,6 +6,7 @@
 #define GEOGRAM_MESH_UTILS_TRIANGLE_METRICS_H
 
 #include <geogram/mesh/mesh.h>
+#include <cassert>
 
 namespace GEO::MeshUtils
 {
@@ -18,11 +19,19 @@ namespace GEO::MeshUtils
      * @param[in] f Facet index of the target triangle.
      * @return Minimum interior angle of facet @p f (in radians, range: [0, pi], best: pi/3).
      */
-    double get_triangle_minimum_angle(
+    inline double get_triangle_minimum_angle(
         const GEO::Mesh& M,
-        GEO::index_t f);
-
-
+        const GEO::index_t f
+        ) {
+        assert(f < M.facets.nb());
+        const auto& p0 = M.facets.point(f, 0);
+        const auto& p1 = M.facets.point(f, 1);
+        const auto& p2 = M.facets.point(f, 2);
+        return std::min({
+            GEO::Geom::angle(p1-p0, p2-p0),
+            GEO::Geom::angle(p0-p1, p2-p1),
+            GEO::Geom::angle(p0-p2, p1-p2)});
+    }
 }
 
 #endif //GEOGRAM_MESH_UTILS_TRIANGLE_METRICS_H
