@@ -157,40 +157,55 @@ namespace GEO::MeshUtils::Tet
      * Collapsed cells/vertices are reported through optional output arguments.
      *
      * @param[in,out] M         The tetrahedral mesh to modify.
-     * @param[in]     c         Index of a cell containing the target edge.
-     * @param[in]     le        Local edge index (0-5) in cell @p c.
+     * @param[in]     _c         Index of a cell containing the target edge.
+     * @param[in]     _le        Local edge index (0-5) in cell @p c.
      * @param[in]     r         Interpolation ratio for the kept vertex position on the edge.
      * @param[out]    disuse_v  Receives the removed vertex index.
      * @param[out]    disuse_cs Receives indices of cells removed by the collapse.
      */
     void cell_edge_collapse(
         GEO::Mesh& M,
-        GEO::index_t c,
-        GEO::index_t le,
+        GEO::index_t _c,
+        GEO::index_t _le,
         GEO::index_t& disuse_v,
         std::vector<GEO::index_t>& disuse_cs,
         double r = 0.5);
 
     /**
-     * Performs a 2-3 edge swap operation on a tetrahedral mesh.
+     * Performs a 2-3 facet swap operation on a tetrahedral mesh.
      *
-     * This operation replaces 2 tetrahedra sharing a common facet with 3 tetrahedra
-     * by flipping the shared facet. Given a cell @p c with a local facet @p lf,
-     * this function identifies the adjacent cell across that facet and performs
-     * the topological transformation.
+     * This operation replaces two tetrahedra that share a common facet with
+     * three tetrahedra by flipping that facet. Given a seed cell @p c and its
+     * local facet @p lf, this function identifies the adjacent tetrahedron
+     * across the facet and updates the local connectivity accordingly.
      *
-     * @param[in,out] M          The tetrahedral mesh to modify
-     * @param[in]     c          Index of the first cell (tetrahedron) to swap
-     * @param[in]     lf         Local facet index (0-3) of cell @p c defining the swap edge
-     * @param[in,out] new_c      Index of the newly created cell for the 2-3 swap
+     * @param[in,out] M      The tetrahedral mesh to modify.
+     * @param[in]     c      Index of the seed cell containing the target facet.
+     * @param[in]     lf     Local facet index (0-3) of cell @p c.
+     * @param[in,out] new_c  Index of the pre-allocated cell used to store the newly created tetrahedron.
+     * @return true if the swap is performed successfully; false if the target facet is on the border or the operation cannot be applied.
      */
-    void cell_edge_swap_2_3(
+    bool cell_edge_swap_2_3(
         GEO::Mesh& M,
         GEO::index_t c,
         GEO::index_t lf,
         GEO::index_t new_c);
 
-    void cell_edge_swap_3_2(
+    /**
+     * Performs a 3-2 edge swap operation on a tetrahedral mesh.
+     *
+     * This operation replaces 3 tetrahedra sharing a common edge with 2 tetrahedra
+     * by removing the shared edge. Given a cell @p _c with a local edge @p _le,
+     * this function identifies all incident cells (expected to be exactly 3),
+     * performs the topological transformation, and reports the removed cell.
+     *
+     * @param[in,out] M        The tetrahedral mesh to modify.
+     * @param[in]     _c       Index of a seed cell containing the target edge.
+     * @param[in]     _le      Local edge index (0-5) in cell @p _c.
+     * @param[out]    disuse_c Reference to receive the index of the removed cell.
+     * @return true if the swap was performed successfully; false if preconditions are not met.
+     */
+    bool cell_edge_swap_3_2(
         GEO::Mesh& M,
         GEO::index_t _c,
         GEO::index_t _le,
