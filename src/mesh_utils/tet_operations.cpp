@@ -7,8 +7,6 @@
 #include <cassert>
 #include <ranges>
 #include <unordered_set>
-#include <geogram/mesh/mesh_io.h>
-
 #include "tet_descriptor.h"
 
 namespace
