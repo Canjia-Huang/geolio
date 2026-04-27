@@ -7,21 +7,9 @@
 #include <geogram/mesh/mesh_io.h>
 #include <gtest/gtest.h>
 #include "utils.h"
-#include "log.h"
 
 namespace GEO::MeshUtils::Test
 {
-    TEST(DepsSpdlogTest, log) {
-        LOG::TRACE("Hello World!");
-        LOG::DEBUG("Hello World!");
-        LOG::INFO("Hello World!");
-        LOG::WARN("Hello World!");
-        LOG::ERROR("Hello World!");
-        LOG::CRITICAL("Hello World!");
-
-        SUCCEED();
-    }
-
     TEST(DepsGeogramTest, tet_io) {
         GEO::Mesh M;
         M.vertices.create_vertices(4);
@@ -32,13 +20,13 @@ namespace GEO::MeshUtils::Test
         M.cells.create_tet(0,1,2,3);
 
         for (GEO::index_t lv = 0; lv < 4; ++lv)
-            LOG::INFO("tet lv {} - v {}", lv, M.cells.vertex(0, lv));
+            std::cout << "tet lv " << lv << " - v " << M.cells.vertex(0, lv) << std::endl;
         for (GEO::index_t le = 0; le < 6; ++le)
-            LOG::INFO("tet le {} - v {},{}", le, M.cells.edge_vertex(0, le, 0), M.cells.edge_vertex(0, le, 1));
+            std::cout << "tet le " << le << " - v " << M.cells.edge_vertex(0, le, 0) << "," << M.cells.edge_vertex(0, le, 1);
         for (GEO::index_t le = 0; le < 6; ++le)
-            LOG::INFO("tet le {} - adj_lf {},{}", le, M.cells.edge_adjacent_facet(0, le, 0), M.cells.edge_adjacent_facet(0, le, 1));
+            std::cout << "tet le " << le << " - adj_lf " << M.cells.edge_adjacent_facet(0, le, 0) << "," << M.cells.edge_adjacent_facet(0, le, 1);
         for (GEO::index_t lf = 0; lf < 4; ++lf)
-            LOG::INFO("tet lf {} - v {},{},{}", lf, M.cells.facet_vertex(0, lf, 0), M.cells.facet_vertex(0, lf, 1), M.cells.facet_vertex(0, lf, 2));
+            std::cout << "tet lf " << lf << " - v " << M.cells.facet_vertex(0, lf, 0) << "," << M.cells.facet_vertex(0, lf, 1) << "," << M.cells.facet_vertex(0, lf, 2);
 
         const std::string write_file_path = get_current_test_name() + ".mesh";
         EXPECT_TRUE(GEO::mesh_save(M, write_file_path));
@@ -64,13 +52,13 @@ namespace GEO::MeshUtils::Test
         M.cells.create_hex(0,1,2,3,4,5,6,7);
 
         for (GEO::index_t lv = 0; lv < 8; ++lv)
-            LOG::INFO("hex lv {} - v {}", lv, M.cells.vertex(0, lv));
+            std::cout << "hex lv " << lv << " - v " << M.cells.vertex(0, lv) << std::endl;
         for (GEO::index_t le = 0; le < 12; ++le)
-            LOG::INFO("hex le {} - v {},{}", le, M.cells.edge_vertex(0, le, 0), M.cells.edge_vertex(0, le, 1));
+            std::cout << "hex le " << le << " - v " << M.cells.edge_vertex(0, le, 0) << "," << M.cells.edge_vertex(0, le, 1) << std::endl;
         for (GEO::index_t le = 0; le < 12; ++le)
-            LOG::INFO("hex le {} - adj_lf {},{}", le, M.cells.edge_adjacent_facet(0, le, 0), M.cells.edge_adjacent_facet(0, le, 1));
+            std::cout << "hex le " << le << " - adj_lf " << M.cells.edge_adjacent_facet(0, le, 0) << "," << M.cells.edge_adjacent_facet(0, le, 1) << std::endl;
         for (GEO::index_t lf = 0; lf < 6; ++lf)
-            LOG::INFO("hex lf {} - v {},{},{},{}", lf, M.cells.facet_vertex(0, lf, 0), M.cells.facet_vertex(0, lf, 1), M.cells.facet_vertex(0, lf, 2), M.cells.facet_vertex(0, lf, 3));
+            std::cout << "hex lf " << lf << " - v " << M.cells.facet_vertex(0, lf, 0) << "," << M.cells.facet_vertex(0, lf, 1) << "," << M.cells.facet_vertex(0, lf, 2) << "," << M.cells.facet_vertex(0, lf, 3) << std::endl;
 
         const std::string write_file_path = get_current_test_name() + ".mesh";
         EXPECT_TRUE(GEO::mesh_save(M, write_file_path));
