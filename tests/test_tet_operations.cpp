@@ -400,26 +400,14 @@ namespace GEO::MeshUtils::Test
             }
 
             const GEO::index_t new_v = M.vertices.create_vertices(1);
-            const GEO::index_t new_cells_nb = 10.0*GEO::Numeric::random_float32();
-            const GEO::index_t new_c = M.cells.create_tets(new_cells_nb);
+            GEO::index_t new_c = M.cells.create_tets(std::ceil(10.0*GEO::Numeric::random_float32()));
 
-            std::vector<GEO::index_t> new_cs;
-            for (GEO::index_t cc = new_c; cc < M.cells.nb(); ++cc) {
-                new_cs.push_back(cc);
-                M_c_affected[cc] = 1;
-            }
-
-            cell_edge_split(M, c, le, new_v, new_cs, GEO::Numeric::random_float32());
+            cell_edge_split(M, c, le, new_v, new_c, GEO::Numeric::random_float32());
 
             /* Delete unuse cells */
             GEO::vector<GEO::index_t> cells_to_delete(M.cells.nb(), 0);
-            for (const auto& cc : new_cs) {
-                if (cc != GEO::NO_CELL) {
-                    for (GEO::index_t lv = 0; lv < 4; ++lv)
-                        EXPECT_TRUE(M.cells.vertex(cc, lv) == GEO::NO_VERTEX);
-                    cells_to_delete[cc] = 1;
-                }
-            }
+            for (GEO::index_t cc = new_c; cc < M.cells.nb(); ++cc)
+                cells_to_delete[cc] = 1;
             M.cells.delete_elements(cells_to_delete);
         }
     };

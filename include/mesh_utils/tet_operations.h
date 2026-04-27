@@ -506,45 +506,46 @@ namespace GEO::MeshUtils::Tet
     /**
      * Splits a tetrahedral edge by inserting one vertex and splitting all incident cells.
      *
-     * The edge is identified by local edge index @p le in cell @p _c. The function
-     * traverses all tetrahedra incident to that edge, places @p new_v on the edge,
-     * and splits each incident tetrahedron into two tetrahedra while updating
-     * local adjacencies.
+     * The edge is identified by local edge index @p le in seed cell @p _c.
+     * The function traverses all tetrahedra incident to that edge, places @p new_v
+     * on the edge using interpolation ratio @p r, and splits each incident tetrahedron
+     * into two tetrahedra while updating adjacency relations.
      *
-     * Vector @p new_cs provides pre-allocated cell indices for the new tetrahedra,
-     * one per incident cell. If it contains fewer indices than required, additional
-     * tetrahedra are created internally, which is slower.
+     * New tetrahedra are written starting at cell index @p _new_c. If the available
+     * range `[_new_c, M.cells.nb())` is not large enough, additional cells are created.
+     * On return, @p _new_c is advanced by the number of incident tetrahedra consumed.
      *
      * @param[in,out] M      The tetrahedral mesh to modify.
      * @param[in]     _c     Index of a seed cell containing the target edge.
      * @param[in]     le     Local edge index (0-5) in cell @p _c.
      * @param[in]     new_v  Index of a pre-allocated vertex used as the split vertex.
-     * @param[in,out] new_cs Pre-allocated cell indices for split results; consumed entries are set to @c GEO::NO_CELL.
-     * @param[in]     r      Interpolation ratio for placing @p new_v on the edge (`0` at the first endpoint, `1` at the second).
+     * @param[in,out] _new_c Input: first cell index available for writing new tetrahedra;
+     *                       output: advanced to the next free cell index.
+     * @param[in]     r      Interpolation ratio for placing @p new_v on the edge
+     *                       (`0` at the first endpoint, `1` at the second).
      */
     inline void cell_edge_split(
         GEO::Mesh& M,
         const GEO::index_t _c,
         const GEO::index_t le,
         const GEO::index_t new_v,
-        std::vector<GEO::index_t>& new_cs,
+        GEO::index_t& _new_c,
         const double r = 0.5
         ) {
         assert(_c < M.cells.nb());
         assert(le < 6);
         assert(new_v < M.vertices.nb());
-        assert(std::ranges::all_of(new_cs, [&](const GEO::index_t c){ return c < M.cells.nb(); }));
+        assert(_new_c < M.cells.nb());
 
         /* Find all adjacent cells */
         std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_c_and_lf;
         get_edge_incident_tetrahedra(M, _c, le, ordered_c_and_lf);
-        if (new_cs.size() < ordered_c_and_lf.size()) {
-            const GEO::index_t new_cells_nb = ordered_c_and_lf.size()-new_cs.size();
-            GEO::index_t new_c = M.cells.create_tets(new_cells_nb);
-            for (GEO::index_t i = 0; i < new_cells_nb; ++i)
-                new_cs.push_back(new_c++);
+        const GEO::index_t INCIDENT_CELLS_NB = ordered_c_and_lf.size();
+        if (_new_c+INCIDENT_CELLS_NB > M.cells.nb()) {
+            const GEO::index_t new_cells_nb = INCIDENT_CELLS_NB-(M.cells.nb()-_new_c);
+            M.cells.create_tets(new_cells_nb);
         }
-        assert(new_cs.size() >= ordered_c_and_lf.size());
+        assert(_new_c+INCIDENT_CELLS_NB <= M.cells.nb());
 
         const GEO::index_t ev0 = M.cells.edge_vertex(_c, le, 0);
         const GEO::index_t ev1 = M.cells.edge_vertex(_c, le, 1);
@@ -552,9 +553,9 @@ namespace GEO::MeshUtils::Tet
         /* Set new vertex */
         M.vertices.point(new_v) = (1-r)*M.vertices.point(ev0) + r*M.vertices.point(ev1);
 
-        for (GEO::index_t i = 0, i_end = ordered_c_and_lf.size(); i < i_end; ++i) {
+        for (GEO::index_t i = 0; i < INCIDENT_CELLS_NB; ++i) {
             const auto& [c, lf0] = ordered_c_and_lf[i];
-            const auto& new_c = new_cs[i];
+            const auto& new_c = _new_c+i;
 
             const GEO::index_t lv0 = M.cells.find_tet_vertex(c, ev0);
             const GEO::index_t lv1 = M.cells.find_tet_vertex(c, ev1);
@@ -581,9 +582,9 @@ namespace GEO::MeshUtils::Tet
             M.cells.set_adjacent(new_c, lv0, c);
             M.cells.set_adjacent(new_c, lv1, nc1);
             if (M.cells.adjacent(c, lv2) != GEO::NO_CELL)
-                M.cells.set_adjacent(new_c, lv2, new_cs[(i+i_end-1)%i_end]);
+                M.cells.set_adjacent(new_c, lv2, _new_c+(i+INCIDENT_CELLS_NB-1)%INCIDENT_CELLS_NB);
             if (M.cells.adjacent(c, lv3) != GEO::NO_CELL)
-                M.cells.set_adjacent(new_c, lv3, new_cs[(i+1)%i_end]);
+                M.cells.set_adjacent(new_c, lv3, _new_c+(i+1)%INCIDENT_CELLS_NB);
             if (nc1 != GEO::NO_CELL) {
                 const GEO::index_t nlf = M.cells.find_tet_facet(
                     nc1,
@@ -595,9 +596,7 @@ namespace GEO::MeshUtils::Tet
             }
         }
 
-        /* Label used cell to GEO::NO_CELL */
-        for (GEO::index_t i = 0, i_end = ordered_c_and_lf.size(); i < i_end; ++i)
-            new_cs[i] = GEO::NO_CELL;
+        _new_c += INCIDENT_CELLS_NB;
     }
 
     /**
@@ -900,3 +899,4 @@ namespace GEO::MeshUtils::Tet
 }
 
 #endif //GEOGRAM_MESH_UTILS_TETRAHEDRON_OPERATIONS_H
+
