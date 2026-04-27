@@ -4,7 +4,7 @@
 //
 
 #include <gtest/gtest.h>
-#include "mesh_utils/tet_descriptor.h"
+#include "tet_descriptor.h"
 #include <geogram/mesh/mesh.h>
 #include <unordered_set>
 
