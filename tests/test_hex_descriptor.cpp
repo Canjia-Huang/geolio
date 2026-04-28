@@ -4,7 +4,7 @@
 //
 
 #include <gtest/gtest.h>
-#include "hex_descriptor.h"
+#include "geogram_mesh_utils/hex_descriptor.h"
 #include <geogram/mesh/mesh.h>
 #include <unordered_set>
 

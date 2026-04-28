@@ -6,7 +6,7 @@
 #include <ranges>
 #include <unordered_set>
 #include "test_tet_opeartions.h"
-#include "tet_operations.h"
+#include "geogram_mesh_utils/tet_operations.h"
 
 using namespace GEO::MeshUtils::Tet;
 

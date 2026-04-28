@@ -9,7 +9,7 @@
 #include <geogram/mesh/mesh_io.h>
 #include <gtest/gtest.h>
 #include "utils.h"
-#include "pair_hash.h"
+#include "geogram_mesh_utils/pair_hash.h"
 
 namespace GEO::MeshUtils::Test
 {

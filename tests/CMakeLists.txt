@@ -23,13 +23,8 @@ file(GLOB TESTS_SOURCE
 add_executable(${PROJECT_NAME}_TESTS
         ${TESTS_SOURCE})
 
-target_include_directories(${PROJECT_NAME}_TESTS
-        PRIVATE
-        "${CMAKE_SOURCE_DIR}/include"
-        "${CMAKE_SOURCE_DIR}/deps"
-)
-
 target_link_libraries(${PROJECT_NAME}_TESTS
+        GeogramMeshUtils
         Geogram::geogram
         GTest::gtest_main
 )

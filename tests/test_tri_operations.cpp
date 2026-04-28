@@ -6,7 +6,7 @@
 #include "test_tri_operations.h"
 #include <random>
 #include <ranges>
-#include "tri_operations.h"
+#include "geogram_mesh_utils/tri_operations.h"
 
 using namespace GEO::MeshUtils::Tri;
 
