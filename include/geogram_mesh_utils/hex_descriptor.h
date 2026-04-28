@@ -83,6 +83,7 @@ namespace GEO::MeshUtils
      */
     constexpr std::array<std::array<GEO::index_t, 2>, 12> HEX_LE_INCIDENT_LV = {
         {
+            // 0       1       2       3       4       5       6       7       8       9      10      11
             {0, 1}, {1, 3}, {3, 2}, {2, 0}, {4, 5}, {5, 7}, {7, 6}, {6, 4}, {0, 4}, {1, 5}, {3, 7}, {2, 6}
         }
     };
@@ -185,6 +186,24 @@ namespace GEO::MeshUtils
      */
     constexpr std::array<GEO::index_t, 6> HEX_LF_OPPOSITE_LF = {
         {1, 0, 3, 2, 5, 4}
+    };
+
+    /**
+     * Local-face to local-face common-local-edge lookup table for a hexahedron.
+     *
+     * `HEX_LF_LF_COMMON_LE[lf0][lf1]` returns the local edge index shared by
+     * local faces `lf0` and `lf1`. Pairs of faces that do not share an edge
+     * (including `lf0 == lf1` and opposite faces) store `GEO::NO_INDEX`.
+     */
+    constexpr std::array<std::array<GEO::index_t, 6>, 6> HEX_LF_LF_COMMON_LE = {
+        {
+            {GEO::NO_INDEX, GEO::NO_INDEX, 8, 11, 3, 7},
+            {GEO::NO_INDEX, GEO::NO_INDEX, 9, 10, 1, 5},
+            {8, 9, GEO::NO_INDEX, GEO::NO_INDEX, 0, 4},
+            {11, 10, GEO::NO_INDEX, GEO::NO_INDEX, 2, 6},
+            {3, 1, 0, 2, GEO::NO_INDEX, GEO::NO_INDEX},
+            {7, 5, 4, 6, GEO::NO_INDEX, GEO::NO_INDEX}
+        }
     };
 
     /**

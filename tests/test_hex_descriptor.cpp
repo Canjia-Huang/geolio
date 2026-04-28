@@ -374,6 +374,32 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(HexDescriptorTest, HEX_LF_LF_COMMON_LE) {
+        EXPECT_EQ(M.cells.nb_facets(c), HEX_LF_LF_COMMON_LE.size());
+
+        for (GEO::index_t lf0 = 0; lf0 < M.cells.nb_facets(c); ++lf0) {
+            EXPECT_EQ(M.cells.nb_facets(c), HEX_LF_LF_COMMON_LE[lf0].size());
+
+            for (GEO::index_t lf1 = 0; lf1 < M.cells.nb_facets(c); ++lf1) {
+                if (lf0 == lf1)
+                    EXPECT_EQ(GEO::NO_INDEX, HEX_LF_LF_COMMON_LE[lf0][lf1]);
+                else {
+                    GEO::index_t common_le = GEO::NO_INDEX;
+                    for (const auto& le0 : HEX_LF_INCIDENT_LE[lf0]) {
+                        for (const auto& le1 : HEX_LF_INCIDENT_LE[lf1]) {
+                            if (le0 == le1) {
+                                EXPECT_EQ(common_le, GEO::NO_INDEX);
+                                common_le = le0;
+                            }
+                        }
+                    }
+
+                    EXPECT_EQ(common_le, HEX_LF_LF_COMMON_LE[lf0][lf1]);
+                }
+            }
+        }
+    }
+
     TEST_F(HexDescriptorTest, HEX_ENCODED_LF) {
         ASSERT_EQ(M.cells.nb_facets(c), HEX_ENCODED_LF.size());
 
