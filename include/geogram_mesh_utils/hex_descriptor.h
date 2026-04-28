@@ -205,6 +205,39 @@ namespace GEO::MeshUtils
     };
 
     /**
+     * Local-face triple to common-local-vertex lookup for a hexahedron.
+     *
+     * `HEX_LF_LF_LF_COMMON_LV(lf0, lf1, lf2)` returns the local vertex index
+     * (LV, 0-7) shared by the three given local faces (LF, 0-5).
+     *
+     * @param[in] lf0 First local face index.
+     * @param[in] lf1 Second local face index.
+     * @param[in] lf2 Third local face index.
+     * @return The common local vertex index if the three faces meet at one
+     *         vertex; otherwise `GEO::NO_INDEX`.
+     */
+    inline GEO::index_t HEX_LF_LF_LF_COMMON_LV(
+        const GEO::index_t lf0,
+        const GEO::index_t lf1,
+        const GEO::index_t lf2
+        ) {
+        assert(lf0 < 6);
+        assert(lf1 < 6);
+        assert(lf2 < 6);
+        switch ((1<<lf0) | (1<<lf1) | (1<<lf2)) {
+            case (1<<HEX_LV_INCIDENT_LF[0][0]) | (1<<HEX_LV_INCIDENT_LF[0][1]) | (1<<HEX_LV_INCIDENT_LF[0][2]): return 0;
+            case (1<<HEX_LV_INCIDENT_LF[1][0]) | (1<<HEX_LV_INCIDENT_LF[1][1]) | (1<<HEX_LV_INCIDENT_LF[1][2]): return 1;
+            case (1<<HEX_LV_INCIDENT_LF[2][0]) | (1<<HEX_LV_INCIDENT_LF[2][1]) | (1<<HEX_LV_INCIDENT_LF[2][2]): return 2;
+            case (1<<HEX_LV_INCIDENT_LF[3][0]) | (1<<HEX_LV_INCIDENT_LF[3][1]) | (1<<HEX_LV_INCIDENT_LF[3][2]): return 3;
+            case (1<<HEX_LV_INCIDENT_LF[4][0]) | (1<<HEX_LV_INCIDENT_LF[4][1]) | (1<<HEX_LV_INCIDENT_LF[4][2]): return 4;
+            case (1<<HEX_LV_INCIDENT_LF[5][0]) | (1<<HEX_LV_INCIDENT_LF[5][1]) | (1<<HEX_LV_INCIDENT_LF[5][2]): return 5;
+            case (1<<HEX_LV_INCIDENT_LF[6][0]) | (1<<HEX_LV_INCIDENT_LF[6][1]) | (1<<HEX_LV_INCIDENT_LF[6][2]): return 6;
+            case (1<<HEX_LV_INCIDENT_LF[7][0]) | (1<<HEX_LV_INCIDENT_LF[7][1]) | (1<<HEX_LV_INCIDENT_LF[7][2]): return 7;
+            default: return GEO::NO_INDEX;
+        }
+    }
+
+    /**
      * Local-face to local-face common-local-edge lookup table for a hexahedron.
      *
      * `HEX_LF_LF_COMMON_LE[lf0][lf1]` returns the local edge index shared by
@@ -240,5 +273,5 @@ namespace GEO::MeshUtils
         }
     };
 }
-
 #endif //GEOGRAMMESHUTILS_HEX_DESCRIPTOR_H
+

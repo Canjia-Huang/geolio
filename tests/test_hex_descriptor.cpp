@@ -398,6 +398,44 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(HexDescriptorTest, HEX_LF_LF_LF_COMMON_LV) {
+        for (GEO::index_t lf0 = 0; lf0 < M.cells.nb_facets(c); ++lf0) {
+            for (GEO::index_t lf1 = 0; lf1 < M.cells.nb_facets(c); ++lf1) {
+                if (lf0 == lf1)
+                    continue;
+
+                for (GEO::index_t lf2 = 0; lf2 < M.cells.nb_facets(c); ++lf2) {
+                    if (lf0 == lf2 || lf1 == lf2)
+                        continue;
+
+                    GEO::index_t common_lv = GEO::NO_INDEX;
+
+                    for (GEO::index_t lv0 = 0; lv0 < M.cells.facet_nb_vertices(c, lf0); ++lv0) {
+                        const auto& v0 = M.cells.facet_vertex(c, lf0, lv0);
+                        for (GEO::index_t lv1 = 0; lv1 < M.cells.facet_nb_vertices(c, lf1); ++lv1) {
+                            const auto& v1 = M.cells.facet_vertex(c, lf1, lv1);
+                            for (GEO::index_t lv2 = 0; lv2 < M.cells.facet_nb_vertices(c, lf2); ++lv2) {
+                                const auto& v2 = M.cells.facet_vertex(c, lf2, lv2);
+
+                                if (v0 == v1 && v1 == v2) {
+                                    EXPECT_EQ(common_lv, GEO::NO_INDEX); // only one common vertex
+                                    for (GEO::index_t lv = 0; lv < M.cells.nb_vertices(c); ++lv) {
+                                        if (M.cells.vertex(c, lv) == v0) {
+                                            common_lv = lv;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    EXPECT_EQ(common_lv, HEX_LF_LF_LF_COMMON_LV(lf0, lf1, lf2));
+                }
+            }
+        }
+    }
+
     TEST_F(HexDescriptorTest, HEX_LF_LF_COMMON_LE) {
         EXPECT_EQ(M.cells.nb_facets(c), HEX_LF_LF_COMMON_LE.size());
 
