@@ -207,6 +207,65 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(HexDescriptorTest, HEX_LE_LOOP_LF) {
+        ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_LOOP_LF.size());
+
+        for (GEO::index_t le = 0; le < M.cells.nb_edges(c); ++le) {
+            ASSERT_EQ(HEX_LE_LOOP_LF[le].size(), 4);
+            std::unordered_set<GEO::index_t> facets;
+            for (const auto lf : HEX_LE_LOOP_LF[le])
+                facets.insert(lf);
+            EXPECT_EQ(facets.size(), 4);
+
+            const GEO::index_t lf0 = HEX_LE_INCIDENT_LF[le][0];
+            const GEO::index_t lf1 = HEX_LE_INCIDENT_LF[le][1];
+
+            GEO::index_t nlf0 = GEO::NO_INDEX;
+            for (const auto lf : HEX_LV_INCIDENT_LF[M.cells.edge_vertex(c, le, 0)]) {
+                if (lf != lf0 && lf != lf1) {
+                    EXPECT_TRUE(nlf0 == GEO::NO_INDEX);
+                    nlf0 = lf;
+                }
+            }
+            EXPECT_FALSE(nlf0 == GEO::NO_INDEX);
+
+            GEO::index_t nlf1 = GEO::NO_INDEX;
+            for (const auto lf : HEX_LV_INCIDENT_LF[M.cells.edge_vertex(c, le, 1)]) {
+                if (lf != lf0 && lf != lf1) {
+                    EXPECT_TRUE(nlf1 == GEO::NO_INDEX);
+                    nlf1 = lf;
+                }
+            }
+            EXPECT_FALSE(nlf1 == GEO::NO_INDEX);
+
+            EXPECT_FALSE(facets.contains(nlf0));
+            EXPECT_FALSE(facets.contains(nlf1));
+        }
+    }
+
+    TEST_F(HexDescriptorTest, HEX_LE_LOOP_LF_orientation) {
+        ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_LOOP_LF.size());
+
+        for (GEO::index_t le = 0; le < M.cells.nb_edges(c); ++le) {
+            const GEO::vec3 en = M.vertices.point(M.cells.edge_vertex(c, le, 1)) - M.vertices.point(M.cells.edge_vertex(c, le, 0));
+
+            ASSERT_EQ(HEX_LE_LOOP_LF[le].size(), 4);
+            for (GEO::index_t i = 0; i < 4; ++i) {
+                const auto& lf0 = HEX_LE_LOOP_LF[le][i];
+                const auto& lf1 = HEX_LE_LOOP_LF[le][(i+1)%4];
+                const auto n0 = GEO::Geom::triangle_normal(
+                    M.vertices.point(M.cells.facet_vertex(c, lf0, 0)),
+                    M.vertices.point(M.cells.facet_vertex(c, lf0, 1)),
+                    M.vertices.point(M.cells.facet_vertex(c, lf0, 2)));
+                const auto n1 = GEO::Geom::triangle_normal(
+                    M.vertices.point(M.cells.facet_vertex(c, lf1, 0)),
+                    M.vertices.point(M.cells.facet_vertex(c, lf1, 1)),
+                    M.vertices.point(M.cells.facet_vertex(c, lf1, 2)));
+                EXPECT_NEAR(GEO::dot(GEO::cross(n0, n1), -en), 1, 1e-10);
+            }
+        }
+    }
+
     TEST_F(HexDescriptorTest, HEX_LE_INCIDENT_LF_orientation) {
         ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_INCIDENT_LF.size());
 

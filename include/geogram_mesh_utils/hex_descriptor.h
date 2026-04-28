@@ -103,6 +103,22 @@ namespace GEO::MeshUtils
     };
 
     /**
+     * Local-edge to surrounding-local-face loop table for a hexahedron.
+     *
+     * `HEX_LE_LOOP_LF[le]` returns the four local faces (LF, 0-5) that form
+     * the cyclic loop around local edge `le`.
+     *
+     * @note The faces are ordered cyclically around the edge, following the
+     * project’s face orientation convention.
+     */
+    constexpr std::array<std::array<GEO::index_t, 4>, 12> HEX_LE_LOOP_LF = {
+        {
+            {4, 2, 5, 3}, {4, 1, 5, 0}, {4, 3, 5, 2}, {4, 0, 5, 1}, {2, 5, 3, 4}, {1, 5, 0, 4},
+            {3, 5, 2, 4}, {0, 5, 1, 4}, {2, 0, 3, 1}, {1, 2, 0, 3}, {3, 1, 2, 0}, {0, 3, 1, 2}
+        }
+    };
+
+    /**
      * Bitmask encoding for each local edge.
      *
      * `HEX_ENCODED_LE[le]` stores a 2-bit vertex mask of edge `le`:
