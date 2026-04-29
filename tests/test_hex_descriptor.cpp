@@ -258,6 +258,35 @@ namespace GEO::MeshUtils::Test
         }
     }
 
+    TEST_F(HexDescriptorTest, HEX_LE_LOOP_LE_ORIENT) {
+        ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_LOOP_LE_ORIENT.size());
+
+        for (GEO::index_t le = 0; le < M.cells.nb_edges(c); ++le) {
+            ASSERT_EQ(HEX_LE_LOOP_LE_ORIENT[le].size(), 4);
+
+            const auto& le0 = HEX_LE_LOOP_LE[le][0];
+            const auto& le1 = HEX_LE_LOOP_LE[le][1];
+            const auto& le2 = HEX_LE_LOOP_LE[le][2];
+            const auto& le3 = HEX_LE_LOOP_LE[le][3];
+            const auto d0 = M.vertices.point(M.cells.edge_vertex(c, le0, 0))-M.vertices.point(M.cells.edge_vertex(c, le0, 1));
+            auto d1 = M.vertices.point(M.cells.edge_vertex(c, le1, 0))-M.vertices.point(M.cells.edge_vertex(c, le1, 1));
+            auto d2 = M.vertices.point(M.cells.edge_vertex(c, le2, 0))-M.vertices.point(M.cells.edge_vertex(c, le2, 1));
+            auto d3 = M.vertices.point(M.cells.edge_vertex(c, le3, 0))-M.vertices.point(M.cells.edge_vertex(c, le3, 1));
+
+            EXPECT_TRUE(HEX_LE_LOOP_LE_ORIENT[le][0]);
+            if (!HEX_LE_LOOP_LE_ORIENT[le][1])
+                d1 = -d1;
+            if (!HEX_LE_LOOP_LE_ORIENT[le][2])
+                d2 = -d2;
+            if (!HEX_LE_LOOP_LE_ORIENT[le][3])
+                d3 = -d3;
+
+            EXPECT_NEAR(GEO::dot(d0, d1), 1, 1e-10);
+            EXPECT_NEAR(GEO::dot(d0, d2), 1, 1e-10);
+            EXPECT_NEAR(GEO::dot(d0, d3), 1, 1e-10);
+        }
+    }
+
     TEST_F(HexDescriptorTest, HEX_LE_LOOP_LF) {
         ASSERT_EQ(M.cells.nb_edges(c), HEX_LE_LOOP_LF.size());
 

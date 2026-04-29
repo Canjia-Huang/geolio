@@ -120,6 +120,26 @@ namespace GEO::MeshUtils
     };
 
     /**
+     * Local-edge loop orientation table for a hexahedron.
+     *
+     * `HEX_LE_LOOP_LE_ORIENT[le][i]` indicates whether the i-th edge in the
+     * loop around local edge `le` (as given by `HEX_LE_LOOP_LE[le][i]`) is
+     * oriented consistently (true) or oppositely (false) with respect to the
+     * local edge's orientation.
+     *
+     * @note Each boolean value corresponds to the orientation of the edge
+     * at the same index in `HEX_LE_LOOP_LE[le]`.
+     */
+    constexpr std::array<std::array<bool, 4>, 12> HEX_LE_LOOP_LE_ORIENT = {
+        {
+            {true, true, false, false}, {true, true, false, false}, {true, true, false, false},
+            {true, true, false, false}, {true, false, false, true}, {true, false, false, true},
+            {true, false, false, true}, {true, false, false, true}, {true, true, true, true},
+            {true, true, true, true}, {true, true, true, true}, {true, true, true, true},
+        }
+    };
+
+    /**
      * Local-edge to surrounding-local-face loop table for a hexahedron.
      *
      * `HEX_LE_LOOP_LF[le]` returns the four local faces (LF, 0-5) that form
