@@ -135,7 +135,7 @@ namespace GEO::MeshUtils
             {true, true, false, false}, {true, true, false, false}, {true, true, false, false},
             {true, true, false, false}, {true, false, false, true}, {true, false, false, true},
             {true, false, false, true}, {true, false, false, true}, {true, true, true, true},
-            {true, true, true, true}, {true, true, true, true}, {true, true, true, true},
+            {true, true, true, true},   {true, true, true, true},   {true, true, true, true},
         }
     };
 

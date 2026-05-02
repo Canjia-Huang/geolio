@@ -114,6 +114,8 @@ namespace GEO::MeshUtils::Hex
         assert(lv0 < 8);
         assert(lv1 < 8);
         assert(lv2 < 8);
+        if (lv0 == lv1 || lv1 == lv2 || lv2 == lv0)
+            return GEO::NO_INDEX;
         if (const auto& encoded_lf = (1<<lv0) | (1<<lv1) | (1<<lv2);
             (encoded_lf & HEX_ENCODED_LF[0]) == encoded_lf)
             return 0;

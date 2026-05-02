@@ -268,10 +268,10 @@ namespace GEO::MeshUtils::Test
             const auto& le1 = HEX_LE_LOOP_LE[le][1];
             const auto& le2 = HEX_LE_LOOP_LE[le][2];
             const auto& le3 = HEX_LE_LOOP_LE[le][3];
-            const auto d0 = M.vertices.point(M.cells.edge_vertex(c, le0, 0))-M.vertices.point(M.cells.edge_vertex(c, le0, 1));
-            auto d1 = M.vertices.point(M.cells.edge_vertex(c, le1, 0))-M.vertices.point(M.cells.edge_vertex(c, le1, 1));
-            auto d2 = M.vertices.point(M.cells.edge_vertex(c, le2, 0))-M.vertices.point(M.cells.edge_vertex(c, le2, 1));
-            auto d3 = M.vertices.point(M.cells.edge_vertex(c, le3, 0))-M.vertices.point(M.cells.edge_vertex(c, le3, 1));
+            const auto d0 = M.vertices.point(M.cells.edge_vertex(c, le0, 1))-M.vertices.point(M.cells.edge_vertex(c, le0, 0));
+            auto d1 = M.vertices.point(M.cells.edge_vertex(c, le1, 1))-M.vertices.point(M.cells.edge_vertex(c, le1, 0));
+            auto d2 = M.vertices.point(M.cells.edge_vertex(c, le2, 1))-M.vertices.point(M.cells.edge_vertex(c, le2, 0));
+            auto d3 = M.vertices.point(M.cells.edge_vertex(c, le3, 1))-M.vertices.point(M.cells.edge_vertex(c, le3, 0));
 
             EXPECT_TRUE(HEX_LE_LOOP_LE_ORIENT[le][0]);
             if (!HEX_LE_LOOP_LE_ORIENT[le][1])
