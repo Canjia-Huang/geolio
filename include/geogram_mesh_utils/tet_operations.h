@@ -9,6 +9,7 @@
 #include <cassert>
 #include <ranges>
 #include <unordered_set>
+#include <stack>
 #include "tet_descriptor.h"
 
 namespace GEO::MeshUtils::Tet
