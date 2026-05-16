@@ -20,7 +20,7 @@ namespace GEO::MeshUtils::Test
             const GEO::index_t f,
             const GEO::index_t lv
             ) {
-            return get_vertex_incident_triangles(M, f, lv, ordered_f_and_lv);
+            return get_vertex_incident_facets(M, f, lv, ordered_f_and_lv);
         }
 
         void check_incident(
