@@ -14,12 +14,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         build_type: [Release, Debug]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
 
       # == Install Dependency Geogram =================================================================================
 
@@ -28,6 +32,7 @@ jobs:
         run: |
           sudo apt-get install cmake build-essential libx11-dev libxcb1-dev libxau-dev libxdmcp-dev
           sudo apt-get install libxi-dev libxcursor-dev libxinerama-dev libxrandr-dev
+          sudo apt-get install libtbb-dev
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
           cd geogram
           echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
@@ -36,6 +41,7 @@ jobs:
           make -j
 
       - name: Install Dependency Geogram (Windows)
+        shell: pwsh
         if: runner.os == 'Windows'
         run: |
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
