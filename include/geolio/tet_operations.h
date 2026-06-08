@@ -12,7 +12,7 @@
 #include <stack>
 #include "tet_descriptor.h"
 
-namespace GEO::MeshUtils::Tet
+namespace geolio
 {
     /**
      * Returns the third vertex of a tetrahedron facet from two known facet vertices.

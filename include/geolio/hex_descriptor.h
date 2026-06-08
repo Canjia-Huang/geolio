@@ -7,8 +7,9 @@
 
 #include <array>
 #include <geogram/basic/numeric.h>
+#include <cassert>
 
-namespace GEO::MeshUtils
+namespace geolio
 {
     /**
      * Local-vertex to adjacent-local-vertex table for a hexahedron.

@@ -9,9 +9,9 @@
 #include <geogram/mesh/mesh_io.h>
 #include <gtest/gtest.h>
 #include "utils.h"
-#include "geogram_mesh_utils/pair_hash.h"
+#include "geolio/pair_hash.h"
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     /**
      * Build the Cartesian reference tetrahedral mesh used by operator tests.
@@ -235,7 +235,7 @@ namespace GEO::MeshUtils::Test
 
         /* Find all border vertices and edges */
         std::vector<bool> M_v_border(M.vertices.nb(), false);
-        std::unordered_set<std::pair<GEO::index_t, GEO::index_t>, GEO::MeshUtils::PairHash> border_edges;
+        std::unordered_set<std::pair<GEO::index_t, GEO::index_t>, geolio::PairHash> border_edges;
         for (const auto& c : M.cells) {
             for (GEO::index_t lf = 0; lf < 4; ++lf) {
                 if (M.cells.adjacent(c, lf) != GEO::NO_CELL)

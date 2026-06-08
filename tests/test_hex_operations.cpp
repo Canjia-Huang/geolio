@@ -6,11 +6,9 @@
 #include <unordered_set>
 #include <gtest/gtest.h>
 #include <geogram/mesh/mesh.h>
-#include <geogram_mesh_utils/hex_operations.h>
+#include <geolio/hex_operations.h>
 
-using namespace GEO::MeshUtils::Hex;
-
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class HexOperatorsTest : public ::testing::Test {
     public:

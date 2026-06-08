@@ -6,13 +6,11 @@
 #include "test_tri_operations.h"
 #include <random>
 #include <ranges>
-#include "geogram_mesh_utils/tri_operations.h"
-
-using namespace GEO::MeshUtils::Tri;
+#include "geolio/tri_operations.h"
 
 /* == GetIncidentTrianglesTest ===================================================================================== */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class GetIncidentTrianglesTest : public TriangleOperationsTest {
     public:
@@ -119,7 +117,7 @@ namespace GEO::MeshUtils::Test
 
 /* == SplitFacetEdgeTest =========================================================================================== */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class SplitFacetEdgeTest : public TriangleOperationsTest {};
 
@@ -192,7 +190,7 @@ namespace GEO::MeshUtils::Test
 
 /* == CollapseFacetEdgeTest ======================================================================================== */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class CollapseFacetEdgeTest : public TriangleOperationsTest {};
 
@@ -274,7 +272,7 @@ namespace GEO::MeshUtils::Test
 
 /* == FlipFacetEdgeTest ============================================================================================ */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class FlipFacetdgeTest : public TriangleOperationsTest {
     public:

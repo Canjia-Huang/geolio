@@ -8,7 +8,7 @@
 #include <geogram/mesh/mesh.h>
 #include <cassert>
 
-namespace GEO::MeshUtils
+namespace geolio
 {
     /**
      * @brief Compute the minimum interior angle of a triangle facet.

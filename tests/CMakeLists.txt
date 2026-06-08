@@ -24,7 +24,7 @@ add_executable(${PROJECT_NAME}_TESTS
         ${TESTS_SOURCE})
 
 target_link_libraries(${PROJECT_NAME}_TESTS
-        GeogramMeshUtils
+        geolio
         Geogram::geogram
         GTest::gtest_main
 )

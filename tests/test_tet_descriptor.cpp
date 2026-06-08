@@ -4,13 +4,11 @@
 //
 
 #include <gtest/gtest.h>
-#include "geogram_mesh_utils/tet_descriptor.h"
+#include "geolio/tet_descriptor.h"
 #include <geogram/mesh/mesh.h>
 #include <unordered_set>
 
-using namespace GEO::MeshUtils;
-
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class TetDescriptorTest : public ::testing::Test {
     public:

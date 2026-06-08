@@ -8,7 +8,7 @@
 #include <gtest/gtest.h>
 #include "utils.h"
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     TEST(DepsGeogramTest, tet_io) {
         GEO::Mesh M;

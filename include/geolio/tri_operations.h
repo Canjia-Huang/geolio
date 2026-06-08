@@ -9,7 +9,7 @@
 #include <cassert>
 #include "surf_operations.h"
 
-namespace GEO::MeshUtils::Tri
+namespace geolio
 {
     /**
      * @brief Split an edge of a triangle in a mesh and update the adjacency topology accordingly.

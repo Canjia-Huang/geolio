@@ -6,13 +6,11 @@
 #include <ranges>
 #include <unordered_set>
 #include "test_tet_opeartions.h"
-#include "geogram_mesh_utils/tet_operations.h"
-
-using namespace GEO::MeshUtils::Tet;
+#include "geolio/tet_operations.h"
 
 /* == GetVertexIncidentTetrahedraTest ============================================================================== */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class GetVertexIncidentTetrahedraTest : public TetrahedronOperationsTest {
     public:
@@ -90,7 +88,7 @@ namespace GEO::MeshUtils::Test
 
 /* == GetEdgeIncidentTetrahedraTest ================================================================================ */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class GetEdgeIncidentTetrahedraTest : public TetrahedronOperationsTest {
     public:
@@ -250,7 +248,7 @@ namespace GEO::MeshUtils::Test
 
 /* == CellSplitTest ================================================================================================ */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class CellSplitTest : public TetrahedronOperationsTest {
     public:
@@ -306,7 +304,7 @@ namespace GEO::MeshUtils::Test
 
 /* == CellFacetSplit =============================================================================================== */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class CellFacetSplitTest : public TetrahedronOperationsTest {};
 
@@ -378,7 +376,7 @@ namespace GEO::MeshUtils::Test
 
 /* == CellEdgeSplitTest ============================================================================================ */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class CellEdgeSplitTest : public TetrahedronOperationsTest {
     public:
@@ -445,7 +443,7 @@ namespace GEO::MeshUtils::Test
 
 /* == CellEdgeCollapseTest ========================================================================================= */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class CellEdgeCollapseTest : public TetrahedronOperationsTest {
     public:
@@ -518,7 +516,7 @@ namespace GEO::MeshUtils::Test
 
 /* == CellEdgeSwap23Test =========================================================================================== */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class CellEdgeSwap23Test : public TetrahedronOperationsTest {};
 
@@ -584,7 +582,7 @@ namespace GEO::MeshUtils::Test
 
 /* == CellEdgeSwap32Test =========================================================================================== */
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     class CellEdgeSwap32Test : public TetrahedronOperationsTest {
     public:
