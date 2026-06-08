@@ -9,7 +9,7 @@
 #include <cassert>
 #include "hex_descriptor.h"
 
-namespace GEO::MeshUtils::Hex
+namespace geolio
 {
     /**
      * Finds the local vertex index in a hexahedron from a global vertex index.

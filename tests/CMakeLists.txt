@@ -13,8 +13,6 @@ FetchContent_MakeAvailable(googletest)
 ########################################################################################################################
 # Build tests
 ########################################################################################################################
-enable_testing()
-
 file(GLOB TESTS_SOURCE
         ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
@@ -24,7 +22,7 @@ add_executable(${PROJECT_NAME}_TESTS
         ${TESTS_SOURCE})
 
 target_link_libraries(${PROJECT_NAME}_TESTS
-        GeogramMeshUtils
+        geolio
         Geogram::geogram
         GTest::gtest_main
 )

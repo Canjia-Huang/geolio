@@ -2,7 +2,7 @@
 # CMake options
 ########################################################################################################################
 cmake_minimum_required(VERSION 3.30)
-project(GeogramMeshUtils)
+project(geolio)
 
 if(WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
@@ -18,20 +18,21 @@ list(PREPEND CMAKE_MODULE_PATH
         ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 ########################################################################################################################
-# Include Deps
+# Include deps
 ########################################################################################################################
 include(Dependencies)
 
 ########################################################################################################################
 # Add library
 ########################################################################################################################
-add_library(GeogramMeshUtils INTERFACE)
+add_library(geolio INTERFACE)
 
-target_include_directories(GeogramMeshUtils INTERFACE
-        include
+target_include_directories(geolio INTERFACE
+        include/
 )
 
 ########################################################################################################################
 # Add subdirectories
 ########################################################################################################################
+enable_testing()
 add_subdirectory(tests)

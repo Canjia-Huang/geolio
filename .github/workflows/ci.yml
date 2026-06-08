@@ -1,0 +1,76 @@
+name: Multi-platform CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} - ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        build_type: [Release, Debug]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
+      # == Install Dependency Geogram =================================================================================
+
+      - name: Install Dependency Geogram (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install cmake build-essential libx11-dev libxcb1-dev libxau-dev libxdmcp-dev
+          sudo apt-get install libxi-dev libxcursor-dev libxinerama-dev libxrandr-dev
+          sudo apt-get install libtbb-dev
+          git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          cd geogram
+          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          ./configure.sh
+          cd build/Linux64-gcc-dynamic-Release
+          make -j
+
+      - name: Install Dependency Geogram (Windows)
+        shell: pwsh
+        if: runner.os == 'Windows'
+        run: |
+          git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          cd geogram
+          .\configure.bat
+          $geogramRoot = (Get-Item -Path ".").FullName
+          echo "GEOGRAM_DIR=$geogramRoot" >> $env:GITHUB_ENV
+          msbuild Build\Windows\Geogram.sln /p:Configuration=Release /p:Platform=x64 /m
+
+      - name: Install Dependency Geogram (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          cd geogram
+          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          ./configure.sh
+          cd build/Darwin-clang-dynamic-Release
+          make -j
+
+      # == Configure and make =========================================================================================
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+
+      # == Test =======================================================================================================
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure -C ${{ matrix.build_type }}

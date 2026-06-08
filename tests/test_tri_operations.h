@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include "utils.h"
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     /**
      * Build the reference triangular test mesh used by the triangle operator tests.

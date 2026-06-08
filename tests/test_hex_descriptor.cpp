@@ -4,13 +4,13 @@
 //
 
 #include <gtest/gtest.h>
-#include "geogram_mesh_utils/hex_descriptor.h"
+#include "geolio/hex_descriptor.h"
 #include <geogram/mesh/mesh.h>
 #include <unordered_set>
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
-    using namespace GEO::MeshUtils;
+    using namespace geolio;
 
     class HexDescriptorTest : public ::testing::Test {
     public:

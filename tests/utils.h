@@ -8,7 +8,7 @@
 #include <gtest/gtest.h>
 #include <string>
 
-namespace GEO::MeshUtils::Test
+namespace geolio::test
 {
     inline std::string get_current_test_name(){
         const testing::TestInfo* const current_test_info = testing::UnitTest::GetInstance()->current_test_info();

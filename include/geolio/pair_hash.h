@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <iostream>
 
-namespace GEO::MeshUtils
+namespace geolio
 {
     struct PairHash {
         std::size_t operator () (std::pair<uint32_t, uint32_t> const& pair

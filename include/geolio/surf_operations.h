@@ -8,7 +8,7 @@
 #include <geogram/mesh/mesh.h>
 #include <cassert>
 
-namespace GEO::MeshUtils
+namespace geolio
 {
     /**
      * @brief Collect facets incident to a vertex in one-ring order.
