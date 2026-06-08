@@ -21,17 +21,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Linux dependencies
+      # == Install Dependency Geogram =================================================================================
+
+      - name: Install Dependency Geogram (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake
+          sudo apt-get install cmake build-essential libx11-dev libxcb1-dev libxau-dev libxdmcp-dev
+          sudo apt-get install libxi-dev libxcursor-dev libxinerama-dev libxrandr-dev
+          git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          cd geogram
+          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          ./configure.sh
+          cd build/Linux64-gcc-dynamic-Release
+          make -j
+
+      - name: Install Dependency Geogram (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          cd geogram
+          .\configure.bat
+          $geogramRoot = (Get-Item -Path ".").FullName
+          echo "GEOGRAM_DIR=$geogramRoot" >> $env:GITHUB_ENV
+          msbuild Build\Windows\Geogram.sln /p:Configuration=Release /p:Platform=x64 /m
+
+      - name: Install Dependency Geogram (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          cd geogram
+          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          ./configure.sh
+          cd build/Darwin-clang-dynamic-Release
+          make -j
+
+      # == Configure and make =========================================================================================
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
+
+      # == Test =======================================================================================================
 
       - name: Test
         working-directory: build
