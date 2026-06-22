@@ -4,6 +4,20 @@
 cmake_minimum_required(VERSION 3.30)
 project(geolio)
 
+# == Options ==
+option(BUILD_TESTS "Build tests" ON)
+
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    # standalone
+    if(NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)
+    endif()
+else()
+    # as submodule
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Force Release build" FORCE)
+    set(BUILD_TESTS OFF)
+endif()
+
 if(WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
 endif()
@@ -34,5 +48,7 @@ target_include_directories(geolio INTERFACE
 ########################################################################################################################
 # Add subdirectories
 ########################################################################################################################
-enable_testing()
-add_subdirectory(tests)
+if (BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
