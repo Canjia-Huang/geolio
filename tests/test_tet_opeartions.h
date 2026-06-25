@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 #include "utils.h"
 #include "geolio/pair_hash.h"
+#include <array>
 
 namespace geolio::test
 {
