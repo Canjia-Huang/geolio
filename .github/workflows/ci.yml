@@ -47,9 +47,9 @@ jobs:
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
           cd geogram
           .\configure.bat
-          $geogramRoot = (Get-Item -Path ".").FullName
+          $geogramRoot = Get-Location
           echo "GEOGRAM_DIR=$geogramRoot" >> $env:GITHUB_ENV
-          msbuild Build\Windows\Geogram.sln /p:Configuration=Release /p:Platform=x64 /m
+          cmake --build build/Windows --config Release --parallel (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
 
       - name: Install Dependency Geogram (macOS)
         if: runner.os == 'macOS'
