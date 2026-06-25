@@ -10,6 +10,15 @@
 
 namespace geolio
 {
+    /**
+     * @brief Hash functor for std::pair<uint32_t, uint32_t>.
+     *
+     * Combines the two 32-bit integers into a single 64-bit key by shifting
+     * the first element into the high 32 bits and OR'ing the second into the
+     * low 32 bits, then applies std::hash<uint64_t> to produce a size_t hash.
+     * This allows using std::pair<uint32_t, uint32_t> as a key in unordered
+     * containers (e.g., std::unordered_map or std::unordered_set).
+     */
     struct PairHash {
         std::size_t operator () (std::pair<uint32_t, uint32_t> const& pair
             ) const {

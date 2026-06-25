@@ -9,12 +9,8 @@ option(BUILD_TESTS "Build tests" ON)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # standalone
-    if(NOT CMAKE_BUILD_TYPE)
-        set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)
-    endif()
 else()
     # as submodule
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Force Release build" FORCE)
     set(BUILD_TESTS OFF)
 endif()
 
@@ -39,10 +35,16 @@ include(Dependencies)
 ########################################################################################################################
 # Add library
 ########################################################################################################################
-add_library(geolio INTERFACE)
+add_subdirectory(src)
 
-target_include_directories(geolio INTERFACE
+add_library(geolio INTERFACE)
+target_include_directories(geolio
+        INTERFACE
         include/
+)
+target_link_libraries(geolio
+        INTERFACE
+        ${PROJECT_NAME}_LIB
 )
 
 ########################################################################################################################
