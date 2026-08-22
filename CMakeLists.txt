@@ -31,6 +31,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ########################################################################################################################
+# Output directories: executables -> build/bin, libraries -> build/lib
+########################################################################################################################
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
+########################################################################################################################
 # CMake module path
 ########################################################################################################################
 list(PREPEND CMAKE_MODULE_PATH
@@ -52,6 +59,8 @@ if (BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+add_subdirectory(app)
 
 ########################################################################################################################
 # Install

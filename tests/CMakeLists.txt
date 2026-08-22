@@ -24,6 +24,11 @@ file(GLOB SOURCE_FILES
 add_executable(${CURRENT_LIB_NAME}
         ${SOURCE_FILES})
 
+# Keep the test executable in build/tests (its own subdirectory), overriding the
+# global build/bin set in the top-level CMakeLists.txt.
+set_target_properties(${CURRENT_LIB_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
 target_link_libraries(${CURRENT_LIB_NAME}
         ${PROJECT_NAME}::geolio
         ${PROJECT_NAME}::third_party

@@ -10,7 +10,9 @@ target_include_directories(${CURRENT_LIB_NAME} INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/CLI11/include"
 #        "${CMAKE_CURRENT_SOURCE_DIR}/json/include"
 #        "${CMAKE_CURRENT_SOURCE_DIR}/libTimekeeper/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/imoguizmo"
         "${CMAKE_CURRENT_SOURCE_DIR}/spdlog/include"
+        "${GEOGRAM_INCLUDE_DIR}/geogram_gfx/third_party/imgui"
 )
 
 geolio_end_file()
