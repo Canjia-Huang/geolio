@@ -2,7 +2,7 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/4.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#include <geolio/high_order_mesh/hex_control_grid.h>
+#include <geolio/high_order/hex_control_grid.h>
 #include <gtest/gtest.h>
 #include "../utils.h"
 

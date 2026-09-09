@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include <gtest/gtest.h>
-#include <geolio/high_order_mesh/basis_functions.h>
+#include <geolio/high_order/basis_functions.h>
 
 namespace geolio::test
 {
