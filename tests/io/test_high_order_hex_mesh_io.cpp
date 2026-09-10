@@ -74,7 +74,7 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
 
         /* Save */
-        const std::filesystem::path filepath = get_current_test_name()+".msh";
+        const std::string filepath = get_current_test_name()+".msh";
         EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, filepath, "2.2"));
 
         /* Load */
@@ -93,7 +93,7 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
 
         /* Save */
-        const std::filesystem::path filepath = get_current_test_name()+".msh";
+        const std::string filepath = get_current_test_name()+".msh";
         EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, filepath, "4.1"));
 
         /* Load */
@@ -137,7 +137,7 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
 
         /* Save */
-        const std::filesystem::path filepath = get_current_test_name()+".msh";
+        const std::string filepath = get_current_test_name()+".msh";
         EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, filepath, "2.2"));
 
         /* Load */
@@ -156,7 +156,7 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
 
         /* Save */
-        const std::filesystem::path filepath = get_current_test_name()+".msh";
+        const std::string filepath = get_current_test_name()+".msh";
         EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, filepath, "4.1"));
 
         /* Load */
