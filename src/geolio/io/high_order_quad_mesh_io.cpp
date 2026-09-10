@@ -5,7 +5,7 @@
 #include "high_order_quad_mesh_io.h"
 #include <geolio/common/log.h>
 #include "line_stream.h"
-#include <array>
+#include <geolio/common/parse_filepath.h>
 
 namespace
 {
@@ -310,6 +310,10 @@ namespace geolio
         const std::string& filepath,
         const std::string& version_number
         ) {
+        if (const auto ext = get_extension(filepath);
+            ext != "msh")
+            LOG::WARN("Currently, only msh format output is supported, but the specified file extension `{}` is not. Is this a mistake?", ext);
+
         std::ofstream out(filepath);
         if (!out.good()) {
             LOG::ERROR("Could not open file `{}` for writing!", filepath);
@@ -619,6 +623,10 @@ namespace geolio
         ) {
         mesh.clear();
         mesh.vertices.set_dimension(DIM);
+
+        if (const auto ext = get_extension(filepath);
+            ext != "msh")
+            LOG::WARN("Currently, only msh format input is supported, but the specified file extension `{}` is not. Is this a mistake?", ext);
 
         LineInput in(filepath);
         if (!in.OK()) {
