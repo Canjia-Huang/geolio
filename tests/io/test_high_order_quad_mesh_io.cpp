@@ -72,7 +72,7 @@ namespace geolio::test
         if (const auto filedir = filepath.parent_path(); !filedir.empty())
             std::filesystem::create_directories(filedir);
 
-        high_order_quad_mesh_save(*(this->control_grid), filepath, "2.2");
+        EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "2.2"));
     }
 
     TYPED_TEST(SingleQuadHighOrderQuadMeshIO, version_4_1) {
@@ -96,7 +96,7 @@ namespace geolio::test
         if (const auto filedir = filepath.parent_path(); !filedir.empty())
             std::filesystem::create_directories(filedir);
 
-        high_order_quad_mesh_save(*(this->control_grid), filepath, "4.1");
+        EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "4.1"));
     }
 
     template <typename DimType>
@@ -159,7 +159,7 @@ namespace geolio::test
         if (const auto filedir = filepath.parent_path(); !filedir.empty())
             std::filesystem::create_directories(filedir);
 
-        high_order_quad_mesh_save(*(this->control_grid), filepath, "2.2");
+        EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "2.2"));
     }
 
     TYPED_TEST(TwoQuadHighOrderQuadMeshIO, version_4_1) {
@@ -190,6 +190,6 @@ namespace geolio::test
         if (const auto filedir = filepath.parent_path(); !filedir.empty())
             std::filesystem::create_directories(filedir);
 
-        high_order_quad_mesh_save(*(this->control_grid), filepath, "4.1");
+        EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "4.1"));
     }
 }

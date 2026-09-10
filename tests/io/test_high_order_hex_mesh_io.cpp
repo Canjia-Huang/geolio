@@ -159,7 +159,7 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
         control_grid->control_node(control_grid->cell_nd(0, 1, 2, 3)) += 0.1 *
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-        high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "2.2");
+        EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "2.2"));
     }
 
     TEST_F(SingleHexCHighOrderHexMeshIO, version_4_1) {
@@ -169,7 +169,7 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
         control_grid->control_node(control_grid->cell_nd(0, 1, 2, 3)) += 0.1 *
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-        high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "4.1");
+        EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "4.1"));
     }
 
     class TwoHexCHighOrderHexMeshIO : public HighOrderHexMeshIO {
@@ -203,7 +203,7 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
         control_grid->control_node(control_grid->cell_nd(1, 2, 4, 1)) += 0.1 *
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-        high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "2.2");
+        EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "2.2"));
     }
 
     TEST_F(TwoHexCHighOrderHexMeshIO, version_4_1) {
@@ -213,6 +213,6 @@ namespace geolio::test
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
         control_grid->control_node(control_grid->cell_nd(1, 2, 4, 1)) += 0.1 *
             GEO::vec3(GEO::Numeric::random_float32(), GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-        high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "4.1");
+        EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, get_current_test_name()+".msh", "4.1"));
     }
 }
