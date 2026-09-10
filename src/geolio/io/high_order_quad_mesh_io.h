@@ -9,11 +9,13 @@
 namespace geolio
 {
     template<GEO::index_t DIM>
-    void save_high_order_quad_mesh(
+    void high_order_quad_mesh_save(
         const QuadControlGrid<DIM>& control_grid,
         const std::string& filepath,
-        const std::string& version_number = "2.2"
-        );
+        const std::string& version_number = "2.2");
+
+    extern template void high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
+    extern template void high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
 }
 
 #endif //GEOLIO_HIGH_ORDER_QUAD_MESH_IO_H
