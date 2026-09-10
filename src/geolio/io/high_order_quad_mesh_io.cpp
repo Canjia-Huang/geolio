@@ -313,108 +313,124 @@ namespace geolio
         std::vector<double>& nodes,
         std::vector<GEO::index_t>& elements
         ) {
-        try {
-            while (!in.eof()) {
-                if (!in.get_line())
-                    break;
-                in.get_fields();
-                if (in.nb_fields() != 1)
-                    throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Expect keyword!");
-
-                if (const std::string kw = in.field(0);
-                    kw == NODES_BEGIN
-                    ) {
-                    in.get_line();
-                    in.get_fields();
-                    if (in.nb_fields() != 1)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid nodes nb, expected 1 number!");
-
-                    const GEO::index_t nodes_nb = in.field_as_uint(0);
-                    nodes.assign(3*nodes_nb, 0.0);
-                    for (GEO::index_t i = 0; i < nodes_nb; ++i) {
-                        in.get_line();
-                        in.get_fields();
-                        if (in.nb_fields() != 4)
-                            throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid node, expected 4 number!");
-
-                        const GEO::index_t nd = in.field_as_uint(0)-1;
-                        if (nd > nodes_nb-1)
-                            throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid node idx `"+std::to_string(nd)+"`!");
-
-                        nodes[3*nd]   = in.field_as_double(1);
-                        nodes[3*nd+1] = in.field_as_double(2);
-                        nodes[3*nd+2] = in.field_as_double(3);
-                    }
-
-                    in.get_line();
-                    in.get_fields();
-                    if (in.nb_fields() != 1)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Expect end keyword!");
-                    if (const std::string end_kw = in.field(0);
-                        end_kw != NODES_END)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
-                }
-                else if (kw == ELEMENTS_BEGIN) {
-                    in.get_line();
-                    in.get_fields();
-                    if (in.nb_fields() != 1)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid elements nb, expected 1 number!");
-
-                    const GEO::index_t elements_nb = in.field_as_uint(0);
-                    GEO::index_t element_type_code = GEO::NO_INDEX;
-                    GEO::index_t element_nodes_nb = GEO::NO_INDEX;
-                    for (GEO::index_t i = 0; i < elements_nb; ++i) {
-                        in.get_line();
-                        in.get_fields();
-                        if (in.nb_fields() <= 5)
-                            throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid element, expected more than 5 uint!");
-
-                        const GEO::index_t ele = in.field_as_uint(0)-1;
-                        if (ele > elements_nb-1)
-                            throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid element idx `"+std::to_string(ele)+"`!");
-
-                        if (element_type_code == GEO::NO_INDEX) {
-                            element_type_code = in.field_as_uint(1);
-                            order = get_order(element_type_code);
-                            if (order == 0 || order == GEO::NO_INDEX)
-                                throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid element type code `"+std::to_string(element_type_code)+"`!");
-
-                            element_nodes_nb = (order+1)*(order+1);
-                            elements.assign(elements_nb*element_nodes_nb, GEO::NO_INDEX);
-                        }
-                        else if (element_type_code != in.field_as_uint(1))
-                            throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Only supports elements that are all of the same type `"+std::to_string(in.field_as_uint(1))+"!="+std::to_string(element_type_code)+"`!""`.");
-
-                        if (in.nb_fields() != 5+element_nodes_nb)
-                            throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid element nodes nb, expected `"+std::to_string(5+element_nodes_nb)+"` uint!");
-                        assert(element_nodes_nb != GEO::NO_INDEX);
-                        for (GEO::index_t j = 0; j < element_nodes_nb; ++j)
-                            elements[ele*element_nodes_nb+j] = in.field_as_uint(5+j)-1;
-                    }
-
-                    in.get_line();
-                    in.get_fields();
-                    if (in.nb_fields() != 1)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Expect end keyword!");
-                    if (const std::string end_kw = in.field(0);
-                        end_kw != ELEMENTS_END)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
-                }
-                else
-                    throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid kw `"+kw+"`!");
+        while (!in.eof()) {
+            if (!in.get_line())
+                break;
+            in.get_fields();
+            if (in.nb_fields() != 1) {
+                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect keyword!");
+                return false;
             }
-        }
-        catch (const std::string& what) {
-            LOG::ERROR("{}", what);
-            return false;
-        }
-        catch (const std::exception& ex) {
-            LOG::ERROR("{}", ex.what());
-            return false;
-        }
-        catch (...) {
-            LOG::ERROR("Caught exception!");
-            return false;
+
+            if (const std::string kw = in.field(0);
+                kw == NODES_BEGIN
+                ) {
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid nodes nb, expected 1 number!");
+                    return false;
+                }
+
+                const GEO::index_t nodes_nb = in.field_as_uint(0);
+                nodes.assign(3*nodes_nb, 0.0);
+                for (GEO::index_t i = 0; i < nodes_nb; ++i) {
+                    in.get_line();
+                    in.get_fields();
+                    if (in.nb_fields() != 4) {
+                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid node, expected 4 number!");
+                        return false;
+                    }
+
+                    const GEO::index_t nd = in.field_as_uint(0)-1;
+                    if (nd > nodes_nb-1) {
+                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid node idx `"+std::to_string(nd)+"`!");
+                        return false;
+                    }
+
+                    nodes[3*nd]   = in.field_as_double(1);
+                    nodes[3*nd+1] = in.field_as_double(2);
+                    nodes[3*nd+2] = in.field_as_double(3);
+                }
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect end keyword!");
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != NODES_END) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
+                    return false;
+                }
+            }
+            else if (kw == ELEMENTS_BEGIN) {
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid elements nb, expected 1 number!");
+                    return false;
+                }
+
+                const GEO::index_t elements_nb = in.field_as_uint(0);
+                GEO::index_t element_type_code = GEO::NO_INDEX;
+                GEO::index_t element_nodes_nb = GEO::NO_INDEX;
+                for (GEO::index_t i = 0; i < elements_nb; ++i) {
+                    in.get_line();
+                    in.get_fields();
+                    if (in.nb_fields() <= 5) {
+                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element, expected more than 5 uint!");
+                        return false;
+                    }
+
+                    const GEO::index_t ele = in.field_as_uint(0)-1;
+                    if (ele > elements_nb-1) {
+                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element idx `"+std::to_string(ele)+"`!");
+                        return false;
+                    }
+
+                    if (element_type_code == GEO::NO_INDEX) {
+                        element_type_code = in.field_as_uint(1);
+                        order = get_order(element_type_code);
+                        if (order == 0 || order == GEO::NO_INDEX) {
+                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element type code `"+std::to_string(element_type_code)+"`!");
+                            return false;
+                        }
+
+                        element_nodes_nb = (order+1)*(order+1);
+                        elements.assign(elements_nb*element_nodes_nb, GEO::NO_INDEX);
+                    }
+                    else if (element_type_code != in.field_as_uint(1)) {
+                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Only supports elements that are all of the same type `"+std::to_string(in.field_as_uint(1))+"!="+std::to_string(element_type_code)+"`!""`.");
+                        return false;
+                    }
+
+                    if (in.nb_fields() != 5+element_nodes_nb) {
+                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element nodes nb, expected `"+std::to_string(5+element_nodes_nb)+"` uint!");
+                        return false;
+                    }
+                    assert(element_nodes_nb != GEO::NO_INDEX);
+                    for (GEO::index_t j = 0; j < element_nodes_nb; ++j)
+                        elements[ele*element_nodes_nb+j] = in.field_as_uint(5+j)-1;
+                }
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect end keyword!");
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != ELEMENTS_END) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
+                    return false;
+                }
+            }
+            else {
+                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid kw `"+kw+"`!");
+                return false;
+            }
         }
 
         return true;
@@ -445,124 +461,128 @@ namespace geolio
             return false;
         }
 
-        try {
-            while (!in.eof()) {
-                if (!in.get_line())
-                    break;
+        while (!in.eof()) {
+            if (!in.get_line())
+                break;
+            in.get_fields();
+            if (in.nb_fields() != 1) {
+                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect keyword!");
+                return false;
+            }
+
+            if (const std::string kw = in.field(0);
+                kw == MESH_FORMAT_BEGIN
+                ) {
+                in.get_line();
                 in.get_fields();
-                if (in.nb_fields() != 1)
-                    throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Expect keyword!");
+                if (in.nb_fields() != 3) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid mesh format, expected 3 numbers!");
+                    return false;
+                }
 
-                if (const std::string kw = in.field(0);
-                    kw == MESH_FORMAT_BEGIN
-                    ) {
-                    in.get_line();
-                    in.get_fields();
-                    if (in.nb_fields() != 3)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid mesh format, expected 3 numbers!");
+                const std::string version_number = in.field(0);
 
-                    const std::string version_number = in.field(0);
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect end keyword!");
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != MESH_FORMAT_END) {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
+                    return false;
+                }
 
-                    in.get_line();
-                    in.get_fields();
-                    if (in.nb_fields() != 1)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Expect end keyword!");
-                    if (const std::string end_kw = in.field(0);
-                        end_kw != MESH_FORMAT_END)
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
-
-                    /* Load nodes and elements */
-                    GEO::index_t order = GEO::NO_INDEX;
-                    std::vector<double> nodes;
-                    std::vector<GEO::index_t> elements;
-                    if (version_number == "2.2") {
-                        if (!high_order_quad_mesh_load_2_2<DIM>(in, order, nodes, elements))
-                            throw std::runtime_error("Load msh 2.2 failed!");
+                /* Load nodes and elements */
+                GEO::index_t order = GEO::NO_INDEX;
+                std::vector<double> nodes;
+                std::vector<GEO::index_t> elements;
+                if (version_number == "2.2") {
+                    if (!high_order_quad_mesh_load_2_2<DIM>(in, order, nodes, elements)) {
+                        LOG::ERROR("{}", "Load msh 2.2 failed!");
+                        return false;
                     }
-                    else if (version_number == "4.1") {
-                        if (!high_order_quad_mesh_load_4_1<DIM>(in, order, nodes, elements))
-                            throw std::runtime_error("Load msh 4.1 failed!");
+                }
+                else if (version_number == "4.1") {
+                    if (!high_order_quad_mesh_load_4_1<DIM>(in, order, nodes, elements)) {
+                        LOG::ERROR("{}", "Load msh 4.1 failed!");
+                        return false;
                     }
-                    else
-                        throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Unsupported version number `"+version_number+"`!");
+                }
+                else {
+                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unsupported version number `"+version_number+"`!");
+                    return false;
+                }
 
-                    const GEO::index_t element_nodes_nb = (order+1)*(order+1);
+                const GEO::index_t element_nodes_nb = (order+1)*(order+1);
 
-                    /* Build mesh */
-                    {
-                        const GEO::index_t nodes_nb = nodes.size()/3;
-                        const GEO::index_t elements_nb = elements.size()/element_nodes_nb;
+                /* Build mesh */
+                {
+                    const GEO::index_t nodes_nb = nodes.size()/3;
+                    const GEO::index_t elements_nb = elements.size()/element_nodes_nb;
 
-                        std::vector<GEO::index_t> node_to_vertex(nodes.size()/3, GEO::NO_VERTEX);
-                        std::vector<GEO::index_t> quad_vertices;
-                        quad_vertices.reserve(4*elements_nb);
+                    std::vector<GEO::index_t> node_to_vertex(nodes.size()/3, GEO::NO_VERTEX);
+                    std::vector<GEO::index_t> quad_vertices;
+                    quad_vertices.reserve(4*elements_nb);
 
-                        GEO::index_t nb_vertices = 0;
-                        for (GEO::index_t ele = 0; ele < elements_nb; ++ele) {
-                            for (GEO::index_t lv = 0; lv < 4; ++lv) {
-                                const auto& nd = elements[ele*element_nodes_nb+lv];
-                                if (nd < nodes_nb)
-                                    throw std::runtime_error("Invalid node idx `"+std::to_string(nd)+"`!");
-                                if (node_to_vertex[nd] == GEO::NO_VERTEX)
-                                    node_to_vertex[nd] = ++nb_vertices;
-
-                                quad_vertices.push_back(node_to_vertex[nd]);
+                    GEO::index_t nb_vertices = 0;
+                    for (GEO::index_t ele = 0; ele < elements_nb; ++ele) {
+                        for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                            const auto& nd = elements[ele*element_nodes_nb+lv];
+                            if (nd < nodes_nb) {
+                                LOG::ERROR("{}", "Invalid node idx `"+std::to_string(nd)+"`!");
+                                return false;
                             }
-                        }
+                            if (node_to_vertex[nd] == GEO::NO_VERTEX)
+                                node_to_vertex[nd] = ++nb_vertices;
 
-                        /* Create vertices */
-                        mesh.vertices.create_vertices(nb_vertices);
-                        for (GEO::index_t nd = 0; nd < nodes_nb; ++nd) {
-                            if (const auto& v = node_to_vertex[nd];
-                                v != GEO::NO_VERTEX
-                                ) {
-                                auto& p = mesh.vertices.point<DIM>(v);
-                                for (GEO::index_t d = 0; d < DIM; ++d)
-                                    p[d] = nodes[nd*3+d];
-                            }
+                            quad_vertices.push_back(node_to_vertex[nd]);
                         }
-
-                        /* Create quads */
-                        mesh.facets.create_quads(quad_vertices.size()/4);
-                        for (const auto& f : mesh.facets) {
-                            for (GEO::index_t lv = 0; lv < 4; ++lv)
-                                mesh.facets.set_vertex(f, lv, quad_vertices[4*f+lv]);
-                        }
-                        mesh.facets.connect();
                     }
 
-                    /* Build control grid */
-                    {
-                        std::vector<GEO::index_t> gmsh_nodes_order;
-                        generate_msh_nodes_order(order, gmsh_nodes_order);
+                    /* Create vertices */
+                    mesh.vertices.create_vertices(nb_vertices);
+                    for (GEO::index_t nd = 0; nd < nodes_nb; ++nd) {
+                        if (const auto& v = node_to_vertex[nd];
+                            v != GEO::NO_VERTEX
+                            ) {
+                            auto& p = mesh.vertices.point<DIM>(v);
+                            for (GEO::index_t d = 0; d < DIM; ++d)
+                                p[d] = nodes[nd*3+d];
+                        }
+                    }
 
-                        control_grid_ptr = std::make_unique<QuadControlGrid<DIM>>(mesh, order);
-                        for (const auto& f : mesh.facets) {
-                            for (GEO::index_t i = 0; i < element_nodes_nb; ++i) {
-                                const auto nd = control_grid_ptr->facet_nd(f, i);
-                                const auto gmsh_nd = elements[f*element_nodes_nb+gmsh_nodes_order[i]];
-                                auto& p = control_grid_ptr->control_node(nd);
-                                for (GEO::index_t d = 0; d < DIM; ++d)
-                                    p[d] = nodes[3*gmsh_nd+d];
-                            }
+                    /* Create quads */
+                    mesh.facets.create_quads(quad_vertices.size()/4);
+                    for (const auto& f : mesh.facets) {
+                        for (GEO::index_t lv = 0; lv < 4; ++lv)
+                            mesh.facets.set_vertex(f, lv, quad_vertices[4*f+lv]);
+                    }
+                    mesh.facets.connect();
+                }
+
+                /* Build control grid */
+                {
+                    std::vector<GEO::index_t> gmsh_nodes_order;
+                    generate_msh_nodes_order(order, gmsh_nodes_order);
+
+                    control_grid_ptr = std::make_unique<QuadControlGrid<DIM>>(mesh, order);
+                    for (const auto& f : mesh.facets) {
+                        for (GEO::index_t i = 0; i < element_nodes_nb; ++i) {
+                            const auto nd = control_grid_ptr->facet_nd(f, i);
+                            const auto gmsh_nd = elements[f*element_nodes_nb+gmsh_nodes_order[i]];
+                            auto& p = control_grid_ptr->control_node(nd);
+                            for (GEO::index_t d = 0; d < DIM; ++d)
+                                p[d] = nodes[3*gmsh_nd+d];
                         }
                     }
                 }
-                else
-                    throw std::runtime_error("Line "+std::to_string(in.line_number())+" :Invalid kw `"+kw+"`!");
             }
-        }
-        catch (const std::string& what) {
-            LOG::ERROR("{}", what);
-            return false;
-        }
-        catch (const std::exception& ex) {
-            LOG::ERROR("{}", ex.what());
-            return false;
-        }
-        catch (...) {
-            LOG::ERROR("Caught exception!");
-            return false;
+            else {
+                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid kw `"+kw+"`!");
+                return false;
+            }
         }
 
         return true;

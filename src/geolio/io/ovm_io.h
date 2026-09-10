@@ -30,7 +30,14 @@ namespace geolio
         }
 
     private:
-        static void parse_property(LineInput& in, GEO::AttributesManager& attributes_manager);
+        /**
+         * @brief Parses a property block (`*_Property` keyword) and loads it
+         *        into the given attributes manager.
+         * @details On malformed input, logs an error with LOG::ERROR and
+         *          returns false instead of throwing.
+         * @return true on success, false if the block could not be parsed.
+         */
+        static bool parse_property(LineInput& in, GEO::AttributesManager& attributes_manager);
     };
 }
 
