@@ -8,7 +8,7 @@
 
 namespace geolio
 {
-    void high_order_hex_mesh_save(
+    bool high_order_hex_mesh_save(
         const HexControlGrid& control_grid,
         const std::string& filepath,
         const std::string& version_number = "2.2");

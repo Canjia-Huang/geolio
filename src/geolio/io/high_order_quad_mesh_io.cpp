@@ -3,6 +3,8 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "high_order_quad_mesh_io.h"
+#include <geolio/common/log.h>
+#include "line_stream.h"
 
 namespace
 {
@@ -107,7 +109,7 @@ namespace
 namespace geolio
 {
     template<GEO::index_t DIM>
-    static void high_order_quad_mesh_save_2_2(
+    static bool high_order_quad_mesh_save_2_2(
         const QuadControlGrid<DIM>& control_grid,
         std::ofstream& out
         ) {
@@ -158,10 +160,12 @@ namespace geolio
             }
             out << ELEMENTS_END << "\n";
         }
+
+        return true;
     }
 
     template<GEO::index_t DIM>
-    static void high_order_quad_mesh_save_4_1(
+    static bool high_order_quad_mesh_save_4_1(
         const QuadControlGrid<DIM>& control_grid,
         std::ofstream& out
         ) {
@@ -260,26 +264,48 @@ namespace geolio
 
             out << ELEMENTS_END << "\n";
         }
+
+        return true;
     }
 
     template<GEO::index_t DIM>
-    void high_order_quad_mesh_save(
+    bool high_order_quad_mesh_save(
         const QuadControlGrid<DIM>& control_grid,
         const std::string& filepath,
         const std::string& version_number
         ) {
         std::ofstream out(filepath);
-        if (!out.good())
-            throw std::runtime_error("Could not open file `"+filepath+"` for writing");
+        if (!out.good()) {
+            LOG::ERROR("Could not open file `{}` for writing!", filepath);
+            return false;
+        }
 
         if (version_number == "2.2")
-            high_order_quad_mesh_save_2_2(control_grid, out);
-        else if (version_number == "4.1")
-            high_order_quad_mesh_save_4_1(control_grid, out);
-        else
-            throw std::logic_error("Unsupported version number `"+version_number+"`");
+            return high_order_quad_mesh_save_2_2(control_grid, out);
+        if (version_number == "4.1")
+            return high_order_quad_mesh_save_4_1(control_grid, out);
+        LOG::ERROR("Unsupported version number `{}`", version_number);
+        return false;
     }
 
-    template void high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
-    template void high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
+
+    template<GEO::index_t DIM>
+    bool high_order_quad_mesh_load(
+        const std::string& filepath,
+        GEO::Mesh& mesh,
+        std::shared_ptr<QuadControlGrid<DIM>>& control_grid_ptr
+        ) {
+        LineInput in(filepath);
+        if (!in.OK()) {
+            LOG::ERROR("Could not open file `{}` for reading!", filepath);
+            return false;
+        }
+
+
+    }
+
+    template bool high_order_quad_mesh_load<2>(const std::string& filepath, GEO::Mesh& mesh, std::shared_ptr<QuadControlGrid<2>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<3>(const std::string& filepath, GEO::Mesh& mesh, std::shared_ptr<QuadControlGrid<3>>& control_grid_ptr);
 }

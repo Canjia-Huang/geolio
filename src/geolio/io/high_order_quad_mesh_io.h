@@ -9,13 +9,22 @@
 namespace geolio
 {
     template<GEO::index_t DIM>
-    void high_order_quad_mesh_save(
+    bool high_order_quad_mesh_save(
         const QuadControlGrid<DIM>& control_grid,
         const std::string& filepath,
         const std::string& version_number = "2.2");
 
-    extern template void high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
-    extern template void high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
+    extern template bool high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
+    extern template bool high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
+
+    template<GEO::index_t DIM>
+    bool high_order_quad_mesh_load(
+        const std::string& filepath,
+        GEO::Mesh& mesh,
+        std::shared_ptr<QuadControlGrid<DIM>>& control_grid_ptr);
+
+    extern template bool high_order_quad_mesh_load<2>(const std::string& filepath, GEO::Mesh& mesh, std::shared_ptr<QuadControlGrid<2>>& control_grid_ptr);
+    extern template bool high_order_quad_mesh_load<3>(const std::string& filepath, GEO::Mesh& mesh, std::shared_ptr<QuadControlGrid<3>>& control_grid_ptr);
 }
 
 #endif //GEOLIO_HIGH_ORDER_QUAD_MESH_IO_H

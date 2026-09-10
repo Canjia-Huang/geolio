@@ -3,6 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "high_order_hex_mesh_io.h"
+#include <geolio/common/log.h>
 
 namespace
 {
@@ -210,7 +211,7 @@ namespace
 
 namespace geolio
 {
-    void high_order_hex_mesh_save_2_2(
+    static bool high_order_hex_mesh_save_2_2(
         const HexControlGrid& control_grid,
         std::ofstream& out
         ) {
@@ -259,9 +260,11 @@ namespace geolio
             }
             out << ELEMENTS_END << "\n";
         }
+
+        return true;
     }
 
-    void high_order_hex_mesh_save_4_1(
+    static bool high_order_hex_mesh_save_4_1(
         const HexControlGrid& control_grid,
         std::ofstream& out
         ) {
@@ -355,22 +358,26 @@ namespace geolio
 
             out << ELEMENTS_END << "\n";
         }
+
+        return true;
     }
 
-    void high_order_hex_mesh_save(
+    bool high_order_hex_mesh_save(
         const HexControlGrid& control_grid,
         const std::string& filepath,
         const std::string& version_number
         ) {
         std::ofstream out(filepath);
-        if (!out.good())
-            throw std::runtime_error("Could not open file `"+filepath+"` for writing");
+        if (!out.good()) {
+            LOG::ERROR("Could not open file `{}` for writing!", filepath);
+            return false;
+        }
 
         if (version_number == "2.2")
-            high_order_hex_mesh_save_2_2(control_grid, out);
-        else if (version_number == "4.1")
-            high_order_hex_mesh_save_4_1(control_grid, out);
-        else
-            throw std::logic_error("Unsupported version number `"+version_number+"`");
+            return high_order_hex_mesh_save_2_2(control_grid, out);
+        if (version_number == "4.1")
+            return high_order_hex_mesh_save_4_1(control_grid, out);
+        LOG::ERROR("Unsupported version number `{}`", version_number);
+        return false;
     }
 }
