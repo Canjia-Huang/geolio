@@ -8,6 +8,15 @@
 
 namespace geolio
 {
+    /**
+     * @brief Saves a high-order quadrilateral control grid to a Gmsh mesh file.
+     *
+     * @tparam DIM The spatial dimension of the control grid.
+     * @param[in] control_grid The control grid to be exported.
+     * @param[in] filepath The destination file path.
+     * @param[in] version_number The Gmsh mesh version string, such as "2.2" or "4.1".
+     * @return True if the mesh is written successfully; otherwise, false.
+     */
     template<GEO::index_t DIM>
     bool high_order_quad_mesh_save(
         const QuadControlGrid<DIM>& control_grid,
@@ -17,6 +26,15 @@ namespace geolio
     extern template bool high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
     extern template bool high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
 
+    /**
+     * @brief Loads a high-order quadrilateral mesh from a Gmsh file into a control grid.
+     *
+     * @tparam DIM The spatial dimension of the mesh.
+     * @param[in] filepath The input Gmsh file path.
+     * @param[out] mesh The mesh object to populate with the loaded geometry.
+     * @param[out] control_grid_ptr The pointer that receives the reconstructed control grid.
+     * @return True if the file is loaded successfully; otherwise, false.
+     */
     template<GEO::index_t DIM>
     bool high_order_quad_mesh_load(
         const std::string& filepath,

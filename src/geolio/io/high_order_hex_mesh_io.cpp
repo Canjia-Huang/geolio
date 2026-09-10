@@ -50,6 +50,12 @@ namespace
         }
     }
 
+    /**
+     * @brief Recovers the polynomial order of a quadrilateral element from its Gmsh element type code.
+     *
+     * @param element_type_code The Gmsh element type code for the high-order quadrilateral.
+     * @return The corresponding polynomial order, or GEO::NO_INDEX if the type code is unsupported.
+     */
     GEO::index_t get_order(const GEO::index_t element_type_code) {
         switch (element_type_code) {
             case 5: return 1;

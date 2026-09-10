@@ -52,6 +52,18 @@ namespace
         }
     }
 
+    /**
+     * @brief Recovers the polynomial order of a quadrilateral element from its Gmsh element type code.
+     *
+     * @param element_type_code The Gmsh element type code for the high-order quadrilateral.
+     * @return The corresponding polynomial order, or GEO::NO_INDEX if the type code is unsupported.
+     */
+    /**
+     * @brief Recovers the polynomial order of a quadrilateral element from its Gmsh element type code.
+     *
+     * @param element_type_code The Gmsh element type code for the high-order quadrilateral.
+     * @return The corresponding polynomial order, or GEO::NO_INDEX if the type code is unsupported.
+     */
     GEO::index_t get_order(const GEO::index_t element_type_code) {
         switch (element_type_code) {
             case 3: return 1;
@@ -70,7 +82,7 @@ namespace
      * @brief Generates the node permutation from the internal order to the Gmsh MSH order.
      *
      * @param order The polynomial order of the quadrilateral element.
-     * @param msh_nodes_order The output node order mapping, indexed by internal node order and storing the corresponding MSH index.
+     * @param msh_nodes_order The output node-order mapping, where each entry stores the corresponding Gmsh node index.
      */
     void generate_msh_nodes_order(
         const GEO::index_t order,
@@ -113,6 +125,14 @@ namespace
 
 namespace geolio
 {
+    /**
+     * @brief Writes a high-order quadrilateral mesh in Gmsh 2.2 format.
+     *
+     * @tparam DIM The spatial dimension of the control grid.
+     * @param control_grid The control grid to export.
+     * @param out The output stream for the mesh file.
+     * @return True if the mesh is written successfully; otherwise, false.
+     */
     template<GEO::index_t DIM>
     static bool high_order_quad_mesh_save_2_2(
         const QuadControlGrid<DIM>& control_grid,
