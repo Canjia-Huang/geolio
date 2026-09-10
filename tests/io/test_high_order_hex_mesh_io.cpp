@@ -6,6 +6,7 @@
 #include <geolio/io/high_order_hex_mesh_io.h>
 #include "../utils.h"
 #include <geogram/points/kd_tree.h>
+#include <filesystem>
 
 namespace geolio::test
 {
