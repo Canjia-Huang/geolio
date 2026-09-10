@@ -119,6 +119,12 @@ namespace geolio::test
             std::filesystem::create_directories(filedir);
 
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "4.1"));
+
+        /* Load */
+        GEO::Mesh loaded_mesh;
+        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
+        this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
 
     template <typename DimType>
@@ -182,6 +188,12 @@ namespace geolio::test
             std::filesystem::create_directories(filedir);
 
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "2.2"));
+
+        /* Load */
+        GEO::Mesh loaded_mesh;
+        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
+        this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
 
     TYPED_TEST(TwoQuadHighOrderQuadMeshIO, version_4_1) {
@@ -213,5 +225,11 @@ namespace geolio::test
             std::filesystem::create_directories(filedir);
 
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "4.1"));
+
+        /* Load */
+        GEO::Mesh loaded_mesh;
+        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
+        this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
 }
