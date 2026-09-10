@@ -4,7 +4,6 @@
 //
 #include <gtest/gtest.h>
 #include <geolio/io/high_order_quad_mesh_io.h>
-
 #include "../utils.h"
 
 namespace geolio::test

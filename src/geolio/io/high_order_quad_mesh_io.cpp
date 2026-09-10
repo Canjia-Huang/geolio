@@ -107,7 +107,61 @@ namespace
 namespace geolio
 {
     template<GEO::index_t DIM>
-    void high_order_quad_mesh_save_4_1(
+    static void high_order_quad_mesh_save_2_2(
+        const QuadControlGrid<DIM>& control_grid,
+        std::ofstream& out
+        ) {
+        /* == Mesh format ========================================================================================== */
+        {
+            out << MESH_FORMAT_BEGIN << "\n";
+            out << "2.2 0 8" << "\n";
+            out << MESH_FORMAT_END << "\n";
+        }
+
+        /* == Nodes ================================================================================================ */
+        {
+            out << NODES_BEGIN << "\n";
+            out << control_grid.control_nodes_nb() << "\n";
+            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
+                const auto& p = control_grid.control_node(nd);
+                out << nd+1 << " ";
+                for (GEO::index_t d = 0; d < DIM; ++d)
+                    out << p[d] << " ";
+                if constexpr (DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
+                    out << "0";
+                out << "\n";
+            }
+            out << NODES_END << "\n";
+        }
+
+        /* == Elements ============================================================================================= */
+        {
+            const auto& mesh = control_grid.mesh();
+            const auto order = control_grid.order();
+            const auto element_type_code = get_element_type_code(order);
+
+            std::vector<GEO::index_t> nodes_order;
+            generate_msh_nodes_order(order, nodes_order);
+            assert(nodes_order.size() == (order+1)*(order+1));
+
+            out << ELEMENTS_BEGIN << "\n";
+            out << mesh.facets.nb() << "\n";
+            for (const auto& f : mesh.facets) {
+                out << f+1 << " "
+                    << element_type_code << " "
+                    << ELEMENTS_NUMBERS_OF_TAGS << " "
+                    << ELEMENTS_PHYSICAL_GROUP_ID << " "
+                    << ELEMENTS_ENTITY_ID << " ";
+                for (const auto i : nodes_order)
+                    out << control_grid.facet_nd(f, i)+1 << " ";
+                out << "\n";
+            }
+            out << ELEMENTS_END << "\n";
+        }
+    }
+
+    template<GEO::index_t DIM>
+    static void high_order_quad_mesh_save_4_1(
         const QuadControlGrid<DIM>& control_grid,
         std::ofstream& out
         ) {
@@ -204,60 +258,6 @@ namespace geolio
                 out << "\n";
             }
 
-            out << ELEMENTS_END << "\n";
-        }
-    }
-
-    template<GEO::index_t DIM>
-    static void high_order_quad_mesh_save_2_2(
-        const QuadControlGrid<DIM>& control_grid,
-        std::ofstream& out
-        ) {
-        /* == Mesh format ========================================================================================== */
-        {
-            out << MESH_FORMAT_BEGIN << "\n";
-            out << "2.2 0 8" << "\n";
-            out << MESH_FORMAT_END << "\n";
-        }
-
-        /* == Nodes ================================================================================================ */
-        {
-            out << NODES_BEGIN << "\n";
-            out << control_grid.control_nodes_nb() << "\n";
-            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
-                const auto& p = control_grid.control_node(nd);
-                out << nd+1 << " ";
-                for (GEO::index_t d = 0; d < DIM; ++d)
-                    out << p[d] << " ";
-                if constexpr (DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
-                    out << "0";
-                out << "\n";
-            }
-            out << NODES_END << "\n";
-        }
-
-        /* == Elements ============================================================================================= */
-        {
-            const auto& mesh = control_grid.mesh();
-            const auto order = control_grid.order();
-            const auto element_type_code = get_element_type_code(order);
-
-            std::vector<GEO::index_t> nodes_order;
-            generate_msh_nodes_order(order, nodes_order);
-            assert(nodes_order.size() == (order+1)*(order+1));
-
-            out << ELEMENTS_BEGIN << "\n";
-            out << mesh.facets.nb() << "\n";
-            for (const auto& f : mesh.facets) {
-                out << f+1 << " "
-                    << element_type_code << " "
-                    << ELEMENTS_NUMBERS_OF_TAGS << " "
-                    << ELEMENTS_PHYSICAL_GROUP_ID << " "
-                    << ELEMENTS_ENTITY_ID << " ";
-                for (const auto i : nodes_order)
-                    out << control_grid.facet_nd(f, i)+1 << " ";
-                out << "\n";
-            }
             out << ELEMENTS_END << "\n";
         }
     }
