@@ -21,7 +21,8 @@ FetchContent_MakeAvailable(googletest)
 file(GLOB SOURCE_FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/common/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/high_order_mesh/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/high_order/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/io/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/local_operation_optimization/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/mesh/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/motorcycle/*.cpp
