@@ -28,19 +28,19 @@ namespace geolio
         GEO::Attribute<GEO::vec3> v_normal; // bounded when load "N OFF"
         if (in.nb_fields() == 1) {
             if (!in.field_matches(0, "OFF")) {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unrecognized header, expect `OFF`!");
+                LOG::ERROR("Line {} :Unrecognized header, expect `OFF`!", in.line_number());
                 return false;
             }
         }
         else {
             if (in.nb_fields() != 2) {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unrecognized header number!");
+                LOG::ERROR("Line {} :Unrecognized header number!", in.line_number());
                 return false;
             }
             if (in.field_matches(0, "N") && in.field_matches(1, "OFF"))
                 v_normal.bind(mesh.vertices.attributes(), "normal");
             else {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unrecognized header, expect `N OFF`!");
+                LOG::ERROR("Line {} :Unrecognized header, expect `N OFF`!", in.line_number());
                 return false;
             }
         }
@@ -49,7 +49,7 @@ namespace geolio
         in.get_line();
         in.get_fields();
         if (in.nb_fields() != 3) {
-            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unrecognized elements nb number, expect 3!");
+            LOG::ERROR("Line {} :Unrecognized elements nb number, expect 3!", in.line_number());
             return false;
         }
 
@@ -65,7 +65,7 @@ namespace geolio
                 in.get_fields();
                 if (v_normal.is_bound()) {
                     if (in.nb_fields() != 6) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid number of fields: expect 6!");
+                        LOG::ERROR("Line {} :Invalid number of fields: expect 6!", in.line_number());
                         return false;
                     }
                     mesh.vertices.point(v).x = in.field_as_double(0);
@@ -75,7 +75,7 @@ namespace geolio
                 }
                 else {
                     if (in.nb_fields() != 3) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid number of fields: expect 3!");
+                        LOG::ERROR("Line {} :Invalid number of fields: expect 3!", in.line_number());
                         return false;
                     }
                     mesh.vertices.point(v).x = in.field_as_double(0);
@@ -92,13 +92,13 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() == 0) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid facet, empty line!");
+                    LOG::ERROR("Line {} :Invalid facet, empty line!", in.line_number());
                     return false;
                 }
 
                 const GEO::index_t fv_nb = in.field_as_uint(0);
                 if (in.nb_fields() != fv_nb+1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Facet need to have "+std::to_string(fv_nb)+" vertices, actual vertices "+std::to_string(in.nb_fields()-1)+"!");
+                    LOG::ERROR("Line {} :Facet need to have {} vertices, actual vertices {}!", in.line_number(), fv_nb, in.nb_fields()-1);
                     return false;
                 }
                 facet_ptr.push_back(fv_nb);
@@ -192,11 +192,11 @@ namespace geolio
                     break;
                 in.get_fields();
                 if (in.nb_fields() != 3) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid number of fields: expect 1+2!");
+                    LOG::ERROR("Line {} :Invalid number of fields: expect 1+2!", in.line_number());
                     return false;
                 }
                 if (in.field_as_uint(0) != 2) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid edge vertices nb, expect 2!");
+                    LOG::ERROR("Line {} :Invalid edge vertices nb, expect 2!", in.line_number());
                     return false;
                 }
                 edge_ptr.push_back(in.field_as_uint(1));

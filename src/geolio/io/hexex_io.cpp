@@ -30,7 +30,7 @@ namespace geolio
             in.get_line();
             in.get_fields();
             if (in.nb_fields() != 1) {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect vertices nb!");
+                LOG::ERROR("Line {} :Expect vertices nb!", in.line_number());
                 return false;
             }
 
@@ -41,7 +41,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 3) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid vertex, expected 3 coordinates!");
+                    LOG::ERROR("Line {} :Invalid vertex, expected 3 coordinates!", in.line_number());
                     return false;
                 }
 
@@ -57,7 +57,7 @@ namespace geolio
             in.get_line();
             in.get_fields();
             if (in.nb_fields() != 1) {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect tetrahedra nb!");
+                LOG::ERROR("Line {} :Expect tetrahedra nb!", in.line_number());
                 return false;
             }
 
@@ -69,7 +69,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if(in.nb_fields() != 16) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid parameterized cell, expected 4 int + 12 double!");
+                    LOG::ERROR("Line {} :Invalid parameterized cell, expected 4 int + 12 double!", in.line_number());
                     return false;
                 }
 
@@ -98,7 +98,7 @@ namespace geolio
                         in.get_line();
                         in.get_fields();
                         if (in.nb_fields() != 4) {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid wall triangles, expected 3 coordinates + 1 double!");
+                            LOG::ERROR("Line {} :Invalid wall triangles, expected 3 coordinates + 1 double!", in.line_number());
                             return false;
                         }
 
@@ -122,7 +122,7 @@ namespace geolio
                             in.get_line();
                             in.get_fields();
                             if (in.nb_fields() != 1) {
-                                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid feature vertex index!");
+                                LOG::ERROR("Line {} :Invalid feature vertex index!", in.line_number());
                                 return false;
                             }
 
@@ -140,7 +140,7 @@ namespace geolio
                             in.get_line();
                             in.get_fields();
                             if (in.nb_fields() != 2) {
-                                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid features edge vertices!");
+                                LOG::ERROR("Line {} :Invalid features edge vertices!", in.line_number());
                                 return false;
                             }
 
@@ -161,7 +161,7 @@ namespace geolio
                             in.get_line();
                             in.get_fields();
                             if (in.nb_fields() != 3) {
-                                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid features facet vertices!");
+                                LOG::ERROR("Line {} :Invalid features facet vertices!", in.line_number());
                                 return false;
                             }
 
@@ -217,7 +217,7 @@ namespace geolio
                     }
                 }
                 else {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid keyword!");
+                    LOG::ERROR("Line {} :Invalid keyword!", in.line_number());
                     return false;
                 }
             }

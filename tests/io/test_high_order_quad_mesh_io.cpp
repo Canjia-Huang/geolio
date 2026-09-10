@@ -91,10 +91,10 @@ namespace geolio::test
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "2.2"));
 
         /* Load */
-        // GEO::Mesh loaded_mesh;
-        // std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
-        // ASSERT_TRUE(high_order_quad_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
-        // this->same_as(loaded_mesh, loaded_control_grid_ptr);
+        GEO::Mesh loaded_mesh;
+        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
+        this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
 
     TYPED_TEST(SingleQuadHighOrderQuadMeshIO, version_4_1) {

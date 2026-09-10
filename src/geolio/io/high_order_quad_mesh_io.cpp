@@ -318,7 +318,7 @@ namespace geolio
                 break;
             in.get_fields();
             if (in.nb_fields() != 1) {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect keyword!");
+                LOG::ERROR("Line {} :Expect keyword!", in.line_number());
                 return false;
             }
 
@@ -328,7 +328,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid nodes nb, expected 1 number!");
+                    LOG::ERROR("Line {} :Invalid nodes nb, expected 1 number!", in.line_number());
                     return false;
                 }
 
@@ -338,13 +338,13 @@ namespace geolio
                     in.get_line();
                     in.get_fields();
                     if (in.nb_fields() != 4) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid node, expected 4 number!");
+                        LOG::ERROR("Line {} :Invalid node, expected 4 number!", in.line_number());
                         return false;
                     }
 
                     const GEO::index_t nd = in.field_as_uint(0)-1;
                     if (nd > nodes_nb-1) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid node idx `"+std::to_string(nd)+"`!");
+                        LOG::ERROR("Line {} :Invalid node idx `{}`!", in.line_number(), nd);
                         return false;
                     }
 
@@ -356,12 +356,12 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect end keyword!");
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
                     return false;
                 }
                 if (const std::string end_kw = in.field(0);
                     end_kw != NODES_END) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
                     return false;
                 }
             }
@@ -369,7 +369,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid elements nb, expected 1 number!");
+                    LOG::ERROR("Line {} :Invalid elements nb, expected 1 number!", in.line_number());
                     return false;
                 }
 
@@ -380,13 +380,13 @@ namespace geolio
                     in.get_line();
                     in.get_fields();
                     if (in.nb_fields() <= 5) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element, expected more than 5 uint!");
+                        LOG::ERROR("Line {} :Invalid element, expected more than 5 uint!", in.line_number());
                         return false;
                     }
 
                     const GEO::index_t ele = in.field_as_uint(0)-1;
                     if (ele > elements_nb-1) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element idx `"+std::to_string(ele)+"`!");
+                        LOG::ERROR("Line {} :Invalid element idx `{}`!", in.line_number(), ele);
                         return false;
                     }
 
@@ -394,7 +394,7 @@ namespace geolio
                         element_type_code = in.field_as_uint(1);
                         order = get_order(element_type_code);
                         if (order == 0 || order == GEO::NO_INDEX) {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element type code `"+std::to_string(element_type_code)+"`!");
+                            LOG::ERROR("Line {} :Invalid element type code `{}`!", in.line_number(), element_type_code);
                             return false;
                         }
 
@@ -402,12 +402,12 @@ namespace geolio
                         elements.assign(elements_nb*element_nodes_nb, GEO::NO_INDEX);
                     }
                     else if (element_type_code != in.field_as_uint(1)) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Only supports elements that are all of the same type `"+std::to_string(in.field_as_uint(1))+"!="+std::to_string(element_type_code)+"`!""`.");
+                        LOG::ERROR("Line {} :Only supports elements that are all of the same type `{}!={}`!`.", in.line_number(), in.field_as_uint(1), element_type_code);
                         return false;
                     }
 
                     if (in.nb_fields() != 5+element_nodes_nb) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid element nodes nb, expected `"+std::to_string(5+element_nodes_nb)+"` uint!");
+                        LOG::ERROR("Line {} :Invalid element nodes nb, expected `{}` uint!", in.line_number(), 5+element_nodes_nb);
                         return false;
                     }
                     assert(element_nodes_nb != GEO::NO_INDEX);
@@ -418,17 +418,17 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect end keyword!");
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
                     return false;
                 }
                 if (const std::string end_kw = in.field(0);
                     end_kw != ELEMENTS_END) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
                     return false;
                 }
             }
             else {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid kw `"+kw+"`!");
+                LOG::ERROR("Line {} :Invalid kw `{}`!", in.line_number(), kw);
                 return false;
             }
         }
@@ -466,7 +466,7 @@ namespace geolio
                 break;
             in.get_fields();
             if (in.nb_fields() != 1) {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect keyword!");
+                LOG::ERROR("Line {} :Expect keyword!", in.line_number());
                 return false;
             }
 
@@ -476,7 +476,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 3) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid mesh format, expected 3 numbers!");
+                    LOG::ERROR("Line {} :Invalid mesh format, expected 3 numbers!", in.line_number());
                     return false;
                 }
 
@@ -485,12 +485,12 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect end keyword!");
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
                     return false;
                 }
                 if (const std::string end_kw = in.field(0);
                     end_kw != MESH_FORMAT_END) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid end mesh format `"+end_kw+"`!");
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
                     return false;
                 }
 
@@ -500,18 +500,18 @@ namespace geolio
                 std::vector<GEO::index_t> elements;
                 if (version_number == "2.2") {
                     if (!high_order_quad_mesh_load_2_2<DIM>(in, order, nodes, elements)) {
-                        LOG::ERROR("{}", "Load msh 2.2 failed!");
+                        LOG::ERROR("Load msh 2.2 failed!");
                         return false;
                     }
                 }
                 else if (version_number == "4.1") {
                     if (!high_order_quad_mesh_load_4_1<DIM>(in, order, nodes, elements)) {
-                        LOG::ERROR("{}", "Load msh 4.1 failed!");
+                        LOG::ERROR("Load msh 4.1 failed!");
                         return false;
                     }
                 }
                 else {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unsupported version number `"+version_number+"`!");
+                    LOG::ERROR("Line {} :Unsupported version number `{}`!", in.line_number(), version_number);
                     return false;
                 }
 
@@ -531,7 +531,7 @@ namespace geolio
                         for (GEO::index_t lv = 0; lv < 4; ++lv) {
                             const auto& nd = elements[ele*element_nodes_nb+lv];
                             if (nd < nodes_nb) {
-                                LOG::ERROR("{}", "Invalid node idx `"+std::to_string(nd)+"`!");
+                                LOG::ERROR("Invalid node idx `{}`!", nd);
                                 return false;
                             }
                             if (node_to_vertex[nd] == GEO::NO_VERTEX)
@@ -580,7 +580,7 @@ namespace geolio
                 }
             }
             else {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid kw `"+kw+"`!");
+                LOG::ERROR("Line {} :Invalid kw `{}`!", in.line_number(), kw);
                 return false;
             }
         }

@@ -51,7 +51,7 @@ namespace geolio
                 break; // back empty line
             in.get_fields();
             if (in.nb_fields() == 0) {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid keyword format!");
+                LOG::ERROR("Line {} :Invalid keyword format!", in.line_number());
                 return false;
             }
 
@@ -60,7 +60,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid vertices nb format!");
+                    LOG::ERROR("Line {} :Invalid vertices nb format!", in.line_number());
                     return false;
                 }
 
@@ -71,7 +71,7 @@ namespace geolio
                     in.get_line();
                     in.get_fields();
                     if(in.nb_fields() != 3) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid vertex, expected 3 coordinates!");
+                        LOG::ERROR("Line {} :Invalid vertex, expected 3 coordinates!", in.line_number());
                         return false;
                     }
 
@@ -85,7 +85,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid edges nb format!");
+                    LOG::ERROR("Line {} :Invalid edges nb format!", in.line_number());
                     return false;
                 }
 
@@ -96,7 +96,7 @@ namespace geolio
                     in.get_line();
                     in.get_fields();
                     if(in.nb_fields() != 2) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid edge, expected 2 indices!");
+                        LOG::ERROR("Line {} :Invalid edge, expected 2 indices!", in.line_number());
                         return false;
                     }
 
@@ -108,7 +108,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid facets nb format!");
+                    LOG::ERROR("Line {} :Invalid facets nb format!", in.line_number());
                     return false;
                 }
 
@@ -119,18 +119,18 @@ namespace geolio
                     in.get_line();
                     in.get_fields();
                     if(in.nb_fields() == 0) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid facet, empty line!");
+                        LOG::ERROR("Line {} :Invalid facet, empty line!", in.line_number());
                         return false;
                     }
 
                     const GEO::index_t fv_nb = in.field_as_uint(0);
                     if (fv_nb < 3) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid facet vertices nb "+std::to_string(fv_nb)+"!");
+                        LOG::ERROR("Line {} :Invalid facet vertices nb {}!", in.line_number(), fv_nb);
                         return false;
                     }
 
                     if (in.nb_fields() != fv_nb+1) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid facet, wrong number of elements!");
+                        LOG::ERROR("Line {} :Invalid facet, wrong number of elements!", in.line_number());
                         return false;
                     }
                     facet_ptr.push_back(fv_nb);
@@ -139,7 +139,7 @@ namespace geolio
                         const GEO::index_t ie = in.field_as_uint(1+lv);
                         const GEO::index_t e = ie/2;
                         if(e > mesh.edges.nb()) {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid edge id in facet!");
+                            LOG::ERROR("Line {} :Invalid edge id in facet!", in.line_number());
                             return false;
                         }
                         if (ie%2 == 0)
@@ -228,7 +228,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if (in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid polyhedra nb format!");
+                    LOG::ERROR("Line {} :Invalid polyhedra nb format!", in.line_number());
                     return false;
                 }
 
@@ -239,18 +239,18 @@ namespace geolio
                     in.get_line();
                     in.get_fields();
                     if(in.nb_fields() == 0) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid cell, empty line!");
+                        LOG::ERROR("Line {} :Invalid cell, empty line!", in.line_number());
                         return false;
                     }
 
                     const GEO::index_t cf_nb = in.field_as_uint(0);
                     if (cf_nb != 4 && cf_nb != 6) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid cell vertices nb "+std::to_string(cf_nb)+"!");
+                        LOG::ERROR("Line {} :Invalid cell vertices nb {}!", in.line_number(), cf_nb);
                         return false;
                     }
 
                     if (in.nb_fields() != cf_nb+1) {
-                        LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid cell, wrong number of elements!");
+                        LOG::ERROR("Line {} :Invalid cell, wrong number of elements!", in.line_number());
                         return false;
                     }
                     cell_ptr.push_back(cf_nb);
@@ -259,7 +259,7 @@ namespace geolio
                         const GEO::index_t hf = in.field_as_uint(1+lf);
                         if(const GEO::index_t f = hf/2;
                             f > mesh.facets.nb()) {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid facet id in cell!");
+                            LOG::ERROR("Line {} :Invalid facet id in cell!", in.line_number());
                             return false;
                         }
                         cell_ptr.push_back(hf);
@@ -296,7 +296,7 @@ namespace geolio
                     }
 
                     if (cell_type == CELL_TYPE_TET) {
-                        LOG::ERROR("{}", "Not support tets yet!");
+                        LOG::ERROR("Not support tets yet!");
                         return false;
                     }
                     else if (cell_type == CELL_TYPE_HEX) {
@@ -462,7 +462,7 @@ namespace geolio
                     return false;
             }
             else {
-                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unknown kw `"+kw+"`!");
+                LOG::ERROR("Line {} :Unknown kw `{}`!", in.line_number(), kw);
                 return false;
             }
         }
@@ -475,7 +475,7 @@ namespace geolio
         GEO::AttributesManager& attributes_manager
         ) {
         if (in.nb_fields() != 3) {
-            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid number of fields, expected 3!");
+            LOG::ERROR("Line {} :Invalid number of fields, expected 3!", in.line_number());
             return false;
         }
 
@@ -489,7 +489,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if(in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid int, expected 1!");
+                    LOG::ERROR("Line {} :Invalid int, expected 1!", in.line_number());
                     return false;
                 }
                 mesh_attribute[i] = in.field_as_int(0);
@@ -501,7 +501,7 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if(in.nb_fields() != 1) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid double, expected 1!");
+                    LOG::ERROR("Line {} :Invalid double, expected 1!", in.line_number());
                     return false;
                 }
                 mesh_attribute[i] = in.field_as_double(0);
@@ -513,14 +513,14 @@ namespace geolio
                 in.get_line();
                 in.get_fields();
                 if(in.nb_fields() != 2) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Invalid vec2d, expected 2!");
+                    LOG::ERROR("Line {} :Invalid vec2d, expected 2!", in.line_number());
                     return false;
                 }
                 mesh_attribute[i] = GEO::vec2(in.field_as_double(0), in.field_as_double(1));
             }
         }
         else {
-            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unknown prop type `"+prop_type+"`!");
+            LOG::ERROR("Line {} :Unknown prop type `{}`!", in.line_number(), prop_type);
             return false;
         }
 

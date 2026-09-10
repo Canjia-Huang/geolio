@@ -35,7 +35,7 @@ namespace geolio
                 begin_kw == "$begin"
                 ) {
                 if (in.nb_fields() != 2) {
-                    LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect drawing name!");
+                    LOG::ERROR("Line {} :Expect drawing name!", in.line_number());
                     return false;
                 }
                 const std::string drawing_name = in.field(1);
@@ -50,16 +50,16 @@ namespace geolio
                     if (in.current_line()[0] == '$') { // end
                         in.get_fields();
                         if (in.nb_fields() != 2) {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect `$end drawing_name`!");
+                            LOG::ERROR("Line {} :Expect `$end drawing_name`!", in.line_number());
                             return false;
                         }
                         if (const std::string kw = in.field(0);
                             kw != "$end") {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Expect `$end`!");
+                            LOG::ERROR("Line {} :Expect `$end`!", in.line_number());
                             return false;
                         }
                         if (in.field(1) != drawing_name) {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" The names of begin and end are different!!");
+                            LOG::ERROR("Line {} The names of begin and end are different!!", in.line_number());
                             return false;
                         }
                         break;
@@ -92,7 +92,7 @@ namespace geolio
                                 tetrahedra.push_back(in.field_as_uint(pos+9)-1);
                             }
                             else {
-                                LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" :Unknown element type!");
+                                LOG::ERROR("Line {} :Unknown element type!", in.line_number());
                                 return false;
                             }
 
@@ -107,7 +107,7 @@ namespace geolio
                             vertices.push_back(in.field_as_double(i));
 
                         if (vertices.size() != 3*nodes_nb) {
-                            LOG::ERROR("{}", "Line "+std::to_string(in.line_number())+" Error nodes nb!");
+                            LOG::ERROR("Line {} Error nodes nb!", in.line_number());
                             return false;
                         }
                     }
