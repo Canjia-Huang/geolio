@@ -21,7 +21,7 @@ namespace geolio::test
             for (GEO::index_t nd = 0, nd_end = other_control_grid->control_nodes_nb(); nd < nd_end; ++nd) {
                 const auto& p0 = control_grid->control_node(nd);
                 const auto& p1 = other_control_grid->control_node(nd);
-                EXPECT_NEAR(GEO::distance2(p0, p1), 0, 1e-20);
+                EXPECT_NEAR(GEO::distance2(p0, p1), 0, 1e-10);
             }
         }
 

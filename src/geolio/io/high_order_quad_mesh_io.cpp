@@ -530,12 +530,12 @@ namespace geolio
                     for (GEO::index_t ele = 0; ele < elements_nb; ++ele) {
                         for (GEO::index_t lv = 0; lv < 4; ++lv) {
                             const auto& nd = elements[ele*element_nodes_nb+lv];
-                            if (nd < nodes_nb) {
+                            if (nd > nodes_nb-1) {
                                 LOG::ERROR("Invalid node idx `{}`!", nd);
                                 return false;
                             }
                             if (node_to_vertex[nd] == GEO::NO_VERTEX)
-                                node_to_vertex[nd] = ++nb_vertices;
+                                node_to_vertex[nd] = nb_vertices++;
 
                             quad_vertices.push_back(node_to_vertex[nd]);
                         }
