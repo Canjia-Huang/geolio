@@ -53,6 +53,22 @@ namespace geolio::test
     TYPED_TEST_SUITE(SingleQuadHighOrderQuadMeshIO, DimTypes);
 
     TYPED_TEST(SingleQuadHighOrderQuadMeshIO, io) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+        {
+            auto& p = this->control_grid->control_node(this->control_grid->facet_edge_nd(0, 1, 1));
+            for (GEO::index_t d = 0; d < DIM; ++d)
+                p[d] += 0.1*GEO::Numeric::random_float32();
+            if (DIM == 3)
+                p[2] += 0.2;
+        }
+        {
+            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(0, 1, 3));
+            for (GEO::index_t d = 0; d < DIM; ++d)
+                p[d] += 0.1*GEO::Numeric::random_float32();
+            if (DIM == 3)
+                p[2] += -0.2;
+        }
+
         const std::filesystem::path filepath = get_current_test_name()+".msh";
         if (const auto filedir = filepath.parent_path(); !filedir.empty())
             std::filesystem::create_directories(filedir);
@@ -93,6 +109,29 @@ namespace geolio::test
     TYPED_TEST_SUITE(TwoQuadHighOrderQuadMeshIO, DimTypes);
 
     TYPED_TEST(TwoQuadHighOrderQuadMeshIO, io) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+        {
+            auto& p = this->control_grid->control_node(this->control_grid->facet_edge_nd(0, 1, 3));
+            for (GEO::index_t d = 0; d < DIM; ++d)
+                p[d] += 0.1*GEO::Numeric::random_float32();
+            if (DIM == 3)
+                p[2] += 0.2;
+        }
+        {
+            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(0, 2, 2));
+            for (GEO::index_t d = 0; d < DIM; ++d)
+                p[d] += 0.1*GEO::Numeric::random_float32();
+            if (DIM == 3)
+                p[2] -= 0.2;
+        }
+        {
+            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(1, 1, 4));
+            for (GEO::index_t d = 0; d < DIM; ++d)
+                p[d] += 0.1*GEO::Numeric::random_float32();
+            if (DIM == 3)
+                p[2] += 0.2;
+        }
+
         const std::filesystem::path filepath = get_current_test_name()+".msh";
         if (const auto filedir = filepath.parent_path(); !filedir.empty())
             std::filesystem::create_directories(filedir);
