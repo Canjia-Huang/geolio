@@ -38,7 +38,7 @@ namespace geolio::geobox
         GEO::index_t rounds_nb_ = 5;
         double target_edge_length_ = 1;
         bool fix_boundary_elements_ = true;
-        bool fix_sharp_elements_ = false;
+        bool fix_sharp_elements_ = true;
         double sharp_angle_ = 135;
         bool allow_split_fixed_edges_ = true;
         bool allow_collapse_fixed_edges_ = true;

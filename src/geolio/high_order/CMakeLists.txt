@@ -1,8 +1,8 @@
 if(COMMAND geolio_begin_file)
     geolio_begin_file()
 endif()
-set(CURRENT_LIB_NAME ${PROJECT_NAME}_high_order_mesh)
-set(CURRENT_LIB_ALIAS_NAME ${PROJECT_NAME}::high_order_mesh)
+set(CURRENT_LIB_NAME ${PROJECT_NAME}_high_order)
+set(CURRENT_LIB_ALIAS_NAME ${PROJECT_NAME}::high_order)
 
 add_library(${CURRENT_LIB_NAME} OBJECT)
 add_library(${CURRENT_LIB_ALIAS_NAME} ALIAS ${CURRENT_LIB_NAME})

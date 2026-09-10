@@ -2,7 +2,7 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/4.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#include <geolio/high_order_mesh/hex_control_grid.h>
+#include <geolio/high_order/hex_control_grid.h>
 #include <gtest/gtest.h>
 #include "../utils.h"
 
@@ -445,6 +445,7 @@ namespace geolio::test
             mesh.vertices.point(11) = GEO::vec3(1, 2, 1);
             mesh.cells.create_hex(0, 1, 2, 3, 4, 5, 6, 7);
             mesh.cells.create_hex(2, 8, 6, 10, 3, 9, 7, 11);
+            mesh.cells.connect();
 
             constexpr GEO::index_t order = 6;
             control_grid = std::make_unique<HexControlGrid>(mesh, order);

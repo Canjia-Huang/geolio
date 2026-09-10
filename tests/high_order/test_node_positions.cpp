@@ -3,8 +3,8 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include <gtest/gtest.h>
-#include <geolio/high_order_mesh/node_positions.h>
-#include <geolio/high_order_mesh/control_grid.h>
+#include <geolio/high_order/node_positions.h>
+#include <geolio/high_order/control_grid.h>
 
 namespace
 {

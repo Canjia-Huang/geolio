@@ -21,7 +21,7 @@ target_include_directories(${CURRENT_LIB_NAME}
 add_subdirectory(common)
 add_subdirectory(geobox)
 #add_subdirectory(geogram_plus) // header only
-add_subdirectory(high_order_mesh)
+add_subdirectory(high_order)
 add_subdirectory(io)
 add_subdirectory(local_operation_optimization)
 add_subdirectory(mesh)
@@ -31,7 +31,7 @@ target_link_libraries(${CURRENT_LIB_NAME}
         PUBLIC
         ${PROJECT_NAME}::common
         ${PROJECT_NAME}::geobox
-        ${PROJECT_NAME}::high_order_mesh
+        ${PROJECT_NAME}::high_order
         ${PROJECT_NAME}::io
         ${PROJECT_NAME}::local_operation_optimization
         ${PROJECT_NAME}::mesh

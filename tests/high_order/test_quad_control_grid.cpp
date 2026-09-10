@@ -2,7 +2,7 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/4.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#include <geolio/high_order_mesh/quad_control_grid.h>
+#include <geolio/high_order/quad_control_grid.h>
 #include <gtest/gtest.h>
 #include "../utils.h"
 
@@ -284,6 +284,7 @@ namespace geolio::test
             }
             this->mesh.facets.create_quad(0, 1, 2, 3);
             this->mesh.facets.create_quad(5, 2, 1, 4);
+            this->mesh.facets.connect();
 
             constexpr GEO::index_t order = 5;
             this->control_grid = std::make_unique<QuadControlGrid<DimType::value>>(this->mesh, order);

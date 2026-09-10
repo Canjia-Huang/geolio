@@ -25,6 +25,7 @@ target_include_directories(${CURRENT_LIB_NAME}
 
 target_link_libraries(${CURRENT_LIB_NAME}
         PUBLIC
+        ${PROJECT_NAME}::high_order
         ${PROJECT_NAME}::third_party
 )
 
