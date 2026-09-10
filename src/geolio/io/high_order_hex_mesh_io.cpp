@@ -216,6 +216,10 @@ namespace
 
         assert(std::ranges::none_of(msh_nodes_order, [](const auto i) { return i == GEO::NO_INDEX; }));
     }
+
+    const std::array<GEO::index_t, 8> msh_hex_lv_to_geogram_hex_lv = {
+        0, 1, 3, 2, 4, 5, 7, 6
+    };
 }
 
 namespace geolio
@@ -788,11 +792,11 @@ namespace geolio
                         }
                     }
 
-                    /* Create quads */
+                    /* Create hexes */
                     mesh.cells.create_hexes(hex_vertices.size()/8);
                     for (const auto& c : mesh.cells) {
                         for (GEO::index_t lv = 0; lv < 8; ++lv)
-                            mesh.cells.set_vertex(c, lv, hex_vertices[8*c+lv]);
+                            mesh.cells.set_vertex(c, lv, hex_vertices[8*c+msh_hex_lv_to_geogram_hex_lv[lv]]);
                     }
                     mesh.cells.connect();
                 }

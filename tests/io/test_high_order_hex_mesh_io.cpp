@@ -120,6 +120,7 @@ namespace geolio::test
             mesh.vertices.point(11) = GEO::vec3(1, 2, 1);
             mesh.cells.create_hex(0, 1, 2, 3, 4, 5, 6, 7);
             mesh.cells.create_hex(2, 8, 6, 10, 3, 9, 7, 11);
+            mesh.cells.connect();
 
             constexpr GEO::index_t order = 6;
             control_grid = std::make_unique<HexControlGrid>(mesh, order);
