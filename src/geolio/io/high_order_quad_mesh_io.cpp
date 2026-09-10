@@ -32,6 +32,12 @@ namespace
     constexpr GEO::index_t ELEMENTS_PHYSICAL_GROUP_ID = 1;
     constexpr GEO::index_t ELEMENTS_ENTITY_ID = 1;
 
+    /**
+     * @brief Gets the Gmsh element type code for a quadrilateral element of the given order.
+     *
+     * @param order The polynomial order of the quadrilateral element.
+     * @return The corresponding Gmsh element type code.
+     */
     GEO::index_t get_element_type_code(const GEO::index_t order) {
         assert(order > 0);
         switch (order) {
@@ -49,6 +55,12 @@ namespace
         }
     }
 
+    /**
+     * @brief Generates the node permutation from the internal order to the Gmsh MSH order.
+     *
+     * @param order The polynomial order of the quadrilateral element.
+     * @param nodes_order The output node order mapping, indexed by internal node order and storing the corresponding MSH index.
+     */
     void generate_msh_nodes_order(
         const GEO::index_t order,
         std::vector<GEO::index_t>& nodes_order
