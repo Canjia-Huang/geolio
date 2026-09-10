@@ -6,6 +6,7 @@
 #include <geolio/common/log.h>
 
 #include "line_stream.h"
+#include <array>
 
 namespace
 {

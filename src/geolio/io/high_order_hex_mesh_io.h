@@ -5,6 +5,7 @@
 #ifndef GEOLIO_HIGH_ORDER_HEX_MESH_IO_H
 #define GEOLIO_HIGH_ORDER_HEX_MESH_IO_H
 #include <geolio/high_order/hex_control_grid.h>
+#include <memory>
 
 namespace geolio
 {

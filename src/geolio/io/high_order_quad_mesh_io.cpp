@@ -5,6 +5,7 @@
 #include "high_order_quad_mesh_io.h"
 #include <geolio/common/log.h>
 #include "line_stream.h"
+#include <array>
 
 namespace
 {
