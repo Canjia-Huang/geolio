@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <geolio/io/high_order_quad_mesh_io.h>
 #include <geogram/points/kd_tree.h>
+#include <filesystem>
 #include "../utils.h"
 
 namespace geolio::test
