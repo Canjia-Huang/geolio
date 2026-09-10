@@ -4,6 +4,7 @@
 //
 #include <gtest/gtest.h>
 #include <geolio/io/high_order_quad_mesh_io.h>
+#include <geogram/points/kd_tree.h>
 #include "../utils.h"
 
 namespace geolio::test
@@ -18,11 +19,31 @@ namespace geolio::test
             EXPECT_EQ(other_mesh.vertices.nb(), mesh.vertices.nb());
             EXPECT_EQ(other_mesh.facets.nb(), mesh.facets.nb());
             EXPECT_EQ(other_control_grid->control_nodes_nb(), control_grid->control_nodes_nb());
-            for (GEO::index_t nd = 0, nd_end = other_control_grid->control_nodes_nb(); nd < nd_end; ++nd) {
-                const auto& p0 = control_grid->control_node(nd);
-                const auto& p1 = other_control_grid->control_node(nd);
-                EXPECT_NEAR(GEO::distance2(p0, p1), 0, 1e-10);
+
+            /* Match nodes */
+            std::vector<double> control_node_points;
+            control_node_points.reserve(DIM*control_grid->control_nodes_nb());
+            for (GEO::index_t nd = 0, nd_end = control_grid->control_nodes_nb(); nd < nd_end; ++nd) {
+                const auto& p = control_grid->control_node(nd);
+                for (GEO::index_t d = 0; d < DIM; ++d)
+                    control_node_points.push_back(p[d]);
             }
+
+            GEO::SmartPointer<GEO::BalancedKdTree> kd_tree;
+            if constexpr (DIM == 2)
+                kd_tree = new GEO::BalancedKdTree(2);
+            else if constexpr (DIM == 3)
+                kd_tree = new GEO::BalancedKdTree(3);
+            kd_tree->set_points(control_grid->control_nodes_nb(), control_node_points.data());
+
+            std::vector<GEO::index_t> found_control_nodes(control_grid->control_nodes_nb(), 0);
+            for (GEO::index_t nd = 0, nd_end = other_control_grid->control_nodes_nb(); nd < nd_end; ++nd) {
+                const auto& p = other_control_grid->control_node(nd);
+                const auto nearest_nd = kd_tree->get_nearest_neighbor(p.data());
+                found_control_nodes[nearest_nd] = 1;
+                EXPECT_NEAR(GEO::distance2(control_grid->control_node(nearest_nd), p), 0, 1e-10);
+            }
+            EXPECT_TRUE(std::ranges::all_of(found_control_nodes, [](const auto b){ return b; }));
         }
 
         GEO::Mesh mesh;
