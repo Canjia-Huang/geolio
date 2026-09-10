@@ -11,6 +11,20 @@ namespace geolio::test
     template <GEO::index_t DIM>
     class HighOrderQuadMeshIO : public ::testing::Test {
     protected:
+        void same_as(const GEO::Mesh& other_mesh, const std::unique_ptr<QuadControlGrid<DIM>>& other_control_grid) {
+            ASSERT_FALSE(control_grid == nullptr);
+            ASSERT_FALSE(other_control_grid == nullptr);
+
+            EXPECT_EQ(other_mesh.vertices.nb(), mesh.vertices.nb());
+            EXPECT_EQ(other_mesh.facets.nb(), mesh.facets.nb());
+            EXPECT_EQ(other_control_grid->control_nodes_nb(), control_grid->control_nodes_nb());
+            for (GEO::index_t nd = 0, nd_end = other_control_grid->control_nodes_nb(); nd < nd_end; ++nd) {
+                const auto& p0 = control_grid->control_node(nd);
+                const auto& p1 = other_control_grid->control_node(nd);
+                EXPECT_NEAR(GEO::distance2(p0, p1), 0, 1e-20);
+            }
+        }
+
         GEO::Mesh mesh;
         std::unique_ptr<QuadControlGrid<DIM>> control_grid;
     };
@@ -44,9 +58,10 @@ namespace geolio::test
             }
             this->mesh.facets.create_quad(0, 1, 2, 3);
 
-            constexpr GEO::index_t order = 4;
-            this->control_grid = std::make_unique<QuadControlGrid<DimType::value>>(this->mesh, order);
+            this->control_grid = std::make_unique<QuadControlGrid<DimType::value>>(this->mesh, ORDER);
         }
+
+        const GEO::index_t ORDER = 4;
     };
 
     TYPED_TEST_SUITE(SingleQuadHighOrderQuadMeshIO, DimTypes);
@@ -68,11 +83,18 @@ namespace geolio::test
                 p[2] += -0.2;
         }
 
+        /* Save */
         const std::filesystem::path filepath = get_current_test_name()+".msh";
         if (const auto filedir = filepath.parent_path(); !filedir.empty())
             std::filesystem::create_directories(filedir);
 
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath, "2.2"));
+
+        /* Load */
+        // GEO::Mesh loaded_mesh;
+        // std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
+        // ASSERT_TRUE(high_order_quad_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
+        // this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
 
     TYPED_TEST(SingleQuadHighOrderQuadMeshIO, version_4_1) {

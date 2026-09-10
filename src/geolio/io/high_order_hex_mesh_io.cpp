@@ -52,17 +52,17 @@ namespace
      * @brief Generates the node permutation from the internal order to the Gmsh MSH order.
      *
      * @param order The polynomial order of the hexahedral element.
-     * @param nodes_order The output node order mapping, indexed by internal node order and storing the corresponding MSH index.
+     * @param msh_nodes_order The output node order mapping, indexed by internal node order and storing the corresponding MSH index.
      */
     void generate_msh_nodes_order(
         const GEO::index_t order,
-        std::vector<GEO::index_t>& nodes_order
+        std::vector<GEO::index_t>& msh_nodes_order
         ) {
         assert(order > 0);
         const auto n = order + 1;
         const auto total_nodes = n * n * n;
 
-        std::vector<GEO::index_t> msh_nodes_order(total_nodes, GEO::NO_INDEX);
+        msh_nodes_order.assign(total_nodes, GEO::NO_INDEX);
 
         auto idx = [n](const GEO::index_t x, const GEO::index_t y, const GEO::index_t z) -> GEO::index_t {
             return z * n * n + y * n + x;
@@ -202,10 +202,6 @@ namespace
         }
 
         assert(std::ranges::none_of(msh_nodes_order, [](const auto i) { return i == GEO::NO_INDEX; }));
-
-        nodes_order.assign(total_nodes, GEO::NO_INDEX);
-        for (GEO::index_t i = 0, i_end = nodes_order.size(); i < i_end; ++i)
-            nodes_order[msh_nodes_order[i]] = i;
     }
 }
 
@@ -242,9 +238,14 @@ namespace geolio
             const auto order = control_grid.order();
             const auto element_type_code = get_element_type_code(order);
 
-            std::vector<GEO::index_t> nodes_order;
-            generate_msh_nodes_order(order, nodes_order);
-            assert(nodes_order.size() == (order+1)*(order+1)*(order+1));
+            std::vector<GEO::index_t> msh_nodes_order;
+            generate_msh_nodes_order(order, msh_nodes_order);
+            assert(msh_nodes_order.size() == (order+1)*(order+1)*(order+1));
+
+            std::vector<GEO::index_t> nodes_order(msh_nodes_order.size(), GEO::NO_INDEX);
+            for (GEO::index_t i = 0, i_end = nodes_order.size(); i < i_end; ++i)
+                nodes_order[msh_nodes_order[i]] = i;
+            assert(std::ranges::none_of(nodes_order, [](const auto i){ return i == GEO::NO_INDEX; }));
 
             out << ELEMENTS_BEGIN << "\n";
             out << mesh.cells.nb() << "\n";
@@ -333,9 +334,14 @@ namespace geolio
             const auto order = control_grid.order();
             const auto element_type_code = get_element_type_code(order);
 
-            std::vector<GEO::index_t> nodes_order;
-            generate_msh_nodes_order(order, nodes_order);
-            assert(nodes_order.size() == (order+1)*(order+1)*(order+1));
+            std::vector<GEO::index_t> msh_nodes_order;
+            generate_msh_nodes_order(order, msh_nodes_order);
+            assert(msh_nodes_order.size() == (order+1)*(order+1)*(order+1));
+
+            std::vector<GEO::index_t> nodes_order(msh_nodes_order.size(), GEO::NO_INDEX);
+            for (GEO::index_t i = 0, i_end = nodes_order.size(); i < i_end; ++i)
+                nodes_order[msh_nodes_order[i]] = i;
+            assert(std::ranges::none_of(nodes_order, [](const auto i){ return i == GEO::NO_INDEX; }));
 
             out << ELEMENTS_BEGIN << "\n";
 

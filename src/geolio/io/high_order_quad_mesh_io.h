@@ -21,10 +21,10 @@ namespace geolio
     bool high_order_quad_mesh_load(
         const std::string& filepath,
         GEO::Mesh& mesh,
-        std::shared_ptr<QuadControlGrid<DIM>>& control_grid_ptr);
+        std::unique_ptr<QuadControlGrid<DIM>>& control_grid_ptr);
 
-    extern template bool high_order_quad_mesh_load<2>(const std::string& filepath, GEO::Mesh& mesh, std::shared_ptr<QuadControlGrid<2>>& control_grid_ptr);
-    extern template bool high_order_quad_mesh_load<3>(const std::string& filepath, GEO::Mesh& mesh, std::shared_ptr<QuadControlGrid<3>>& control_grid_ptr);
+    extern template bool high_order_quad_mesh_load<2>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2>>& control_grid_ptr);
+    extern template bool high_order_quad_mesh_load<3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3>>& control_grid_ptr);
 }
 
 #endif //GEOLIO_HIGH_ORDER_QUAD_MESH_IO_H
