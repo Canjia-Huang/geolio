@@ -5,6 +5,8 @@
 #include "high_order_hex_mesh_io.h"
 #include <geolio/common/log.h>
 
+#include "line_stream.h"
+
 namespace
 {
     const std::string MESH_FORMAT_BEGIN = "$MeshFormat";
@@ -45,6 +47,17 @@ namespace
             case 1: return 5;
             case 2: return 12;
             default: return order+89; // right?
+        }
+    }
+
+    GEO::index_t get_order(const GEO::index_t element_type_code) {
+        switch (element_type_code) {
+            case 5: return 1;
+            case 12: return 2;
+            default:
+                if (element_type_code < 92)
+                    return GEO::NO_INDEX;
+                return element_type_code-89;
         }
     }
 
@@ -385,5 +398,428 @@ namespace geolio
             return high_order_hex_mesh_save_4_1(control_grid, out);
         LOG::ERROR("Unsupported version number `{}`", version_number);
         return false;
+    }
+
+    static bool high_order_hex_mesh_load_2_2(
+        LineInput& in,
+        GEO::index_t& order,
+        std::vector<double>& nodes,
+        std::vector<GEO::index_t>& elements
+        ) {
+        while (!in.eof()) {
+            if (!in.get_line())
+                break;
+            in.get_fields();
+            if (in.nb_fields() != 1) {
+                LOG::ERROR("Line {} :Expect keyword!", in.line_number());
+                return false;
+            }
+
+            if (const std::string kw = in.field(0);
+                kw == NODES_BEGIN
+                ) {
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Invalid nodes nb, expected 1 number!", in.line_number());
+                    return false;
+                }
+
+                const GEO::index_t nodes_nb = in.field_as_uint(0);
+                nodes.assign(3*nodes_nb, 0.0);
+                for (GEO::index_t i = 0; i < nodes_nb; ++i) {
+                    in.get_line();
+                    in.get_fields();
+                    if (in.nb_fields() != 4) {
+                        LOG::ERROR("Line {} :Invalid node, expected 4 number!", in.line_number());
+                        return false;
+                    }
+
+                    const GEO::index_t nd = in.field_as_uint(0)-1;
+                    if (nd > nodes_nb-1) {
+                        LOG::ERROR("Line {} :Invalid node idx `{}`!", in.line_number(), nd);
+                        return false;
+                    }
+
+                    nodes[3*nd]   = in.field_as_double(1);
+                    nodes[3*nd+1] = in.field_as_double(2);
+                    nodes[3*nd+2] = in.field_as_double(3);
+                }
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != NODES_END) {
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
+                    return false;
+                }
+            }
+            else if (kw == ELEMENTS_BEGIN) {
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Invalid elements nb, expected 1 number!", in.line_number());
+                    return false;
+                }
+
+                const GEO::index_t elements_nb = in.field_as_uint(0);
+                GEO::index_t element_type_code = GEO::NO_INDEX;
+                GEO::index_t element_nodes_nb = GEO::NO_INDEX;
+                for (GEO::index_t i = 0; i < elements_nb; ++i) {
+                    in.get_line();
+                    in.get_fields();
+                    if (in.nb_fields() <= 5) {
+                        LOG::ERROR("Line {} :Invalid element, expected more than 5 uint!", in.line_number());
+                        return false;
+                    }
+
+                    const GEO::index_t ele = in.field_as_uint(0)-1;
+                    if (ele > elements_nb-1) {
+                        LOG::ERROR("Line {} :Invalid element idx `{}`!", in.line_number(), ele);
+                        return false;
+                    }
+
+                    if (element_type_code == GEO::NO_INDEX) {
+                        element_type_code = in.field_as_uint(1);
+                        order = get_order(element_type_code);
+                        if (order == 0 || order == GEO::NO_INDEX) {
+                            LOG::ERROR("Line {} :Invalid element type code `{}`!", in.line_number(), element_type_code);
+                            return false;
+                        }
+
+                        element_nodes_nb = (order+1)*(order+1)*(order+1);
+                        elements.assign(elements_nb*element_nodes_nb, GEO::NO_INDEX);
+                    }
+                    else if (element_type_code != in.field_as_uint(1)) {
+                        LOG::ERROR("Line {} :Only supports elements that are all of the same type `{}!={}`!`.", in.line_number(), in.field_as_uint(1), element_type_code);
+                        return false;
+                    }
+
+                    if (in.nb_fields() != 5+element_nodes_nb) {
+                        LOG::ERROR("Line {} :Invalid element nodes nb, expected `{}` uint!", in.line_number(), 5+element_nodes_nb);
+                        return false;
+                    }
+                    assert(element_nodes_nb != GEO::NO_INDEX);
+                    for (GEO::index_t j = 0; j < element_nodes_nb; ++j)
+                        elements[ele*element_nodes_nb+j] = in.field_as_uint(5+j)-1;
+                }
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != ELEMENTS_END) {
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
+                    return false;
+                }
+            }
+            else {
+                LOG::ERROR("Line {} :Invalid kw `{}`!", in.line_number(), kw);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static bool high_order_hex_mesh_load_4_1(
+        LineInput& in,
+        GEO::index_t& order,
+        std::vector<double>& nodes,
+        std::vector<GEO::index_t>& elements
+        ) {
+        while (!in.eof()) {
+            if (!in.get_line())
+                break;
+            in.get_fields();
+            if (in.nb_fields() != 1) {
+                LOG::ERROR("Line {} :Expect keyword!", in.line_number());
+                return false;
+            }
+
+            if (const std::string kw = in.field(0);
+                kw == NODES_BEGIN
+                ) {
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 4) {
+                    LOG::ERROR("Line {} :Invalid line, expected 4!", in.line_number());
+                    return false;
+                }
+
+                const GEO::index_t nodes_nb = in.field_as_uint(1);
+                nodes.assign(3*nodes_nb, 0.0);
+
+                in.get_line(); // skip a line
+
+                std::vector<GEO::index_t> nodes_indices(nodes_nb, GEO::NO_INDEX);
+                for (GEO::index_t i = 0; i < nodes_nb; ++i) {
+                    in.get_line();
+                    in.get_fields();
+                    if (in.nb_fields() != 1) {
+                        LOG::ERROR("Line {} :Invalid node idx, expected 1!", in.line_number());
+                        return false;
+                    }
+                    const auto nd = in.field_as_uint(0)-1;
+                    if (nd > nodes_nb-1) {
+                        LOG::ERROR("Line {} :Invalid node idx `{}`!", in.line_number(), nd);
+                        return false;
+                    }
+
+                    nodes_indices[i] = nd;
+                }
+                assert(std::ranges::none_of(nodes_indices, [](const auto idx){ return idx == GEO::NO_INDEX; }));
+
+                for (GEO::index_t i = 0; i < nodes_nb; ++i) {
+                    in.get_line();
+                    in.get_fields();
+                    if (in.nb_fields() != 3) {
+                        LOG::ERROR("Line {} :Invalid node, expected 3 number!", in.line_number());
+                        return false;
+                    }
+
+                    const GEO::index_t nd = nodes_indices[i];
+                    nodes[3*nd]   = in.field_as_double(0);
+                    nodes[3*nd+1] = in.field_as_double(1);
+                    nodes[3*nd+2] = in.field_as_double(2);
+                }
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != NODES_END) {
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
+                    return false;
+                }
+            }
+            else if (kw == ELEMENTS_BEGIN) {
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 4) {
+                    LOG::ERROR("Line {} :Invalid line, expected 4 number!", in.line_number());
+                    return false;
+                }
+                const GEO::index_t elements_nb = in.field_as_uint(1);
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 4) {
+                    LOG::ERROR("Line {} :Invalid line, expected 4 number!", in.line_number());
+                    return false;
+                }
+                const GEO::index_t element_type_code = in.field_as_uint(2);
+                order = get_order(element_type_code);
+                if (order == 0 || order == GEO::NO_INDEX) {
+                    LOG::ERROR("Line {} :Invalid element type code `{}`!", in.line_number(), element_type_code);
+                    return false;
+                }
+                const GEO::index_t element_nodes_nb = (order+1)*(order+1)*(order+1);
+
+                elements.assign(elements_nb*element_nodes_nb, GEO::NO_INDEX);
+
+                for (GEO::index_t ele = 0; ele < elements_nb; ++ele) {
+                    in.get_line();
+                    in.get_fields();
+                    if (in.nb_fields() <= 2) {
+                        LOG::ERROR("Line {} :Invalid element, expected more than 2 uint!", in.line_number());
+                        return false;
+                    }
+
+                    if (in.nb_fields() != 1+element_nodes_nb) {
+                        LOG::ERROR("Line {} :Invalid element nodes nb, expected `{}` uint!", in.line_number(), 5+element_nodes_nb);
+                        return false;
+                    }
+                    assert(element_nodes_nb != GEO::NO_INDEX);
+                    for (GEO::index_t j = 0; j < element_nodes_nb; ++j)
+                        elements[ele*element_nodes_nb+j] = in.field_as_uint(1+j)-1;
+                }
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != ELEMENTS_END) {
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
+                    return false;
+                }
+            }
+            else if (kw == ENTITIES_BEGIN) {
+                in.get_line();
+                in.get_line();
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != ENTITIES_END) {
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
+                    return false;
+                }
+            }
+            else {
+                LOG::ERROR("Line {} :Invalid kw `{}`!", in.line_number(), kw);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool high_order_hex_mesh_load(
+        const std::string& filepath,
+        GEO::Mesh& mesh,
+        std::unique_ptr<HexControlGrid>& control_grid_ptr
+        ) {
+        mesh.clear();
+        mesh.vertices.set_dimension(3);
+
+        LineInput in(filepath);
+        if (!in.OK()) {
+            LOG::ERROR("Could not open file `{}` for reading!", filepath);
+            return false;
+        }
+
+        while (!in.eof()) {
+            if (!in.get_line())
+                break;
+            in.get_fields();
+            if (in.nb_fields() != 1) {
+                LOG::ERROR("Line {} :Expect keyword!", in.line_number());
+                return false;
+            }
+
+            if (const std::string kw = in.field(0);
+                kw == MESH_FORMAT_BEGIN
+                ) {
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 3) {
+                    LOG::ERROR("Line {} :Invalid mesh format, expected 3 numbers!", in.line_number());
+                    return false;
+                }
+
+                const std::string version_number = in.field(0);
+
+                in.get_line();
+                in.get_fields();
+                if (in.nb_fields() != 1) {
+                    LOG::ERROR("Line {} :Expect end keyword!", in.line_number());
+                    return false;
+                }
+                if (const std::string end_kw = in.field(0);
+                    end_kw != MESH_FORMAT_END) {
+                    LOG::ERROR("Line {} :Invalid end mesh format `{}`!", in.line_number(), end_kw);
+                    return false;
+                }
+
+                /* Load nodes and elements */
+                GEO::index_t order = GEO::NO_INDEX;
+                std::vector<double> nodes;
+                std::vector<GEO::index_t> elements;
+                if (version_number == "2.2") {
+                    if (!high_order_hex_mesh_load_2_2(in, order, nodes, elements)) {
+                        LOG::ERROR("Load msh 2.2 failed!");
+                        return false;
+                    }
+                }
+                else if (version_number == "4.1") {
+                    if (!high_order_hex_mesh_load_4_1(in, order, nodes, elements)) {
+                        LOG::ERROR("Load msh 4.1 failed!");
+                        return false;
+                    }
+                }
+                else {
+                    LOG::ERROR("Line {} :Unsupported version number `{}`!", in.line_number(), version_number);
+                    return false;
+                }
+
+                const GEO::index_t element_nodes_nb = (order+1)*(order+1)*(order+1);
+
+                /* Build mesh */
+                {
+                    const GEO::index_t nodes_nb = nodes.size()/3;
+                    const GEO::index_t elements_nb = elements.size()/element_nodes_nb;
+
+                    std::vector<GEO::index_t> node_to_vertex(nodes.size()/3, GEO::NO_VERTEX);
+                    std::vector<GEO::index_t> hex_vertices;
+                    hex_vertices.reserve(8*elements_nb);
+
+                    GEO::index_t nb_vertices = 0;
+                    for (GEO::index_t ele = 0; ele < elements_nb; ++ele) {
+                        for (GEO::index_t lv = 0; lv < 8; ++lv) {
+                            const auto& nd = elements[ele*element_nodes_nb+lv];
+                            if (nd > nodes_nb-1) {
+                                LOG::ERROR("Invalid node idx `{}`!", nd);
+                                return false;
+                            }
+                            if (node_to_vertex[nd] == GEO::NO_VERTEX)
+                                node_to_vertex[nd] = nb_vertices++;
+
+                            hex_vertices.push_back(node_to_vertex[nd]);
+                        }
+                    }
+
+                    /* Create vertices */
+                    mesh.vertices.create_vertices(nb_vertices);
+                    for (GEO::index_t nd = 0; nd < nodes_nb; ++nd) {
+                        if (const auto& v = node_to_vertex[nd];
+                            v != GEO::NO_VERTEX
+                            ) {
+                            auto& p = mesh.vertices.point(v);
+                            for (GEO::index_t d = 0; d < 3; ++d)
+                                p[d] = nodes[nd*3+d];
+                        }
+                    }
+
+                    /* Create quads */
+                    mesh.cells.create_hexes(hex_vertices.size()/8);
+                    for (const auto& c : mesh.cells) {
+                        for (GEO::index_t lv = 0; lv < 8; ++lv)
+                            mesh.cells.set_vertex(c, lv, hex_vertices[8*c+lv]);
+                    }
+                    mesh.cells.connect();
+                }
+
+                /* Build control grid */
+                {
+                    std::vector<GEO::index_t> gmsh_nodes_order;
+                    generate_msh_nodes_order(order, gmsh_nodes_order);
+
+                    control_grid_ptr = std::make_unique<HexControlGrid>(mesh, order);
+                    for (const auto& c : mesh.cells) {
+                        for (GEO::index_t i = 0; i < element_nodes_nb; ++i) {
+                            const auto nd = control_grid_ptr->cell_nd(c, i);
+                            const auto gmsh_nd = elements[c*element_nodes_nb+gmsh_nodes_order[i]];
+                            auto& p = control_grid_ptr->control_node(nd);
+                            for (GEO::index_t d = 0; d < 3; ++d)
+                                p[d] = nodes[3*gmsh_nd+d];
+                        }
+                    }
+                }
+            }
+            else {
+                LOG::ERROR("Line {} :Invalid kw `{}`!", in.line_number(), kw);
+                return false;
+            }
+        }
+
+        return true;
     }
 }

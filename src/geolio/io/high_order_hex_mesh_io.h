@@ -12,6 +12,11 @@ namespace geolio
         const HexControlGrid& control_grid,
         const std::string& filepath,
         const std::string& version_number = "2.2");
+
+    bool high_order_hex_mesh_load(
+        const std::string& filepath,
+        GEO::Mesh& mesh,
+        std::unique_ptr<HexControlGrid>& control_grid_ptr);
 }
 
 #endif //GEOLIO_HIGH_ORDER_HEX_MESH_IO_H

@@ -60,7 +60,7 @@ namespace
             case 37: return 4;
             case 38: return 5;
             default:
-                if (element_type_code <= 41)
+                if (element_type_code < 47)
                     return GEO::NO_INDEX;
                 return element_type_code-41;
         }
