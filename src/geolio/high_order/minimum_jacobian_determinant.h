@@ -96,23 +96,23 @@ namespace geolio
         bool contains_inverted_region(GEO::index_t c, double eps = 1e-10);
 
         /**
-         * Compute an estimated conservative upper bound on the minimum Jacobian determinant over cell `c`.
+         * Compute a conservative estimate of the minimum Jacobian determinant over cell `c`.
          *
          * The routine explores the parametric domain through the same subdivision and priority-driven
-         * evaluation as `contains_inverted_region()` and returns the smallest lower bound it manages to
-         * certify, so a negative return value proves that the mapping is inverted somewhere.
-         *
-         * @note The definition of this member is currently commented out in
-         * minimum_jacobian_determinant.cpp, so calling it does not link.
+         * evaluation as `contains_inverted_region()`. The value it returns, `R`, is the smallest lower
+         * bound it manages to certify, which brackets the true minimum `m` as `R <= m <= R + eps`: a
+         * block is pruned as soon as it cannot beat the best sampled corner value, and the search stops
+         * at the first block whose coefficient range has shrunk below `eps`.
          *
          * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to analyze.
          * @param[in] eps Stopping tolerance for subdivision (smaller eps -> more accurate bound). Default is 1e-10.
          * @param[out] travelled_sub_blocks Optional pointer to a vector that will be filled with the blocks
-         * visited during the search. Can be nullptr if the caller does not need that information.
-         * @return Conservative upper bound on the minimum Jacobian determinant over the cell: a negative
-         * value proves inversion, a non-negative value cannot certify positivity on its own.
+         * visited during the search, in the order in which they were examined. Can be nullptr if the caller
+         * does not need that information.
+         * @return Lower bound `R` on the minimum determinant, tight to `eps`: `R > 0` certifies that the
+         * mapping is valid over the whole cell, while `R < -eps` certifies that it is inverted somewhere.
          */
-        double compute_upper_bound(GEO::index_t c, double eps = 1e-10, std::vector<Block>* travelled_sub_blocks = nullptr);
+        double compute_lower_bound(GEO::index_t c, double eps = 1e-10, std::vector<Block>* travelled_sub_blocks = nullptr);
 
         /**
          * Collect sub-blocks of `c` that may contain a negative Jacobian determinant.
@@ -120,9 +120,6 @@ namespace geolio
          * Adaptive subdivision of the parametric domain of `c` is run and every block that can neither be
          * certified non-negative nor be refined any further is appended to `invalid_sub_blocks`; blocks
          * whose coefficients are all negative are reported directly, without refinement.
-         *
-         * @note The definition of this member is currently commented out in
-         * minimum_jacobian_determinant.cpp, so calling it does not link.
          *
          * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to examine.
          * @param[out] invalid_sub_blocks Vector that will be filled with the suspect blocks. The caller
@@ -196,14 +193,10 @@ namespace geolio
         /**
          * Append block geometry to a Geogram mesh for visualization / debug.
          *
-         * Each block is emitted as one element of `M_out` (eight vertices and twelve edges, following the
-         * hexahedral layout of HEX_LE_INCIDENT_LV) whose vertices are the block corners in parametric
-         * space, and the determinant at those corners is stored in the `min_det_J` vertex attribute, so
-         * that tools can inspect where the invalid sub-blocks are.
-         *
-         * @note The definition of this member is currently commented out in
-         * minimum_jacobian_determinant.cpp, so calling it does not link. Only the hexahedral layout is
-         * implemented there; a facet grid would need the four-vertex quad layout instead.
+         * Each block is emitted as one element of `mesh_out` whose vertices are its corners in parametric
+         * space: eight vertices and twelve edges for a hexahedral grid, four vertices and four edges laid
+         * out in the `w = min_w` plane for a facet grid. The determinant at those corners is stored in the
+         * `min_det_J` vertex attribute, so that tools can inspect where the suspect sub-blocks are.
          *
          * @param[in] blocks List of blocks to append.
          * @param[in,out] mesh_out Geogram mesh to which block elements will be appended. The mesh is modified in-place.

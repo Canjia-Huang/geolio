@@ -140,7 +140,7 @@ namespace geolio
     }
 
     template<GEO::index_t DIM, typename CONTROL_GRID>
-    double MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_upper_bound(
+    double MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_lower_bound(
         const GEO::index_t c,
         const double eps,
         std::vector<Block>* travelled_sub_blocks
@@ -177,40 +177,38 @@ namespace geolio
 
         return global_upper_bound;
     }
-    //
-    // template<GEO::index_t DIM, typename CONTROL_GRID>
-    // void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::collect_invalid_sub_blocks(
-    //     const GEO::index_t c,
-    //     std::vector<Block>& invalid_sub_blocks,
-    //     const double eps
-    //     ) {
-    //     // LOG::TRACE(__FUNCTION__);
-    //
-    //     initialize_priority_queue(c);
-    //
-    //     while (!pq_.empty()) {
-    //         if (const auto& B = pq_.top();
-    //             B.min_c > 0
-    //             ) {
-    //             /* Do nothing */
-    //             pq_.pop();
-    //         }
-    //         else if (B.max_c < 0 || B.max_c - B.min_c < eps) {
-    //             invalid_sub_blocks.push_back(B);
-    //             pq_.pop();
-    //         }
-    //         else {
-    //             /* Subdivide */
-    //             std::vector<Block> sub_blocks;
-    //             subdivide(B, sub_blocks);
-    //
-    //             pq_.pop();
-    //             for (GEO::index_t i = 0; i < 8; ++i)
-    //                 pq_.push(sub_blocks[i]);
-    //         }
-    //     }
-    // }
-    //
+
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::collect_invalid_sub_blocks(
+        const GEO::index_t c,
+        std::vector<Block>& invalid_sub_blocks,
+        const double eps
+        ) {
+        initialize_priority_queue(c);
+
+        while (!pq_.empty()) {
+            if (const auto& B = pq_.top();
+                B.min_c > 0
+                ) {
+                /* Do nothing */
+                pq_.pop();
+            }
+            else if (B.max_c < 0 || B.max_c - B.min_c < eps) {
+                invalid_sub_blocks.push_back(B);
+                pq_.pop();
+            }
+            else {
+                /* Subdivide */
+                std::vector<Block> sub_blocks;
+                subdivide(B, sub_blocks);
+
+                pq_.pop();
+                for (const auto& sub_block : sub_blocks)
+                    pq_.push(sub_block);
+            }
+        }
+    }
+
 
     template<GEO::index_t DIM, typename CONTROL_GRID>
     void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_det_J(
