@@ -154,10 +154,9 @@ namespace geolio
          *                       - `QualityType::MIPS`: penalizes shear and anisotropic stretching, [1, inf], best: 1
          * @return the requested quality value at the given parameter point
          */
-        [[nodiscard]] double compute_facet_uv_measure(
-                GEO::index_t f,
-                const GEO::vec2& uv,
-                MeasureType quality_type) const;
+        [[nodiscard]] double compute_facet_uv_measure(GEO::index_t f, const GEO::vec2& uv, MeasureType quality_type) const;
+
+        void compute_facet_uv_detJ_gradient(GEO::index_t f, const GEO::vec2& uv, std::vector<double>& gradient) const;
 
         /**
          * @brief Append a discretized surfacic mesh of all high-order facets (for visualization purposes).

@@ -283,10 +283,7 @@ namespace geolio
          *               - columns 0, 1, 2 correspond to u, v, w derivatives
          *               - rows 0, 1, 2 correspond to x, y, z physical coordinates
          */
-        void compute_cell_uvw_Jacobian(
-                GEO::index_t c,
-                const GEO::vec3& uvw,
-                Eigen::Matrix3d& J) const;
+        void compute_cell_uvw_Jacobian(GEO::index_t c, const GEO::vec3& uvw, Eigen::Matrix3d& J) const;
 
         enum class MeasureType {
             DET_JACOBIAN,             // Signed Jacobian determinant; non-positive values indicate inversion or degeneration.
@@ -307,10 +304,7 @@ namespace geolio
          *                       - `QualityType::MIPS`: penalizes shear and anisotropic stretching, [1, inf], best: 1
          * @return the requested quality value at the given parameter point
          */
-        [[nodiscard]] double compute_cell_uvw_measure(
-                GEO::index_t c,
-                const GEO::vec3& uvw,
-                MeasureType quality_type) const;
+        [[nodiscard]] double compute_cell_uvw_measure(GEO::index_t c, const GEO::vec3& uvw, MeasureType quality_type) const;
 
         /**
          * Evaluate the gradient of the Jacobian determinant at a cell parameter point.
@@ -326,10 +320,7 @@ namespace geolio
          *                      - `gradient[3*N+1] = d(detJ)/dP_N.y`
          *                      - `gradient[3*N+2] = d(detJ)/dP_N.z`
          */
-        void compute_cell_uvw_detJ_gradient(
-            GEO::index_t c,
-            const GEO::vec3& uvw,
-            std::vector<double>& gradient) const;
+        void compute_cell_uvw_detJ_gradient(GEO::index_t c, const GEO::vec3& uvw, std::vector<double>& gradient) const;
 
         /**
          * @brief Compute the reference volume of every cell in the mesh.
