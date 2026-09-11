@@ -76,9 +76,8 @@ namespace geolio
          *
          * @param[in] c Index of the control-grid facet/cell to test.
          * @param[in] eps Determinant threshold. Values <= eps are considered invalid. Default is 1e-10.
-         * @return `true` if the test certifies det(J) > eps everywhere on the cell; `false` otherwise.
          */
-        bool check_inverse(GEO::index_t c, double eps = 1e-10);
+        bool contains_inverted_region(GEO::index_t c, double eps = 1e-10);
 
         /**
          * Compute an estimated conservative upper bound on the minimum Jacobian determinant over cell `c`.

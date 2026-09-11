@@ -100,12 +100,10 @@ namespace geolio
     }
 
     template<GEO::index_t DIM, typename CONTROL_GRID>
-    bool MinimumJacobianDeterminant<DIM, CONTROL_GRID>::check_inverse(
+    bool MinimumJacobianDeterminant<DIM, CONTROL_GRID>::contains_inverted_region(
         const GEO::index_t c,
         const double eps
         ) {
-        // LOG::TRACE(__FUNCTION__);
-
         initialize_priority_queue(c);
 
         while (!pq_.empty()) {
@@ -249,38 +247,38 @@ namespace geolio
     //         }
     //     }
     // }
-    //
-    // template<GEO::index_t DIM, typename CONTROL_GRID>
-    // void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_det_J(
-    //     const GEO::index_t c,
-    //     Eigen::VectorXd& det_J
-    //     ) const {
-    //     if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
-    //         det_J = Eigen::VectorXd::Zero(N2_);
-    //
-    //         for (GEO::index_t j = 0; j < N1_; ++j) {
-    //             for (GEO::index_t i = 0; i < N1_; ++i) {
-    //                 const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
-    //                 det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
-    //             }
-    //         }
-    //     }
-    //     else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
-    //         det_J = Eigen::VectorXd::Zero(N3_);
-    //
-    //         for (GEO::index_t k = 0; k < N1_; ++k) {
-    //             for (GEO::index_t j = 0; j < N1_; ++j) {
-    //                 for (GEO::index_t i = 0; i < N1_; ++i) {
-    //                     const GEO::vec3 uvw(samples_1D_[i], samples_1D_[j], samples_1D_[k]);
-    //                     det_J(i+j*N1_+k*N2_) = control_grid_.compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     else
-    //         static_assert(false);
-    // }
-    //
+
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_det_J(
+        const GEO::index_t c,
+        Eigen::VectorXd& det_J
+        ) const {
+        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+            det_J = Eigen::VectorXd::Zero(N2_);
+
+            for (GEO::index_t j = 0; j < N1_; ++j) {
+                for (GEO::index_t i = 0; i < N1_; ++i) {
+                    const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
+                    det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
+                }
+            }
+        }
+        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
+            det_J = Eigen::VectorXd::Zero(N3_);
+
+            for (GEO::index_t k = 0; k < N1_; ++k) {
+                for (GEO::index_t j = 0; j < N1_; ++j) {
+                    for (GEO::index_t i = 0; i < N1_; ++i) {
+                        const GEO::vec3 uvw(samples_1D_[i], samples_1D_[j], samples_1D_[k]);
+                        det_J(i+j*N1_+k*N2_) = control_grid_.compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
+                    }
+                }
+            }
+        }
+        else
+            static_assert(false);
+    }
+
     // template<GEO::index_t DIM, typename CONTROL_GRID>
     // void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_grad_det_J(
     //     const GEO::index_t c,
@@ -453,6 +451,7 @@ namespace geolio
             static_assert(false);
 
         /* Output */
+        sub_blocks.clear();
         sub_blocks.reserve(sub_coeffs.size());
         for (auto & sub_coeff : sub_coeffs)
             sub_blocks.emplace_back(sub_coeff);
@@ -463,15 +462,18 @@ namespace geolio
         const double& max_v = block.max_v;
         const double mid_u = 0.5*(min_u+max_u);
         const double mid_v = 0.5*(min_v+max_v);
-        sub_blocks[0].min_u = min_u;  sub_blocks[0].max_u = mid_u;
-        sub_blocks[0].min_v = min_v;  sub_blocks[0].max_v = mid_v;
-        sub_blocks[1].min_u = min_u;  sub_blocks[1].max_u = mid_u;
-        sub_blocks[1].min_v = mid_v;  sub_blocks[1].max_v = max_v;
-        sub_blocks[2].min_u = mid_u;  sub_blocks[2].max_u = max_u;
-        sub_blocks[2].min_v = min_v;  sub_blocks[2].max_v = mid_v;
-        sub_blocks[3].min_u = mid_u;  sub_blocks[3].max_u = max_u;
-        sub_blocks[3].min_v = mid_v;  sub_blocks[3].max_v = max_v;
-        if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
+        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+            assert(sub_blocks.size() == 4);
+            sub_blocks[0].min_u = min_u;  sub_blocks[0].max_u = mid_u;
+            sub_blocks[0].min_v = min_v;  sub_blocks[0].max_v = mid_v;
+            sub_blocks[1].min_u = min_u;  sub_blocks[1].max_u = mid_u;
+            sub_blocks[1].min_v = mid_v;  sub_blocks[1].max_v = max_v;
+            sub_blocks[2].min_u = mid_u;  sub_blocks[2].max_u = max_u;
+            sub_blocks[2].min_v = mid_v;  sub_blocks[2].max_v = max_v;
+            sub_blocks[3].min_u = mid_u;  sub_blocks[3].max_u = max_u;
+            sub_blocks[3].min_v = min_v;  sub_blocks[3].max_v = mid_v;
+        }
+        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
             const double& min_w = block.min_w;
             const double& max_w = block.max_w;
             const double mid_w = 0.5*(min_w+max_w);
@@ -493,6 +495,8 @@ namespace geolio
             sub_blocks[7].min_v = mid_v;  sub_blocks[7].max_v = max_v;
             sub_blocks[7].min_w = mid_w;  sub_blocks[7].max_w = max_w;
         }
+        else
+            static_assert(false);
     }
 
     template class MinimumJacobianDeterminant<2, QuadControlGrid<2>>;
