@@ -50,6 +50,10 @@ namespace geolio
                 C = _C;
                 min_c = _C.minCoeff();
                 max_c = _C.maxCoeff();
+                if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+                    min_w = 0;
+                    max_w = 0;
+                }
             }
 
             /**
@@ -129,23 +133,6 @@ namespace geolio
         void collect_invalid_sub_blocks(GEO::index_t c, std::vector<Block>& invalid_sub_blocks, double eps = 1e-1);
 
         /**
-         * Append block geometry to a Geogram mesh for visualization / debug.
-         *
-         * Each block is emitted as one element of `M_out` (eight vertices and twelve edges, following the
-         * hexahedral layout of HEX_LE_INCIDENT_LV) whose vertices are the block corners in parametric
-         * space, and the determinant at those corners is stored in the `min_det_J` vertex attribute, so
-         * that tools can inspect where the invalid sub-blocks are.
-         *
-         * @note The definition of this member is currently commented out in
-         * minimum_jacobian_determinant.cpp, so calling it does not link. Only the hexahedral layout is
-         * implemented there; a facet grid would need the four-vertex quad layout instead.
-         *
-         * @param[in] blocks List of blocks to append.
-         * @param[in,out] M_out Geogram mesh to which block elements will be appended. The mesh is modified in-place.
-         */
-        void append_blocks_to_mesh(const std::vector<Block>& blocks, GEO::Mesh& M_out) const;
-
-        /**
          * Sample the Jacobian determinant on the tensor-product sample grid of cell / facet `c`.
          *
          * The samples are taken at the equispaced one-dimensional nodes `i / n_` and stored with `u` as
@@ -206,6 +193,23 @@ namespace geolio
          */
         [[nodiscard]] auto samples_nb() const { return N3_; }
 
+        /**
+         * Append block geometry to a Geogram mesh for visualization / debug.
+         *
+         * Each block is emitted as one element of `M_out` (eight vertices and twelve edges, following the
+         * hexahedral layout of HEX_LE_INCIDENT_LV) whose vertices are the block corners in parametric
+         * space, and the determinant at those corners is stored in the `min_det_J` vertex attribute, so
+         * that tools can inspect where the invalid sub-blocks are.
+         *
+         * @note The definition of this member is currently commented out in
+         * minimum_jacobian_determinant.cpp, so calling it does not link. Only the hexahedral layout is
+         * implemented there; a facet grid would need the four-vertex quad layout instead.
+         *
+         * @param[in] blocks List of blocks to append.
+         * @param[in,out] mesh_out Geogram mesh to which block elements will be appended. The mesh is modified in-place.
+         */
+        void append_blocks_to_mesh(const std::vector<Block>& blocks, GEO::Mesh& mesh_out) const;
+
     private:
         /**
          * Compute and cache the tensor-product Lagrange to Bernstein transforms used by the determinant
@@ -244,9 +248,7 @@ namespace geolio
          * @param[in] block Parent block to subdivide.
          * @param[out] sub_blocks Vector replaced by the children (four or eight of them).
          */
-        void subdivide(
-            const Block& block,
-            std::vector<Block>& sub_blocks);
+        void subdivide(const Block& block, std::vector<Block>& sub_blocks);
 
         const CONTROL_GRID& control_grid_;
 

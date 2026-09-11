@@ -4,7 +4,6 @@
 //
 #ifndef GEOLIO_HEX_DESCRIPTOR_H
 #define GEOLIO_HEX_DESCRIPTOR_H
-
 #include <array>
 #include <geogram/basic/numeric.h>
 #include <cassert>

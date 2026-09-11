@@ -131,54 +131,52 @@ namespace geolio
                 subdivide(B, sub_blocks);
 
                 pq_.pop();
-                for (const auto& block : sub_blocks)
-                    pq_.push(block);
+                for (const auto& sub_block : sub_blocks)
+                    pq_.push(sub_block);
             }
         }
 
         return false;
     }
 
-    // template<GEO::index_t DIM, typename CONTROL_GRID>
-    // double MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_upper_bound(
-    //     const GEO::index_t c,
-    //     const double eps,
-    //     std::vector<Block>* travelled_sub_blocks
-    //     ) {
-    //     // LOG::TRACE(__FUNCTION__);
-    //
-    //     initialize_priority_queue(c);
-    //
-    //     double global_upper_bound = std::numeric_limits<double>::max();
-    //     while (!pq_.empty()) {
-    //         const auto& B = pq_.top();
-    //         for (GEO::index_t i = 0; i < 8; ++i)
-    //             global_upper_bound = std::min(global_upper_bound, B.C[CORNER_INDICES_[i]]);
-    //
-    //         if (travelled_sub_blocks != nullptr) // for debug
-    //             travelled_sub_blocks->push_back(B);
-    //
-    //         if (B.min_c > global_upper_bound) {
-    //             /* Do nothing */
-    //             pq_.pop();
-    //         }
-    //         else if (B.max_c - B.min_c < eps) {
-    //             global_upper_bound = B.min_c;
-    //             break;
-    //         }
-    //         else {
-    //             /* Subdivide */
-    //             std::vector<Block> sub_blocks;
-    //             subdivide(B, sub_blocks);
-    //
-    //             pq_.pop();
-    //             for (GEO::index_t i = 0; i < 8; ++i)
-    //                 pq_.push(sub_blocks[i]);
-    //         }
-    //     }
-    //
-    //     return global_upper_bound;
-    // }
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    double MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_upper_bound(
+        const GEO::index_t c,
+        const double eps,
+        std::vector<Block>* travelled_sub_blocks
+        ) {
+        initialize_priority_queue(c);
+
+        double global_upper_bound = std::numeric_limits<double>::max();
+        while (!pq_.empty()) {
+            const auto& B = pq_.top();
+            for (unsigned int& i : CORNER_INDICES_)
+                global_upper_bound = std::min(global_upper_bound, B.C[i]);
+
+            if (travelled_sub_blocks != nullptr) // for debug
+                travelled_sub_blocks->push_back(B);
+
+            if (B.min_c > global_upper_bound) {
+                /* Do nothing */
+                pq_.pop();
+            }
+            else if (B.max_c - B.min_c < eps) {
+                global_upper_bound = B.min_c;
+                break;
+            }
+            else {
+                /* Subdivide */
+                std::vector<Block> sub_blocks;
+                subdivide(B, sub_blocks);
+
+                pq_.pop();
+                for (const auto& sub_block : sub_blocks)
+                    pq_.push(sub_block);
+            }
+        }
+
+        return global_upper_bound;
+    }
     //
     // template<GEO::index_t DIM, typename CONTROL_GRID>
     // void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::collect_invalid_sub_blocks(
@@ -213,40 +211,6 @@ namespace geolio
     //     }
     // }
     //
-    // template<GEO::index_t DIM, typename CONTROL_GRID>
-    // void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::append_blocks_to_mesh(
-    //     const std::vector<Block>& blocks,
-    //     GEO::Mesh& M_out
-    //     ) const {
-    //     LOG::TRACE("{}({})", __FUNCTION__, blocks.size());
-    //
-    //     GEO::Attribute<double> M_out_v_mindetJ(M_out.vertices.attributes(), "min_det_J");
-    //     const GEO::index_t new_v = M_out.vertices.create_vertices(8*blocks.size());
-    //     const GEO::index_t new_e = M_out.edges.create_edges(12*blocks.size());
-    //     for (GEO::index_t i = 0, i_end = blocks.size(); i < i_end; ++i) {
-    //         const auto& B = blocks[i];
-    //         M_out.vertices.point(new_v+8*i)     = GEO::vec3(B.min_u, B.min_v, B.min_w);
-    //         M_out.vertices.point(new_v+8*i+1)   = GEO::vec3(B.max_u, B.min_v, B.min_w);
-    //         M_out.vertices.point(new_v+8*i+2)   = GEO::vec3(B.min_u, B.max_v, B.min_w);
-    //         M_out.vertices.point(new_v+8*i+3)   = GEO::vec3(B.max_u, B.max_v, B.min_w);
-    //         M_out.vertices.point(new_v+8*i+4)   = GEO::vec3(B.min_u, B.min_v, B.max_w);
-    //         M_out.vertices.point(new_v+8*i+5)   = GEO::vec3(B.max_u, B.min_v, B.max_w);
-    //         M_out.vertices.point(new_v+8*i+6)   = GEO::vec3(B.min_u, B.max_v, B.max_w);
-    //         M_out.vertices.point(new_v+8*i+7)   = GEO::vec3(B.max_u, B.max_v, B.max_w);
-    //         M_out_v_mindetJ[new_v+8*i]      = B.C[CORNER_INDICES_[0]];
-    //         M_out_v_mindetJ[new_v+8*i+1]    = B.C[CORNER_INDICES_[1]];
-    //         M_out_v_mindetJ[new_v+8*i+2]    = B.C[CORNER_INDICES_[2]];
-    //         M_out_v_mindetJ[new_v+8*i+3]    = B.C[CORNER_INDICES_[3]];
-    //         M_out_v_mindetJ[new_v+8*i+4]    = B.C[CORNER_INDICES_[4]];
-    //         M_out_v_mindetJ[new_v+8*i+5]    = B.C[CORNER_INDICES_[5]];
-    //         M_out_v_mindetJ[new_v+8*i+6]    = B.C[CORNER_INDICES_[6]];
-    //         M_out_v_mindetJ[new_v+8*i+7]    = B.C[CORNER_INDICES_[7]];
-    //         for (GEO::index_t le = 0; le < 12; ++le) {
-    //             M_out.edges.set_vertex(new_e+12*i+le, 0, new_v+8*i+geolio::HEX_LE_INCIDENT_LV[le][0]);
-    //             M_out.edges.set_vertex(new_e+12*i+le, 1, new_v+8*i+geolio::HEX_LE_INCIDENT_LV[le][1]);
-    //         }
-    //     }
-    // }
 
     template<GEO::index_t DIM, typename CONTROL_GRID>
     void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_det_J(
@@ -328,6 +292,67 @@ namespace geolio
             C = M3D_ * J;
         else
             static_assert(false);
+    }
+
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::append_blocks_to_mesh(
+        const std::vector<Block>& blocks,
+        GEO::Mesh& mesh_out
+        ) const {
+        LOG::TRACE("{}({})", __FUNCTION__, blocks.size());
+
+        constexpr GEO::index_t CORNERS_NB = std::is_same_v<CONTROL_GRID, HexControlGrid> ? 8 : 4;
+        assert(CORNER_INDICES_.size() == CORNERS_NB);
+        constexpr GEO::index_t EDGES_NB = std::is_same_v<CONTROL_GRID, HexControlGrid> ? 12 : 4;
+
+        GEO::Attribute<double> mesh_out_v_mindetJ(mesh_out.vertices.attributes(), "min_det_J");
+        const GEO::index_t new_v = mesh_out.vertices.create_vertices(CORNERS_NB*blocks.size());
+        const GEO::index_t new_e = mesh_out.edges.create_edges(EDGES_NB*blocks.size());
+        for (GEO::index_t i = 0, i_end = blocks.size(); i < i_end; ++i) {
+            const auto& B = blocks[i];
+
+            if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
+                mesh_out.vertices.point(new_v+CORNERS_NB*i)     = GEO::vec3(B.min_u, B.min_v, B.min_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+1)   = GEO::vec3(B.max_u, B.min_v, B.min_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+2)   = GEO::vec3(B.min_u, B.max_v, B.min_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+3)   = GEO::vec3(B.max_u, B.max_v, B.min_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+4)   = GEO::vec3(B.min_u, B.min_v, B.max_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+5)   = GEO::vec3(B.max_u, B.min_v, B.max_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+6)   = GEO::vec3(B.min_u, B.max_v, B.max_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+7)   = GEO::vec3(B.max_u, B.max_v, B.max_w);
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i]      = B.C[CORNER_INDICES_[0]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+1]    = B.C[CORNER_INDICES_[1]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+2]    = B.C[CORNER_INDICES_[2]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+3]    = B.C[CORNER_INDICES_[3]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+4]    = B.C[CORNER_INDICES_[4]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+5]    = B.C[CORNER_INDICES_[5]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+6]    = B.C[CORNER_INDICES_[6]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+7]    = B.C[CORNER_INDICES_[7]];
+            }
+            else {
+                mesh_out.vertices.point(new_v+CORNERS_NB*i)     = GEO::vec3(B.min_u, B.min_v, B.min_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+1)   = GEO::vec3(B.max_u, B.min_v, B.min_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+2)   = GEO::vec3(B.max_u, B.max_v, B.min_w);
+                mesh_out.vertices.point(new_v+CORNERS_NB*i+3)   = GEO::vec3(B.min_u, B.max_v, B.min_w);
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i]      = B.C[CORNER_INDICES_[0]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+1]    = B.C[CORNER_INDICES_[1]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+2]    = B.C[CORNER_INDICES_[2]];
+                mesh_out_v_mindetJ[new_v+CORNERS_NB*i+3]    = B.C[CORNER_INDICES_[3]];
+            }
+
+            if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
+                for (GEO::index_t le = 0; le < EDGES_NB; ++le) {
+                    mesh_out.edges.set_vertex(new_e+EDGES_NB*i+le, 0, new_v+CORNERS_NB*i+geolio::HEX_LE_INCIDENT_LV[le][0]);
+                    mesh_out.edges.set_vertex(new_e+EDGES_NB*i+le, 1, new_v+CORNERS_NB*i+geolio::HEX_LE_INCIDENT_LV[le][1]);
+                }
+            }
+            else {
+                for (GEO::index_t le = 0; le < EDGES_NB; ++le) {
+                    mesh_out.edges.set_vertex(new_e+EDGES_NB*i+le, 0, new_v+CORNERS_NB*i+le);
+                    mesh_out.edges.set_vertex(new_e+EDGES_NB*i+le, 1, new_v+CORNERS_NB*i+(le+1)%4);
+                }
+            }
+        }
     }
 
     template<GEO::index_t DIM, typename CONTROL_GRID>
