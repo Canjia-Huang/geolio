@@ -223,8 +223,10 @@ namespace geolio
         double det_J = 0;
         if constexpr (DIM == 2)
             det_J = geolio::cross(du, dv);
-        else if constexpr (DIM == 3)
-            det_J = GEO::length(GEO::cross(du, dv));
+        else if constexpr (DIM == 3) { // Equivalent Jacobian determinant
+            const auto cross = GEO::cross(du, dv);
+            det_J = GEO::length(cross);
+        }
 
         switch (quality_type) {
             case MeasureType::DET_JACOBIAN: {
