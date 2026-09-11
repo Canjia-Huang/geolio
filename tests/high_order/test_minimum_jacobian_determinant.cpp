@@ -92,8 +92,7 @@ namespace geolio::test
             constexpr GEO::index_t order = 5;
             this->control_grid = std::make_unique<QuadControlGrid<DimType::value>>(this->mesh, order);
 
-            /* Inverse */
-            const auto nd = this->control_grid->facet_nd(1, 5, 2);
+            const auto nd = this->control_grid->facet_inner_nd(1, 3, 2);
             if constexpr (DimType::value == 2)
                 this->control_grid->control_node(nd) += GEO::vec2(-0.4, 0.1);
             else if constexpr (DimType::value == 3)

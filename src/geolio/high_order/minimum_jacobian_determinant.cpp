@@ -348,7 +348,10 @@ namespace geolio
         M2D_ = Eigen::KroneckerProduct(M_, M_).eval();
         M2D_T_ = M2D_.transpose();
 
-        M3D_ = kroneckerProduct(M_, M2D_).eval();
+        /* Only the hexahedral path converts (N3_ x N3_) tensor coefficients, and that matrix
+         * grows as N1_^6, so it must not be built for the 2D (quad) instantiations. */
+        if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>)
+            M3D_ = kroneckerProduct(M_, M2D_).eval();
     }
 
     template<GEO::index_t DIM, typename CONTROL_GRID>
@@ -401,18 +404,27 @@ namespace geolio
         const Block& block,
         std::vector<Block>& sub_blocks
         ) {
+        constexpr bool IS_2D = std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> ||
+                               std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>;
+
         const auto& C = block.C;
+
+        /* The coefficient vector of a 2D block is a single N1_ x N1_ (u, v) plane, while the 3D
+         * one stacks N1_ such planes along w. Both are stored with u as the fastest index, so a
+         * block is viewed as an N1_ x (N1_*PLANE_NB) matrix whose columns carry the remaining
+         * (v, w) index. */
+        const GEO::index_t PLANE_NB = IS_2D ? 1 : N1_;
 
         /* U subdivision */
         auto split_U = [&](const Eigen::MatrixXd& mat) -> std::pair<Eigen::MatrixXd, Eigen::MatrixXd> {
             return {ML_ * mat, MR_ * mat};
         };
-        auto [UL, UR] = split_U(Eigen::Map<const Eigen::MatrixXd>(C.data(), N1_, N2_));
+        auto [UL, UR] = split_U(Eigen::Map<const Eigen::MatrixXd>(C.data(), N1_, N1_*PLANE_NB));
 
         /* V subdivision */
         auto split_V = [&](const Eigen::MatrixXd& mat_u) -> std::pair<Eigen::MatrixXd, Eigen::MatrixXd> {
-            Eigen::MatrixXd VL(N1_, N2_), VR(N1_, N2_);
-            for(GEO::index_t k = 0; k < N1_; ++k) {
+            Eigen::MatrixXd VL(mat_u.rows(), mat_u.cols()), VR(mat_u.rows(), mat_u.cols());
+            for(GEO::index_t k = 0; k < PLANE_NB; ++k) {
                 Eigen::Map<const Eigen::MatrixXd> plane(mat_u.data() + k*N2_, N1_, N1_);
                 Eigen::MatrixXd T = plane.transpose();
                 VL.block(0, k*N1_, N1_, N1_) = (ML_ * T).transpose();
@@ -423,13 +435,19 @@ namespace geolio
         auto [ULVL, ULVR] = split_V(UL);
         auto [URVL, URVR] = split_V(UR);
 
+        /* Child blocks are indexed by a (u_bit, v_bit, w_bit) triple, the child with a set bit
+         * taking the upper half of the parent block along the corresponding axis. The three bits
+         * form the flat index u_bit*2 + v_bit + w_bit*4, which is the order in which the
+         * coefficients below are assigned. */
         std::vector<Eigen::VectorXd> sub_coeffs(CORNER_INDICES_.size());
-        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+        if constexpr (IS_2D) {
             assert(sub_coeffs.size() == 4);
-            sub_coeffs[0] = ULVL;
-            sub_coeffs[1] = URVL;
-            sub_coeffs[2] = URVR;
-            sub_coeffs[3] = ULVR;
+            /* Every child is one N1_ x N1_ plane; flattening it column-major keeps u as the
+             * fastest index, which is what split_U / split_V expect on the next subdivision. */
+            sub_coeffs[0] = Eigen::Map<const Eigen::VectorXd>(ULVL.data(), N2_);
+            sub_coeffs[1] = Eigen::Map<const Eigen::VectorXd>(ULVR.data(), N2_);
+            sub_coeffs[2] = Eigen::Map<const Eigen::VectorXd>(URVL.data(), N2_);
+            sub_coeffs[3] = Eigen::Map<const Eigen::VectorXd>(URVR.data(), N2_);
         }
         else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
             /* W subdivision */
@@ -455,48 +473,30 @@ namespace geolio
         sub_blocks.reserve(sub_coeffs.size());
         for (auto & sub_coeff : sub_coeffs)
             sub_blocks.emplace_back(sub_coeff);
-        // set uvw
-        const double& min_u = block.min_u;
-        const double& max_u = block.max_u;
-        const double& min_v = block.min_v;
-        const double& max_v = block.max_v;
-        const double mid_u = 0.5*(min_u+max_u);
-        const double mid_v = 0.5*(min_v+max_v);
-        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
-            assert(sub_blocks.size() == 4);
-            sub_blocks[0].min_u = min_u;  sub_blocks[0].max_u = mid_u;
-            sub_blocks[0].min_v = min_v;  sub_blocks[0].max_v = mid_v;
-            sub_blocks[1].min_u = min_u;  sub_blocks[1].max_u = mid_u;
-            sub_blocks[1].min_v = mid_v;  sub_blocks[1].max_v = max_v;
-            sub_blocks[2].min_u = mid_u;  sub_blocks[2].max_u = max_u;
-            sub_blocks[2].min_v = mid_v;  sub_blocks[2].max_v = max_v;
-            sub_blocks[3].min_u = mid_u;  sub_blocks[3].max_u = max_u;
-            sub_blocks[3].min_v = min_v;  sub_blocks[3].max_v = mid_v;
+        /* Set the parametric bounds of every child with the same bit indexing as its
+         * coefficients: a clear bit keeps the lower half of the parent block along that axis,
+         * a set bit takes the upper half. The w bounds of a 2D block are left untouched. */
+        const double lower[3] = {block.min_u, block.min_v, block.min_w};
+        const double upper[3] = {block.max_u, block.max_v, block.max_w};
+        const double middle[3] = {
+            0.5*(block.min_u+block.max_u),
+            0.5*(block.min_v+block.max_v),
+            0.5*(block.min_w+block.max_w)
+        };
+        double Block::* const min_bounds[3] = {&Block::min_u, &Block::min_v, &Block::min_w};
+        double Block::* const max_bounds[3] = {&Block::max_u, &Block::max_v, &Block::max_w};
+        /* A child index is u_bit*2 + v_bit + w_bit*4, so bit 0 carries v and bit 1 carries u. */
+        const GEO::index_t axis_of_bit[3] = {1, 0, 2}; // v, u, w
+        const GEO::index_t BIT_NB = IS_2D ? 2 : 3;
+
+        for (GEO::index_t i = 0; i < sub_blocks.size(); ++i) {
+            for (GEO::index_t b = 0; b < BIT_NB; ++b) {
+                const GEO::index_t d = axis_of_bit[b];
+                const bool upper_half = ((i >> b) & 1) != 0;
+                sub_blocks[i].*min_bounds[d] = upper_half ? middle[d] : lower[d];
+                sub_blocks[i].*max_bounds[d] = upper_half ? upper[d]  : middle[d];
+            }
         }
-        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
-            const double& min_w = block.min_w;
-            const double& max_w = block.max_w;
-            const double mid_w = 0.5*(min_w+max_w);
-            assert(sub_blocks.size() == 8);
-            sub_blocks[0].min_w = min_w;  sub_blocks[0].max_w = mid_w;
-            sub_blocks[1].min_w = min_w;  sub_blocks[1].max_w = mid_w;
-            sub_blocks[2].min_w = min_w;  sub_blocks[2].max_w = mid_w;
-            sub_blocks[3].min_w = min_w;  sub_blocks[3].max_w = mid_w;
-            sub_blocks[4].min_u = min_u;  sub_blocks[4].max_u = mid_u;
-            sub_blocks[4].min_v = min_v;  sub_blocks[4].max_v = mid_v;
-            sub_blocks[4].min_w = mid_w;  sub_blocks[4].max_w = max_w;
-            sub_blocks[5].min_u = min_u;  sub_blocks[5].max_u = mid_u;
-            sub_blocks[5].min_v = mid_v;  sub_blocks[5].max_v = max_v;
-            sub_blocks[5].min_w = mid_w;  sub_blocks[5].max_w = max_w;
-            sub_blocks[6].min_u = mid_u;  sub_blocks[6].max_u = max_u;
-            sub_blocks[6].min_v = min_v;  sub_blocks[6].max_v = mid_v;
-            sub_blocks[6].min_w = mid_w;  sub_blocks[6].max_w = max_w;
-            sub_blocks[7].min_u = mid_u;  sub_blocks[7].max_u = max_u;
-            sub_blocks[7].min_v = mid_v;  sub_blocks[7].max_v = max_v;
-            sub_blocks[7].min_w = mid_w;  sub_blocks[7].max_w = max_w;
-        }
-        else
-            static_assert(false);
     }
 
     template class MinimumJacobianDeterminant<2, QuadControlGrid<2>>;
