@@ -8,6 +8,7 @@
 #include <Eigen/Dense>
 #include "hex_control_grid.h"
 #include "quad_control_grid.h"
+#include <queue>
 
 namespace geolio
 {
