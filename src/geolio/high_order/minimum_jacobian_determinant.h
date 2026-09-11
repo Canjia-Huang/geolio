@@ -130,65 +130,18 @@ namespace geolio
         void collect_invalid_sub_blocks(GEO::index_t c, std::vector<Block>& invalid_sub_blocks, double eps = 1e-1);
 
         /**
-         * Sample the Jacobian determinant on the tensor-product sample grid of cell / facet `c`.
+         * Compute the Bernstein-basis determinant coefficients and their gradient for cell / facet `c`.
          *
-         * The samples are taken at the equispaced one-dimensional nodes `i / n_` and stored with `u` as
-         * the fastest index: the linear index is `i + j * N1_` for a facet grid (N2_ entries) and
-         * `i + j * N1_ + k * N2_` for a hexahedral grid (N3_ entries).
+         * `detJ_b_coeffs` stores the determinant coefficients in the flattened `u`-fastest layout used by
+         * the rest of this class. `grad_detJ_b_coeffs` stores the gradient samples converted column-wise
+         * to the Bernstein basis, with one column per control-point degree of freedom.
          *
-         * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to evaluate.
-         * @param[out] det_J Output vector of sampled determinant values.
+         * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to analyze.
+         * @param[out] detJ_b_coeffs Output vector receiving the determinant coefficients in Bernstein basis.
+         * @param[out] grad_detJ_b_coeffs Output matrix receiving the determinant-gradient coefficients in
+         * Bernstein basis.
          */
-        void compute_samples_det_J(GEO::index_t c, Eigen::VectorXd& det_J) const;
-
-        /**
-         * Sample the Jacobian-determinant gradient on the tensor-product sample grid of cell / facet `c`.
-         *
-         * Each row corresponds to one sampled parametric point, flattened with `u` as the fastest index
-         * (`i + j * N1_` for a facet, `i + j * N1_ + k * N2_` for a hexahedral cell). Each column
-         * corresponds to one control-point degree of freedom in the flattened layout used by
-         * `ControlGrid`, so the matrix has `DIM * control_points_nb_per_facet()` columns for a facet grid
-         * and `3 * control_points_nb_per_cell()` columns for a hexahedral grid.
-         *
-         * @note The definition of this member is currently commented out in
-         * minimum_jacobian_determinant.cpp, so calling it does not link.
-         *
-         * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to evaluate.
-         * @param[out] grad_det_J Output matrix of sampled determinant gradients.
-         */
-        void compute_samples_grad_det_J(GEO::index_t c, Eigen::MatrixXd& grad_det_J) const;
-
-        /**
-         * Convert sampled values / coefficients from the tensor-product Lagrange basis to the Bernstein basis.
-         *
-         * The transform is `M2D_` for a facet grid and `M3D_` for a hexahedral grid, so `J` and `C` hold
-         * N2_ and N3_ entries respectively, in the same `u`-fastest flattened layout as
-         * `compute_samples_det_J()`.
-         *
-         * @param[in] J Input vector in the Lagrange basis.
-         * @param[out] C Output vector in the Bernstein basis.
-         */
-        void convert_to_bernstein_coeffs(const Eigen::VectorXd& J, Eigen::VectorXd& C) const;
-
-        /**
-         * Convert sampled values / coefficients from the tensor-product Lagrange basis to the Bernstein basis.
-         *
-         * This overload applies the same transform to every column of `J` at once (`C = M2D_ * J` for a
-         * facet grid, `C = M3D_ * J` for a hexahedral grid), for callers that keep several sample vectors
-         * side by side.
-         *
-         * @param[in] J Input matrix in the Lagrange basis.
-         * @param[out] C Output matrix in the Bernstein basis.
-         */
-        void convert_to_bernstein_coeffs(const Eigen::MatrixXd& J, Eigen::MatrixXd& C) const;
-
-        /**
-         * Get the number of sampling nodes of the Jacobian-detector.
-         *
-         * @return N1_^3 for a hexahedral grid. Note that for a facet (quad) grid the sampled vector only
-         * holds N1_^2 entries, so prefer the size of the vector filled by `compute_samples_det_J()` there.
-         */
-        [[nodiscard]] auto samples_nb() const { return N3_; }
+        void compute_untangling_funcgrad(GEO::index_t c, Eigen::VectorXd& detJ_b_coeffs, Eigen::MatrixXd& grad_detJ_b_coeffs) const;
 
         /**
          * Append block geometry to a Geogram mesh for visualization / debug.
@@ -242,6 +195,60 @@ namespace geolio
          * @param[out] sub_blocks Vector replaced by the children (four or eight of them).
          */
         void subdivide(const Block& block, std::vector<Block>& sub_blocks);
+
+
+        /**
+         * Sample the Jacobian determinant on the tensor-product sample grid of cell / facet `c`.
+         *
+         * The samples are taken at the equispaced one-dimensional nodes `i / n_` and stored with `u` as
+         * the fastest index: the linear index is `i + j * N1_` for a facet grid (N2_ entries) and
+         * `i + j * N1_ + k * N2_` for a hexahedral grid (N3_ entries).
+         *
+         * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to evaluate.
+         * @param[out] det_J Output vector of sampled determinant values.
+         */
+        void compute_samples_det_J(GEO::index_t c, Eigen::VectorXd& det_J) const;
+
+        /**
+         * Sample the Jacobian-determinant gradient on the tensor-product sample grid of cell / facet `c`.
+         *
+         * Each row corresponds to one sampled parametric point, flattened with `u` as the fastest index
+         * (`i + j * N1_` for a facet, `i + j * N1_ + k * N2_` for a hexahedral cell). Each column
+         * corresponds to one control-point degree of freedom in the flattened layout used by
+         * `ControlGrid`, so the matrix has `DIM * control_points_nb_per_facet()` columns for a facet grid
+         * and `3 * control_points_nb_per_cell()` columns for a hexahedral grid.
+         *
+         * @note The definition of this member is currently commented out in
+         * minimum_jacobian_determinant.cpp, so calling it does not link.
+         *
+         * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to evaluate.
+         * @param[out] grad_det_J Output matrix of sampled determinant gradients.
+         */
+        void compute_samples_grad_det_J(GEO::index_t c, Eigen::MatrixXd& grad_det_J) const;
+
+        /**
+         * Convert sampled values / coefficients from the tensor-product Lagrange basis to the Bernstein basis.
+         *
+         * The transform is `M2D_` for a facet grid and `M3D_` for a hexahedral grid, so `J` and `C` hold
+         * N2_ and N3_ entries respectively, in the same `u`-fastest flattened layout as
+         * `compute_samples_det_J()`.
+         *
+         * @param[in] J Input vector in the Lagrange basis.
+         * @param[out] C Output vector in the Bernstein basis.
+         */
+        void convert_to_bernstein_coeffs(const Eigen::VectorXd& J, Eigen::VectorXd& C) const;
+
+        /**
+         * Convert sampled values / coefficients from the tensor-product Lagrange basis to the Bernstein basis.
+         *
+         * This overload applies the same transform to every column of `J` at once (`C = M2D_ * J` for a
+         * facet grid, `C = M3D_ * J` for a hexahedral grid), for callers that keep several sample vectors
+         * side by side.
+         *
+         * @param[in] J Input matrix in the Lagrange basis.
+         * @param[out] C Output matrix in the Bernstein basis.
+         */
+        void convert_to_bernstein_coeffs(const Eigen::MatrixXd& J, Eigen::MatrixXd& C) const;
 
         const CONTROL_GRID& control_grid_;
 

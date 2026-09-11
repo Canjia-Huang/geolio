@@ -209,105 +209,19 @@ namespace geolio
         }
     }
 
-
     template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_det_J(
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_untangling_funcgrad(
         const GEO::index_t c,
-        Eigen::VectorXd& det_J
+        Eigen::VectorXd& detJ_b_coeffs,
+        Eigen::MatrixXd& grad_detJ_b_coeffs
         ) const {
-        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
-            det_J = Eigen::VectorXd::Zero(N2_);
+        Eigen::VectorXd detJ;
+        compute_samples_det_J(c, detJ);
+        convert_to_bernstein_coeffs(detJ, detJ_b_coeffs);
 
-            for (GEO::index_t j = 0; j < N1_; ++j) {
-                for (GEO::index_t i = 0; i < N1_; ++i) {
-                    const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
-                    det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
-                }
-            }
-        }
-        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
-            det_J = Eigen::VectorXd::Zero(N3_);
-
-            for (GEO::index_t k = 0; k < N1_; ++k) {
-                for (GEO::index_t j = 0; j < N1_; ++j) {
-                    for (GEO::index_t i = 0; i < N1_; ++i) {
-                        const GEO::vec3 uvw(samples_1D_[i], samples_1D_[j], samples_1D_[k]);
-                        det_J(i+j*N1_+k*N2_) = control_grid_.compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
-                    }
-                }
-            }
-        }
-        else
-            static_assert(false);
-    }
-
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_grad_det_J(
-        const GEO::index_t c,
-        Eigen::MatrixXd& grad_det_J
-        ) const {
-        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
-            const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_facet();
-            grad_det_J = Eigen::MatrixXd::Zero(N2_, DIM*CONTROL_POINTS_NB);
-            for (GEO::index_t j = 0; j < N1_; ++j) {
-                for (GEO::index_t i = 0; i < N1_; ++i) {
-                    const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
-                    std::vector<double> grads;
-                    control_grid_.compute_facet_uv_detJ_gradient(c, uv, grads);
-                    assert(grads.size() == DIM*CONTROL_POINTS_NB);
-
-                    const GEO::index_t I = i+j*N1_;
-                    for (GEO::index_t ii = 0; ii < DIM*CONTROL_POINTS_NB; ++ii)
-                        grad_det_J(I, ii) = grads[ii];
-                }
-            }
-        }
-        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
-            const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_cell();
-            grad_det_J = Eigen::MatrixXd::Zero(N3_, 3*CONTROL_POINTS_NB);
-            for (GEO::index_t k = 0; k < N1_; ++k) {
-                for (GEO::index_t j = 0; j < N1_; ++j) {
-                    for (GEO::index_t i = 0; i < N1_; ++i) {
-                        const GEO::vec3 uvw(samples_1D_[i], samples_1D_[j], samples_1D_[k]);
-                        std::vector<double> grads;
-                        control_grid_.compute_cell_uvw_detJ_gradient(c, uvw, grads);
-                        assert(grads.size() == 3*CONTROL_POINTS_NB);
-
-                        const GEO::index_t I = i+j*N1_+k*N2_;
-                        for (GEO::index_t ii = 0; ii < 3*CONTROL_POINTS_NB; ++ii)
-                            grad_det_J(I, ii) = grads[ii];
-                    }
-                }
-            }
-        }
-        else
-            static_assert(false);
-    }
-
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::convert_to_bernstein_coeffs(
-        const Eigen::VectorXd& J,
-        Eigen::VectorXd& C
-        ) const {
-        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>)
-            C = M2D_ * J;
-        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>)
-            C = M3D_ * J;
-        else
-            static_assert(false);
-    }
-
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::convert_to_bernstein_coeffs(
-        const Eigen::MatrixXd& J,
-        Eigen::MatrixXd& C
-        ) const {
-        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>)
-            C = M2D_ * J;
-        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>)
-            C = M3D_ * J;
-        else
-            static_assert(false);
+        Eigen::MatrixXd grad_detJ;
+        compute_samples_grad_det_J(c, grad_detJ);
+        convert_to_bernstein_coeffs(grad_detJ, grad_detJ_b_coeffs);
     }
 
     template<GEO::index_t DIM, typename CONTROL_GRID>
@@ -538,6 +452,106 @@ namespace geolio
                 sub_blocks[i].*max_bounds[d] = upper_half ? upper[d]  : middle[d];
             }
         }
+    }
+
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_det_J(
+        const GEO::index_t c,
+        Eigen::VectorXd& det_J
+        ) const {
+        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+            det_J = Eigen::VectorXd::Zero(N2_);
+
+            for (GEO::index_t j = 0; j < N1_; ++j) {
+                for (GEO::index_t i = 0; i < N1_; ++i) {
+                    const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
+                    det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
+                }
+            }
+        }
+        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
+            det_J = Eigen::VectorXd::Zero(N3_);
+
+            for (GEO::index_t k = 0; k < N1_; ++k) {
+                for (GEO::index_t j = 0; j < N1_; ++j) {
+                    for (GEO::index_t i = 0; i < N1_; ++i) {
+                        const GEO::vec3 uvw(samples_1D_[i], samples_1D_[j], samples_1D_[k]);
+                        det_J(i+j*N1_+k*N2_) = control_grid_.compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
+                    }
+                }
+            }
+        }
+        else
+            static_assert(false);
+    }
+
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_grad_det_J(
+        const GEO::index_t c,
+        Eigen::MatrixXd& grad_det_J
+        ) const {
+        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+            const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_facet();
+            grad_det_J = Eigen::MatrixXd::Zero(N2_, DIM*CONTROL_POINTS_NB);
+            for (GEO::index_t j = 0; j < N1_; ++j) {
+                for (GEO::index_t i = 0; i < N1_; ++i) {
+                    const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
+                    std::vector<double> grads;
+                    control_grid_.compute_facet_uv_detJ_gradient(c, uv, grads);
+                    assert(grads.size() == DIM*CONTROL_POINTS_NB);
+
+                    const GEO::index_t I = i+j*N1_;
+                    for (GEO::index_t ii = 0; ii < DIM*CONTROL_POINTS_NB; ++ii)
+                        grad_det_J(I, ii) = grads[ii];
+                }
+            }
+        }
+        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>) {
+            const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_cell();
+            grad_det_J = Eigen::MatrixXd::Zero(N3_, 3*CONTROL_POINTS_NB);
+            for (GEO::index_t k = 0; k < N1_; ++k) {
+                for (GEO::index_t j = 0; j < N1_; ++j) {
+                    for (GEO::index_t i = 0; i < N1_; ++i) {
+                        const GEO::vec3 uvw(samples_1D_[i], samples_1D_[j], samples_1D_[k]);
+                        std::vector<double> grads;
+                        control_grid_.compute_cell_uvw_detJ_gradient(c, uvw, grads);
+                        assert(grads.size() == 3*CONTROL_POINTS_NB);
+
+                        const GEO::index_t I = i+j*N1_+k*N2_;
+                        for (GEO::index_t ii = 0; ii < 3*CONTROL_POINTS_NB; ++ii)
+                            grad_det_J(I, ii) = grads[ii];
+                    }
+                }
+            }
+        }
+        else
+            static_assert(false);
+    }
+
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::convert_to_bernstein_coeffs(
+        const Eigen::VectorXd& J,
+        Eigen::VectorXd& C
+        ) const {
+        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>)
+            C = M2D_ * J;
+        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>)
+            C = M3D_ * J;
+        else
+            static_assert(false);
+    }
+
+    template<GEO::index_t DIM, typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::convert_to_bernstein_coeffs(
+        const Eigen::MatrixXd& J,
+        Eigen::MatrixXd& C
+        ) const {
+        if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>)
+            C = M2D_ * J;
+        else if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>)
+            C = M3D_ * J;
+        else
+            static_assert(false);
     }
 
     template class MinimumJacobianDeterminant<2, QuadControlGrid<2>>;
