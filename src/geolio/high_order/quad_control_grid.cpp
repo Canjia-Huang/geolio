@@ -5,6 +5,7 @@
 #include "quad_control_grid.h"
 #include <geolio/common/pair_hash.h>
 #include "basis_functions.h"
+#include "geolio/common/vecg.h"
 
 namespace geolio
 {
@@ -209,7 +210,7 @@ namespace geolio
     double QuadControlGrid<DIM>::compute_facet_uv_measure(
         GEO::index_t f,
         const GEO::vec2& uv,
-        MeasureType quality_type
+        const MeasureType quality_type
         ) const {
         assert(f < this->mesh_.facets.nb());
         assert(uv.x >= 0 && uv.x <= 1);
@@ -218,6 +219,32 @@ namespace geolio
         GEO::vecng<DIM, double> du, dv;
         std::vector<double> Bu, Bv, dBu, dBv;
         this->compute_facet_uv_dudv(f, uv, du, dv, Bu, Bv, dBu, dBv);
+
+        double det_J = 0;
+        if constexpr (DIM == 2)
+            det_J = geolio::cross(du, dv);
+        else if constexpr (DIM == 3)
+            det_J = GEO::length(GEO::cross(du, dv));
+
+        switch (quality_type) {
+            case MeasureType::DET_JACOBIAN: {
+                return det_J;
+            }
+            case MeasureType::MIPS: {
+                const double F_sq_norm = du.length2()+dv.length2();
+                return F_sq_norm / (2.0 * det_J);
+            }
+            case MeasureType::SCALED_JACOBIAN: {
+                return det_J/(du.length()*dv.length());
+            }
+            case MeasureType::INVERSE_MEAN_RATIO: {
+                const double F_sq_norm = du.length2()+dv.length2();
+                return 2.0*det_J/F_sq_norm;
+            }
+            default: assert(0);
+        }
+
+        return 0;
     }
 
     template<GEO::index_t DIM>
