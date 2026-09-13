@@ -143,7 +143,7 @@ namespace geolio
          * @param[in] action Callback invoked with (edge_index_this, edge_index_other).
          */
         void compute_other_cell_bbox_intersections(const MeshEdgesAABB* other, const std::function<void(GEO::index_t, GEO::index_t)>& action) const {
-            other_intersect_recursive(
+            this->other_intersect_recursive(
                 action,
                 1, 0, edges_nb_,
                 other,
@@ -305,7 +305,7 @@ namespace geolio
             }
             nearest_e = this->element_in_leaf(b);
 
-            nearest_point = this->mesh_->vertices.point<DIM>(this->mesh_->edges.vertex(nearest_e, 0));
+            nearest_point = this->mesh_->vertices.template point<DIM>(this->mesh_->edges.vertex(nearest_e, 0));
             sq_dist = GEO::Geom::distance2(p, nearest_point);
         }
 
@@ -337,7 +337,7 @@ namespace geolio
             }
 
             // The acceleration is here:
-            if(!this->bboxes_overlap(this->bboxes_[node1], this->bboxes_[node2])) {
+            if(!GEO::bboxes_overlap(this->bboxes_[node1], this->bboxes_[node2])) {
                 return;
             }
 
@@ -574,7 +574,7 @@ namespace geolio
             const GEO::index_t e,
             GEO::vecng<DIM, double>& nearest_p,
             double& squared_dist
-            ) {
+            ) const {
             squared_dist = GEO::Numeric::max_float64();
 
             double lambda0, lambda1;
@@ -597,10 +597,10 @@ namespace geolio
          * @param[in] B Axis-aligned bounding box.
          * @return Squared distance between `p` and the center of `B`.
          */
-        double point_box_center_squared_distance(
+        [[nodiscard]] double point_box_center_squared_distance(
             const GEO::vecng<DIM, double>& p,
             const Box& B
-            ) {
+            ) const {
             double result = 0.0;
             for(GEO::coord_index_t c = 0; c < DIM; ++c) {
                 if constexpr (DIM == 2) {
@@ -628,10 +628,10 @@ namespace geolio
          * @param[in] B Axis-aligned bounding box.
          * @return Squared distance from `p` to the nearest face of `B`.
          */
-        double inner_point_box_squared_distance(
+        [[nodiscard]] double inner_point_box_squared_distance(
             const GEO::vecng<DIM, double>& p,
             const Box& B
-            ) {
+            ) const {
             geo_debug_assert(B.contains(p));
             double result = std::numeric_limits<double>::max();
             for(GEO::coord_index_t c = 0; c < DIM; ++c) {
@@ -662,10 +662,10 @@ namespace geolio
          * @return Positive squared distance for outside points, negative squared
          *         distance-to-nearest-face for inside points.
          */
-        double point_box_signed_squared_distance(
+        [[nodiscard]] double point_box_signed_squared_distance(
             const GEO::vecng<DIM, double>& p,
             const Box& B
-            ) {
+            ) const {
             bool inside = true;
             double result = 0.0;
             for(GEO::coord_index_t c = 0; c < DIM; c++) {
@@ -701,8 +701,5 @@ namespace geolio
 
         GEO::index_t edges_nb_ = 0;
     };
-
-    extern template class MeshEdgesAABB<2>;
-    extern template class MeshEdgesAABB<3>;
 }
 #endif //GEOLIO_MESH_EDGES_AABB3D_H
