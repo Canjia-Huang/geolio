@@ -46,12 +46,12 @@ namespace geolio
          * @return true if the two elements were in different sets and were merged;
          *         false if they were already connected.
          */
-        bool unite(const GEO::index_t p, const GEO::index_t q) {
+        GEO::index_t unite(const GEO::index_t p, const GEO::index_t q) {
             GEO::index_t root_p = find(p);
             GEO::index_t root_q = find(q);
 
             if (root_p == root_q)
-                return false;
+               return root_p;
 
             if (size_[root_p] < size_[root_q])
                 std::swap(root_p, root_q);
@@ -61,7 +61,7 @@ namespace geolio
 
             --component_count_;
 
-            return true;
+           return root_p;
         }
 
         /**
@@ -87,7 +87,7 @@ namespace geolio
          * @brief Gets the number of connected components.
          * @return The total number of connected components.
          */
-        [[nodiscard]] GEO::index_t get_component_count() const {
+        [[nodiscard]] GEO::index_t component_count() const {
             return component_count_;
         }
 
