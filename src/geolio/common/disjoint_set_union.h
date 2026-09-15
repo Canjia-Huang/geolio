@@ -21,10 +21,10 @@ namespace geolio
          */
         explicit DisjointSetUnion(const GEO::index_t n) {
             parent_.resize(n);
+            std::iota(parent_.begin(), parent_.end(), 0);
+
             size_.assign(n, 1);
             component_count_ = n;
-
-            std::iota(parent_.begin(), parent_.end(), 0);
         }
 
         /**
@@ -84,8 +84,12 @@ namespace geolio
         }
 
         /**
+         * @brief Get the size of the disjoint set union.
+         */
+        [[nodiscard]] GEO::index_t n() const { return parent_.size(); }
+
+        /**
          * @brief Gets the number of connected components.
-         * @return The total number of connected components.
          */
         [[nodiscard]] GEO::index_t component_count() const {
             return component_count_;
