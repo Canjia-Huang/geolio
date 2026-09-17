@@ -55,7 +55,7 @@ namespace geolio
          * Returns all generated tetrahedron vertex coordinates.
          * @note Size is 4 * number of generated tetrahedra.
          */
-        [[nodiscard]] const auto& tet_coords() const { return coords_; }
+        [[nodiscard]] const auto& coords() const { return coords_; }
 
         /**
          * Returns barycentric coordinates corresponding to `tet_coords()`.

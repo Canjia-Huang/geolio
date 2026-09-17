@@ -43,7 +43,7 @@ namespace geolio::test
 
             origin_p0 = p0; origin_p1 = p1; origin_p2 = p2; origin_p3 = p3;
             tet_clipper = std::make_unique<AxisAlignedTetClipper>(p0, p1, p2, p3);
-            eval_signed_volume();
+            check_signed_volume();
         }
 
         void clip() {
@@ -51,7 +51,7 @@ namespace geolio::test
                 tet_clipper->clip(d, t);
         }
 
-        void eval_volume_computation() const {
+        void check_volume_computation() const {
             ASSERT_EQ(cut_planes.size(), 1);
             const auto& [d, t] = cut_planes[0];
 
@@ -62,7 +62,7 @@ namespace geolio::test
                 V, V0, V1);
 
             ASSERT_FALSE(tet_clipper == nullptr);
-            const auto& tet_coords = tet_clipper->tet_coords();
+            const auto& tet_coords = tet_clipper->coords();
             const auto& partitions = tet_clipper->partitions();
             EXPECT_EQ(tet_coords.size()%4, 0);
             EXPECT_EQ(tet_coords.size()/4, partitions.size());
@@ -83,9 +83,9 @@ namespace geolio::test
             EXPECT_NEAR(V1, exact_V1, 1e-10);
         }
 
-        void eval_signed_volume() const {
+        void check_signed_volume() const {
             ASSERT_FALSE(tet_clipper == nullptr);
-            const auto& tet_coords = tet_clipper->tet_coords();
+            const auto& tet_coords = tet_clipper->coords();
             EXPECT_EQ(tet_coords.size()%4, 0);
 
             for (GEO::index_t c = 0, c_end = tet_coords.size()/4; c < c_end; ++c) {
@@ -97,9 +97,9 @@ namespace geolio::test
             }
         }
 
-        void eval_barycentric_coords() const {
+        void check_barycentric_coords() const {
             ASSERT_FALSE(tet_clipper == nullptr);
-            const auto& tet_coords = tet_clipper->tet_coords();
+            const auto& tet_coords = tet_clipper->coords();
             const auto& bary_coords = tet_clipper->bary_coords();
             EXPECT_EQ(tet_coords.size()%4, 0);
             EXPECT_EQ(bary_coords.size()%4, 0);
@@ -114,9 +114,9 @@ namespace geolio::test
             }
         }
 
-        void eval_partitions() const {
+        void check_partitions() const {
             ASSERT_FALSE(tet_clipper == nullptr);
-            const auto& tet_coords = tet_clipper->tet_coords();
+            const auto& tet_coords = tet_clipper->coords();
             const auto& partitions = tet_clipper->partitions();
             EXPECT_EQ(tet_coords.size()%4, 0);
             EXPECT_EQ(tet_coords.size()/4, partitions.size());
@@ -138,56 +138,54 @@ namespace geolio::test
             const GEO::index_t i
             ) const {
             ASSERT_FALSE(tet_clipper == nullptr);
-            const auto& tet_coords = tet_clipper->tet_coords();
+            const auto& coords = tet_clipper->coords();
+            const auto& bary_coords = tet_clipper->bary_coords();
             const auto& partitions = tet_clipper->partitions();
-            const auto& tet_facet_cut_plane = tet_clipper->facet_cut_plane();
-            EXPECT_EQ(tet_coords.size()%4, 0);
-            EXPECT_EQ(partitions.size(), tet_coords.size()/4);
-            EXPECT_EQ(tet_facet_cut_plane.size(), tet_coords.size());
+            const auto& facet_cut_plane = tet_clipper->facet_cut_plane();
+            EXPECT_EQ(coords.size()%4, 0);
+            EXPECT_EQ(partitions.size(), coords.size()/4);
+            EXPECT_EQ(facet_cut_plane.size(), coords.size());
 
-            GEO::Mesh M_out;
+            GEO::Mesh mesh_out;
             {
-                GEO::Attribute<GEO::index_t> M_out_c_partitions(M_out.cells.attributes(), "partitions");
-                GEO::index_t new_v = M_out.vertices.create_vertices(tet_coords.size());
-                M_out.cells.create_tets(tet_coords.size()/4);
-                for (const auto& c : M_out.cells) {
-                    M_out_c_partitions[c] = partitions[c];
+                GEO::index_t new_v = mesh_out.vertices.create_vertices(coords.size());
+                mesh_out.cells.create_tets(coords.size()/4);
+                for (const auto& c : mesh_out.cells) {
                     for (GEO::index_t lv = 0; lv < 4; ++lv) {
-                        M_out.vertices.point(new_v+lv) = tet_coords[4*c+lv];
-                        M_out.cells.set_vertex(c, lv, new_v+lv);
+                        mesh_out.vertices.point(new_v+lv) = coords[4*c+lv];
+                        mesh_out.cells.set_vertex(c, lv, new_v+lv);
                     }
                     new_v += 4;
                 }
             }
             {
-                GEO::Attribute<GEO::index_t> M_out_f_cut_plane(M_out.facets.attributes(), "cut_plane");
-                GEO::index_t new_v = M_out.vertices.create_vertices(tet_coords.size());
-                M_out.facets.create_triangles(tet_coords.size());
-                for (const auto& c : M_out.cells) {
-                    const auto center = 0.25 * (
-                        M_out.cells.point(c, 0) + M_out.cells.point(c, 1) + M_out.cells.point(c, 2) + M_out.cells.point(c, 3));
+                GEO::Attribute<double> mesh_out_cc_partition;
+                mesh_out_cc_partition.create_vector_attribute(mesh_out.cell_corners.attributes(), "bary_coord", 4);
+                for (const auto& c : mesh_out.cells) {
                     for (GEO::index_t lv = 0; lv < 4; ++lv) {
-                        M_out.vertices.point(new_v+lv) = 0.9 * M_out.cells.point(c, lv) + 0.1 * center;
-                        // M_out.vertices.point(new_v+lv) = M_out.cells.point(c, lv);
+                        const auto& p = bary_coords[4*c+lv];
+                        const auto& cc = mesh_out.cells.corner(c, lv);
+                        mesh_out_cc_partition[4*c] = p[0];
+                        mesh_out_cc_partition[4*c+1] = p[1];
+                        mesh_out_cc_partition[4*c+2] = p[2];
+                        mesh_out_cc_partition[4*c+3] = p[3];
                     }
-                    for (GEO::index_t lf = 0; lf < 4; ++lf) {
-                        for (GEO::index_t lv = 0; lv < 3; ++lv)
-                            M_out.facets.set_vertex(4*c+lf, lv, new_v+TET_LF_INCIDENT_LV[lf][lv]);
-                        M_out_f_cut_plane[4*c+lf] = tet_facet_cut_plane[4*c+lf];
-                    }
-                    new_v += 4;
                 }
-
-                // delete other facets
-                GEO::vector<GEO::index_t> facets_to_delete(M_out.facets.nb(), 0);
-                for (const auto& f : M_out.facets) {
-                    if (M_out_f_cut_plane[f] == GEO::NO_INDEX)
-                        facets_to_delete[f] = 1;
+            }
+            {
+                GEO::Attribute<GEO::index_t> mesh_out_c_partitions(mesh_out.cells.attributes(), "partitions");
+                for (const auto& c : mesh_out.cells)
+                    mesh_out_c_partitions[c] = partitions[c];
+            }
+            {
+                GEO::Attribute<GEO::index_t> mesh_out_cf_cut_plane(mesh_out.cell_facets.attributes(), "cut_plane");
+                for (const auto& c : mesh_out.cells) {
+                    for (GEO::index_t lf = 0; lf < 4; ++lf)
+                        mesh_out_cf_cut_plane[mesh_out.cells.facet(c, lf)] = facet_cut_plane[4*c+lf];
                 }
-                M_out.facets.delete_elements(facets_to_delete);
             }
 
-            M_out.save("test_AxisAlignedTetClipperTest/" + get_current_test_name() + "_" + std::to_string(i) + ".geogram");
+            mesh_out.save("test_AxisAlignedTetClipperTest/" + get_current_test_name() + "_" + std::to_string(i) + ".geogram");
         }
 
         GEO::vec3 origin_p0, origin_p1, origin_p2, origin_p3;
@@ -203,10 +201,10 @@ namespace geolio::test
             cut_planes.emplace_back(0, 1);
             clip();
 
-            eval_volume_computation();
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_volume_computation();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
@@ -219,10 +217,10 @@ namespace geolio::test
             cut_planes.emplace_back(1, 0.8);
             clip();
 
-            eval_volume_computation();
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_volume_computation();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
@@ -235,10 +233,10 @@ namespace geolio::test
             cut_planes.emplace_back(2, 1.8);
             clip();
 
-            eval_volume_computation();
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_volume_computation();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
@@ -251,10 +249,10 @@ namespace geolio::test
             cut_planes.emplace_back(0, -1.5);
             clip();
 
-            eval_volume_computation();
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_volume_computation();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
@@ -267,10 +265,10 @@ namespace geolio::test
             cut_planes.emplace_back(0, -0.5);
             clip();
 
-            eval_volume_computation();
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_volume_computation();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
@@ -284,9 +282,9 @@ namespace geolio::test
             cut_planes.emplace_back(1, 0.5);
             clip();
 
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
@@ -301,9 +299,9 @@ namespace geolio::test
             cut_planes.emplace_back(2, 0.2);
             clip();
 
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
@@ -321,9 +319,9 @@ namespace geolio::test
             cut_planes.emplace_back(1, 0.5);
             clip();
 
-            eval_signed_volume();
-            eval_barycentric_coords();
-            eval_partitions();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
             output(i);
         }
     }
