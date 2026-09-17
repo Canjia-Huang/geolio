@@ -236,6 +236,64 @@ namespace geolio::geobox
         void autorange();
 
         /**
+         * @brief Range of attribute values the colormap is sampled with.
+         * @details The range autorange() computes and the min/max fields show
+         *          -- i.e. [attribute_min_, attribute_max_] -- cannot be used
+         *          as is to sample the colormap when the displayed attribute
+         *          is an index attribute (GEO::Attribute<GEO::index_t>, stored
+         *          as uint32) holding GEO::NO_INDEX values. The uint32(-1)
+         *          sentinel means "no such element" rather than a value on the
+         *          attribute scale, but it would still stretch the range to
+         *          4.29e9 and squeeze every real value, say 0..10, into the
+         *          first texel of the colormap. Elements are therefore colored
+         *          with this range instead, which gives each integer of the
+         *          real range a band of its own and keeps one band free for
+         *          GEO::NO_INDEX (see update_colormap_range()).
+         */
+        struct ColormapRange {
+            /** Bounds mapped onto the colormap, [0,1] after the mapping. */
+            double min = 0.0;
+            double max = 0.0;
+
+            /**
+             * Inputs of the computation above: update_colormap_range() returns
+             * immediately while they are unchanged, since recomputing them
+             * means scanning the whole attribute.
+             */
+            const void* store = nullptr;
+            GEO::index_t element_index = 0;
+            GEO::index_t nb_elements = 0;
+            float attribute_min = 0.0f;
+            float attribute_max = 0.0f;
+        };
+        mutable ColormapRange colormap_range_;
+
+        /**
+         * @brief Lower bound of the attribute range mapped onto the colormap.
+         * @return Bound to pass to GEO::glupMapTexCoords1d() (or to
+         *         MeshGfx::set_scalar_attribute()) instead of attribute_min_.
+         */
+        double colormap_range_min() const;
+
+        /**
+         * @brief Upper bound of the attribute range mapped onto the colormap.
+         * @return Bound to pass to GEO::glupMapTexCoords1d() (or to
+         *         MeshGfx::set_scalar_attribute()) instead of attribute_max_.
+         */
+        double colormap_range_max() const;
+
+        /**
+         * @brief Updates colormap_range_ for the current attribute and range.
+         * @details Called by colormap_range_min()/max(), so that the colormap
+         *          range always matches the attribute the min/max fields
+         *          describe, whatever changed them (autorange(), the min/max
+         *          fields, another attribute, another mesh). autorange() itself
+         *          keeps the GeoGram behavior of ranging over every value of
+         *          the attribute, GEO::NO_INDEX included.
+         */
+        void update_colormap_range() const;
+
+        /**
          * @brief Returns a list of available scalar attribute names.
          * @return Comma-separated attribute names for the mesh.
          * @ref <geogram_gfx/gui/simple_mesh_application.cpp> attribute_names()
