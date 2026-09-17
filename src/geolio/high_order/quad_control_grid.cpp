@@ -312,7 +312,7 @@ namespace geolio
          * DIM == 3: appro n = p+1 or p+2
          */
         std::vector<std::pair<GEO::vec2, double>> points_and_weights;
-        geolio::get_Gauss_Legendre_quadrature_quad(std::ceill(this->order_ + DIM-2), points_and_weights);
+        geolio::get_Gauss_Legendre_quadrature_quad(std::ceil(this->order_ + DIM-2), points_and_weights);
 
         for (const auto& f : this->mesh_.facets) {
             auto& S = areas[f];
