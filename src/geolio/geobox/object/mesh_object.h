@@ -236,19 +236,21 @@ namespace geolio::geobox
         void autorange();
 
         /**
-         * @brief Range of attribute values the colormap is sampled with.
-         * @details The range autorange() computes and the min/max fields show
-         *          -- i.e. [attribute_min_, attribute_max_] -- cannot be used
-         *          as is to sample the colormap when the displayed attribute
-         *          is an index attribute (GEO::Attribute<GEO::index_t>, stored
-         *          as uint32) holding GEO::NO_INDEX values. The uint32(-1)
-         *          sentinel means "no such element" rather than a value on the
-         *          attribute scale, but it would still stretch the range to
-         *          4.29e9 and squeeze every real value, say 0..10, into the
-         *          first texel of the colormap. Elements are therefore colored
-         *          with this range instead, which gives each integer of the
-         *          real range a band of its own and keeps one band free for
-         *          GEO::NO_INDEX (see update_colormap_range()).
+         * @brief Range of attribute values the random colormap is sampled with.
+         * @details The random colormap (RANDOM_COLORMAP_NAME) is meant to give
+         *          an attribute with few distinct values -- an index attribute
+         *          such as "vertices.v_cell", say -- one color per value. The
+         *          range autorange() computes and the min/max fields show
+         *          cannot do that when such an attribute holds GEO::NO_INDEX
+         *          values: the uint32(-1) sentinel means "no such element"
+         *          rather than a value on the attribute scale, but it would
+         *          still stretch the range to 4.29e9 and squeeze every real
+         *          value, say 0..10, into the first texel of the colormap.
+         *          Elements are therefore colored with this range instead when
+         *          the random colormap is selected, which gives each integer of
+         *          the real range a band of its own and keeps one band free for
+         *          GEO::NO_INDEX. The other colormaps keep the plain GeoGram
+         *          range, i.e. behave as if this class did not exist.
          */
         struct ColormapRange {
             /** Bounds mapped onto the colormap, [0,1] after the mapping. */
@@ -260,6 +262,7 @@ namespace geolio::geobox
              * immediately while they are unchanged, since recomputing them
              * means scanning the whole attribute.
              */
+            GEO::index_t colormap_index = 0;
             const void* store = nullptr;
             GEO::index_t element_index = 0;
             GEO::index_t nb_elements = 0;
@@ -267,6 +270,13 @@ namespace geolio::geobox
             float attribute_max = 0.0f;
         };
         mutable ColormapRange colormap_range_;
+
+        /**
+         * @brief Tests whether the selected colormap is the random one.
+         * @return true if the attribute range must be laid out for one color
+         *         per distinct value, see ColormapRange.
+         */
+        bool random_colormap_active() const;
 
         /**
          * @brief Lower bound of the attribute range mapped onto the colormap.
@@ -287,9 +297,11 @@ namespace geolio::geobox
          * @details Called by colormap_range_min()/max(), so that the colormap
          *          range always matches the attribute the min/max fields
          *          describe, whatever changed them (autorange(), the min/max
-         *          fields, another attribute, another mesh). autorange() itself
-         *          keeps the GeoGram behavior of ranging over every value of
-         *          the attribute, GEO::NO_INDEX included.
+         *          fields, another attribute, another colormap, another mesh).
+         *          The attribute is only scanned when the random colormap is
+         *          selected; autorange() itself keeps the GeoGram behavior of
+         *          ranging over every value of the attribute, GEO::NO_INDEX
+         *          included.
          */
         void update_colormap_range() const;
 

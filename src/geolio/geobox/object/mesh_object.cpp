@@ -991,6 +991,17 @@ namespace geolio::geobox
         }
     }
 
+    bool MeshObject::random_colormap_active(
+        ) const {
+        // The random colormap colors an attribute by mapping every distinct
+        // value onto its own texel, which is what the sentinel-aware range of
+        // update_colormap_range() is for. The other colormaps are sampled the
+        // way GeoGram does, i.e. with [attribute_min_, attribute_max_] mapped
+        // linearly onto them.
+        return current_colormap_index_ < colormaps_.size() &&
+               colormaps_[current_colormap_index_].name == RANDOM_COLORMAP_NAME;
+    }
+
     void MeshObject::update_colormap_range(
         ) const {
         if (attribute_subelements_ == GEO::MESH_NONE) {
@@ -1005,26 +1016,34 @@ namespace geolio::geobox
         );
 
         // Scanning the attribute is only worth it when its range changed: the
-        // min/max fields, the attribute itself, or the mesh it belongs to.
+        // min/max fields, the attribute itself, the selected colormap, or the
+        // mesh the attribute belongs to.
         const GEO::index_t nb_elements =
             attribute.is_bound() ? subelements.nb() : 0;
-        if (colormap_range_.store == attribute.attribute_store() &&
+        if (colormap_range_.colormap_index == current_colormap_index_ &&
+            colormap_range_.store == attribute.attribute_store() &&
             colormap_range_.element_index == attribute.element_index() &&
             colormap_range_.nb_elements == nb_elements &&
             colormap_range_.attribute_min == attribute_min_ &&
             colormap_range_.attribute_max == attribute_max_) {
             return;
         }
+        colormap_range_.colormap_index = current_colormap_index_;
         colormap_range_.store = attribute.attribute_store();
         colormap_range_.element_index = attribute.element_index();
         colormap_range_.nb_elements = nb_elements;
         colormap_range_.attribute_min = attribute_min_;
         colormap_range_.attribute_max = attribute_max_;
 
-        // Without a valid range to correct, the colormap is sampled with the
-        // range autorange() (or the user) set, as in GeoGram.
+        // Without a range to correct, the colormap is sampled with the range
+        // autorange() (or the user) set, as in GeoGram. That is also what every
+        // colormap but the random one keeps using: only the random one is meant
+        // to give each distinct value its own color.
         colormap_range_.min = static_cast<double>(attribute_min_);
         colormap_range_.max = static_cast<double>(attribute_max_);
+
+        if (!random_colormap_active())
+            return;
 
         // Only an index attribute (GEO::index_t is uint32) can hold the
         // GEO::NO_INDEX sentinel; for any other storage type, 4294967295 is an
