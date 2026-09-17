@@ -95,6 +95,23 @@ namespace geolio
         }
     }
 
+    template <GEO::index_t DIM>
+    AxisAlignedTriClipper<DIM>::AxisAlignedTriClipper(
+        const GEO::vec3& p0,
+        const GEO::vec3& p1,
+        const GEO::vec3& p2
+        ) {
+
+    }
+
+    template <GEO::index_t DIM>
+    void AxisAlignedTriClipper<DIM>::clip(
+        const GEO::index_t dim,
+        const double t
+        ) {
+
+    }
+
     AxisAlignedTetClipper::AxisAlignedTetClipper(
         const GEO::vec3& p0,
         const GEO::vec3& p1,
@@ -103,11 +120,11 @@ namespace geolio
         ) {
         partitions_.push_back(0);
 
-        tet_coords_.reserve(4);
-        tet_coords_.push_back(p0);
-        tet_coords_.push_back(p1);
-        tet_coords_.push_back(p2);
-        tet_coords_.push_back(p3);
+        coords_.reserve(4);
+        coords_.push_back(p0);
+        coords_.push_back(p1);
+        coords_.push_back(p2);
+        coords_.push_back(p3);
 
         bary_coords_.reserve(4);
         bary_coords_.emplace_back(1, 0, 0, 0);
@@ -115,11 +132,11 @@ namespace geolio
         bary_coords_.emplace_back(0, 0, 1, 0);
         bary_coords_.emplace_back(0, 0, 0, 1);
 
-        tet_facet_cut_plane_.reserve(4);
-        tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-        tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-        tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-        tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
+        facet_cut_plane_.reserve(4);
+        facet_cut_plane_.push_back(GEO::NO_INDEX);
+        facet_cut_plane_.push_back(GEO::NO_INDEX);
+        facet_cut_plane_.push_back(GEO::NO_INDEX);
+        facet_cut_plane_.push_back(GEO::NO_INDEX);
     }
 
     void AxisAlignedTetClipper::clip(
@@ -127,21 +144,21 @@ namespace geolio
         const double t
         ) {
         assert(dim < 3);
-        assert(tet_coords_.size()%4 == 0);
+        assert(coords_.size()%4 == 0);
         assert(bary_coords_.size()%4 == 0);
 
         const GEO::index_t PREV_TETS_NB = partitions_.size();
-        assert(tet_coords_.size()/4 == PREV_TETS_NB);
+        assert(coords_.size()/4 == PREV_TETS_NB);
         assert(bary_coords_.size()/4 == PREV_TETS_NB);
 
         /* Cut each tet */
         for (GEO::index_t c = 0; c < PREV_TETS_NB; ++c) {
-            assert(4*c+3 < tet_coords_.size());
+            assert(4*c+3 < coords_.size());
 
             const auto origin_partition = partitions_[c];
 
             const std::array<double, 4> dists = {
-                tet_coords_[4*c][dim]-t, tet_coords_[4*c+1][dim]-t, tet_coords_[4*c+2][dim]-t, tet_coords_[4*c+3][dim]-t
+                coords_[4*c][dim]-t, coords_[4*c+1][dim]-t, coords_[4*c+2][dim]-t, coords_[4*c+3][dim]-t
             };
             const std::array<bool, 4> signs = {
                 dists[0]>0, dists[1]>0, dists[2]>0, dists[3]>0
@@ -172,10 +189,10 @@ namespace geolio
                     assert(r02 >= 0 && r02 <= 1);
                     assert(r03 >= 0 && r03 <= 1);
 
-                    const auto p0 = tet_coords_[4*c+lv0];
-                    const auto p1 = tet_coords_[4*c+lv1];
-                    const auto p2 = tet_coords_[4*c+lv2];
-                    const auto p3 = tet_coords_[4*c+lv3];
+                    const auto p0 = coords_[4*c+lv0];
+                    const auto p1 = coords_[4*c+lv1];
+                    const auto p2 = coords_[4*c+lv2];
+                    const auto p3 = coords_[4*c+lv3];
                     const auto p01 = (1-r01)*p0 + r01*p1;
                     const auto p02 = (1-r02)*p0 + r02*p2;
                     const auto p03 = (1-r03)*p0 + r03*p3;
@@ -189,45 +206,45 @@ namespace geolio
                     const auto bp03 = (1-r03)*bp0 + r03*bp3;
 
                     partitions_.reserve(partitions_.size()+3);
-                    tet_coords_.reserve(tet_coords_.size()+12);
+                    coords_.reserve(coords_.size()+12);
                     bary_coords_.reserve(bary_coords_.size()+12);
-                    tet_facet_cut_plane_.reserve(tet_facet_cut_plane_.size()+12);
+                    facet_cut_plane_.reserve(facet_cut_plane_.size()+12);
 
                     partitions_.push_back(origin_partition);
-                    tet_coords_.push_back(p1);    bary_coords_.push_back(bp1);
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_coords_.push_back(p2);    bary_coords_.push_back(bp2);
-                    tet_coords_.push_back(p01);   bary_coords_.push_back(bp01);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv0]);
+                    coords_.push_back(p1);    bary_coords_.push_back(bp1);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    coords_.push_back(p2);    bary_coords_.push_back(bp2);
+                    coords_.push_back(p01);   bary_coords_.push_back(bp01);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv0]);
 
                     partitions_.push_back(origin_partition);
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_coords_.push_back(p2);    bary_coords_.push_back(bp2);
-                    tet_coords_.push_back(p01);   bary_coords_.push_back(bp01);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    coords_.push_back(p2);    bary_coords_.push_back(bp2);
+                    coords_.push_back(p01);   bary_coords_.push_back(bp01);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
 
                     partitions_.push_back(origin_partition);
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p01);   bary_coords_.push_back(bp01);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p01);   bary_coords_.push_back(bp01);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
 
                     partitions_[c] |= (1<<cut_planes_nb_);
-                    tet_coords_[4*c+lv1] = p01;   bary_coords_[4*c+lv1] = bp01;
-                    tet_coords_[4*c+lv2] = p02;   bary_coords_[4*c+lv2] = bp02;
-                    tet_coords_[4*c+lv3] = p03;   bary_coords_[4*c+lv3] = bp03;
-                    tet_facet_cut_plane_[4*c+lv0] = cut_planes_nb_;
+                    coords_[4*c+lv1] = p01;   bary_coords_[4*c+lv1] = bp01;
+                    coords_[4*c+lv2] = p02;   bary_coords_[4*c+lv2] = bp02;
+                    coords_[4*c+lv3] = p03;   bary_coords_[4*c+lv3] = bp03;
+                    facet_cut_plane_[4*c+lv0] = cut_planes_nb_;
 
                     break;
                 }
@@ -251,10 +268,10 @@ namespace geolio
                     assert(r02 >= 0 && r02 <= 1);
                     assert(r03 >= 0 && r03 <= 1);
 
-                    const auto p0 = tet_coords_[4*c+lv0];
-                    const auto p1 = tet_coords_[4*c+lv1];
-                    const auto p2 = tet_coords_[4*c+lv2];
-                    const auto p3 = tet_coords_[4*c+lv3];
+                    const auto p0 = coords_[4*c+lv0];
+                    const auto p1 = coords_[4*c+lv1];
+                    const auto p2 = coords_[4*c+lv2];
+                    const auto p3 = coords_[4*c+lv3];
                     const auto p01 = (1-r01)*p0 + r01*p1;
                     const auto p02 = (1-r02)*p0 + r02*p2;
                     const auto p03 = (1-r03)*p0 + r03*p3;
@@ -268,45 +285,45 @@ namespace geolio
                     const auto bp03 = (1-r03)*bp0 + r03*bp3;
 
                     partitions_.reserve(partitions_.size()+3);
-                    tet_coords_.reserve(tet_coords_.size()+12);
+                    coords_.reserve(coords_.size()+12);
                     bary_coords_.reserve(bary_coords_.size()+12);
-                    tet_facet_cut_plane_.reserve(tet_facet_cut_plane_.size()+12);
+                    facet_cut_plane_.reserve(facet_cut_plane_.size()+12);
 
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p1);    bary_coords_.push_back(bp1);
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_coords_.push_back(p2);    bary_coords_.push_back(bp2);
-                    tet_coords_.push_back(p01);   bary_coords_.push_back(bp01);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv0]);
+                    coords_.push_back(p1);    bary_coords_.push_back(bp1);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    coords_.push_back(p2);    bary_coords_.push_back(bp2);
+                    coords_.push_back(p01);   bary_coords_.push_back(bp01);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv0]);
 
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_coords_.push_back(p2);    bary_coords_.push_back(bp2);
-                    tet_coords_.push_back(p01);   bary_coords_.push_back(bp01);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    coords_.push_back(p2);    bary_coords_.push_back(bp2);
+                    coords_.push_back(p01);   bary_coords_.push_back(bp01);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
 
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p01);   bary_coords_.push_back(bp01);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p01);   bary_coords_.push_back(bp01);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
 
                     // partitions_[c] = origin_partition;
-                    tet_coords_[4*c+lv1] = p01;   bary_coords_[4*c+lv1] = bp01;
-                    tet_coords_[4*c+lv2] = p02;   bary_coords_[4*c+lv2] = bp02;
-                    tet_coords_[4*c+lv3] = p03;   bary_coords_[4*c+lv3] = bp03;
-                    tet_facet_cut_plane_[4*c+lv0] = cut_planes_nb_;
+                    coords_[4*c+lv1] = p01;   bary_coords_[4*c+lv1] = bp01;
+                    coords_[4*c+lv2] = p02;   bary_coords_[4*c+lv2] = bp02;
+                    coords_[4*c+lv3] = p03;   bary_coords_[4*c+lv3] = bp03;
+                    facet_cut_plane_[4*c+lv0] = cut_planes_nb_;
 
                     break;
                 }
@@ -338,10 +355,10 @@ namespace geolio
                 const double r12 = std::abs(dists[lv1]) / (std::abs(dists[lv1])+std::abs(dists[lv2]));
                 const double r13 = std::abs(dists[lv1]) / (std::abs(dists[lv1])+std::abs(dists[lv3]));
 
-                const auto p0 = tet_coords_[4*c+lv0];
-                const auto p1 = tet_coords_[4*c+lv1];
-                const auto p2 = tet_coords_[4*c+lv2];
-                const auto p3 = tet_coords_[4*c+lv3];
+                const auto p0 = coords_[4*c+lv0];
+                const auto p1 = coords_[4*c+lv1];
+                const auto p2 = coords_[4*c+lv2];
+                const auto p3 = coords_[4*c+lv3];
                 const auto p02 = (1-r02)*p0 + r02*p2;
                 const auto p03 = (1-r03)*p0 + r03*p3;
                 const auto p12 = (1-r12)*p1 + r12*p2;
@@ -357,122 +374,122 @@ namespace geolio
                 const auto bp13 = (1-r13)*bp1 + r13*bp3;
 
                 partitions_.reserve(partitions_.size()+5);
-                tet_coords_.reserve(tet_coords_.size()+20);
+                coords_.reserve(coords_.size()+20);
                 bary_coords_.reserve(bary_coords_.size()+20);
-                tet_facet_cut_plane_.reserve(tet_facet_cut_plane_.size()+20);
+                facet_cut_plane_.reserve(facet_cut_plane_.size()+20);
                 if (GEO::Geom::tetra_signed_volume(p02, p03, p12, p0) > 0) {
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_coords_.push_back(p12);   bary_coords_.push_back(bp12);
-                    tet_coords_.push_back(p0);    bary_coords_.push_back(bp0);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    coords_.push_back(p12);   bary_coords_.push_back(bp12);
+                    coords_.push_back(p0);    bary_coords_.push_back(bp0);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p13);   bary_coords_.push_back(bp13);
-                    tet_coords_.push_back(p12);   bary_coords_.push_back(bp12);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_coords_.push_back(p1);    bary_coords_.push_back(bp1);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv0]);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p13);   bary_coords_.push_back(bp13);
+                    coords_.push_back(p12);   bary_coords_.push_back(bp12);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    coords_.push_back(p1);    bary_coords_.push_back(bp1);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv0]);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p0);    bary_coords_.push_back(bp0);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_coords_.push_back(p12);   bary_coords_.push_back(bp12);
-                    tet_coords_.push_back(p1);    bary_coords_.push_back(bp1);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    coords_.push_back(p0);    bary_coords_.push_back(bp0);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    coords_.push_back(p12);   bary_coords_.push_back(bp12);
+                    coords_.push_back(p1);    bary_coords_.push_back(bp1);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
 
                     partitions_.push_back(origin_partition);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_coords_.push_back(p12);   bary_coords_.push_back(bp12);
-                    tet_coords_.push_back(p13);   bary_coords_.push_back(bp13);
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv0]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    coords_.push_back(p12);   bary_coords_.push_back(bp12);
+                    coords_.push_back(p13);   bary_coords_.push_back(bp13);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv0]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     partitions_.push_back(origin_partition);
-                    tet_coords_.push_back(p12);   bary_coords_.push_back(bp12);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p2);    bary_coords_.push_back(bp2);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p12);   bary_coords_.push_back(bp12);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p2);    bary_coords_.push_back(bp2);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     // partitions_[c] = origin_partition;
-                    tet_coords_[4*c+lv0] = p03;   bary_coords_[4*c+lv0] = bp03;
-                    tet_coords_[4*c+lv1] = p12;   bary_coords_[4*c+lv1] = bp12;
-                    tet_facet_cut_plane_[4*c+lv2] = GEO::NO_INDEX;
-                    tet_facet_cut_plane_[4*c+lv3] = GEO::NO_INDEX;
+                    coords_[4*c+lv0] = p03;   bary_coords_[4*c+lv0] = bp03;
+                    coords_[4*c+lv1] = p12;   bary_coords_[4*c+lv1] = bp12;
+                    facet_cut_plane_[4*c+lv2] = GEO::NO_INDEX;
+                    facet_cut_plane_[4*c+lv3] = GEO::NO_INDEX;
                 }
                 else {
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p13);   bary_coords_.push_back(bp13);
-                    tet_coords_.push_back(p0);    bary_coords_.push_back(bp0);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p13);   bary_coords_.push_back(bp13);
+                    coords_.push_back(p0);    bary_coords_.push_back(bp0);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p12);   bary_coords_.push_back(bp12);
-                    tet_coords_.push_back(p13);   bary_coords_.push_back(bp13);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p1);    bary_coords_.push_back(bp1);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv0]);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p12);   bary_coords_.push_back(bp12);
+                    coords_.push_back(p13);   bary_coords_.push_back(bp13);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p1);    bary_coords_.push_back(bp1);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv0]);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     partitions_.push_back(origin_partition | (1<<cut_planes_nb_));
-                    tet_coords_.push_back(p0);    bary_coords_.push_back(bp0);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p13);   bary_coords_.push_back(bp13);
-                    tet_coords_.push_back(p1);    bary_coords_.push_back(bp1);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    coords_.push_back(p0);    bary_coords_.push_back(bp0);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p13);   bary_coords_.push_back(bp13);
+                    coords_.push_back(p1);    bary_coords_.push_back(bp1);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
 
                     partitions_.push_back(origin_partition);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p13);   bary_coords_.push_back(bp13);
-                    tet_coords_.push_back(p12);   bary_coords_.push_back(bp12);
-                    tet_coords_.push_back(p2);    bary_coords_.push_back(bp2);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv0]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv3]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p13);   bary_coords_.push_back(bp13);
+                    coords_.push_back(p12);   bary_coords_.push_back(bp12);
+                    coords_.push_back(p2);    bary_coords_.push_back(bp2);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv0]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv3]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     partitions_.push_back(origin_partition);
-                    tet_coords_.push_back(p13);   bary_coords_.push_back(bp13);
-                    tet_coords_.push_back(p02);   bary_coords_.push_back(bp02);
-                    tet_coords_.push_back(p03);   bary_coords_.push_back(bp03);
-                    tet_coords_.push_back(p3);    bary_coords_.push_back(bp3);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv1]);
-                    tet_facet_cut_plane_.push_back(tet_facet_cut_plane_[4*c+lv2]);
-                    tet_facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    tet_facet_cut_plane_.push_back(cut_planes_nb_);
+                    coords_.push_back(p13);   bary_coords_.push_back(bp13);
+                    coords_.push_back(p02);   bary_coords_.push_back(bp02);
+                    coords_.push_back(p03);   bary_coords_.push_back(bp03);
+                    coords_.push_back(p3);    bary_coords_.push_back(bp3);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv1]);
+                    facet_cut_plane_.push_back(facet_cut_plane_[4*c+lv2]);
+                    facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    facet_cut_plane_.push_back(cut_planes_nb_);
 
                     // partitions_[c] = origin_partition;
-                    tet_coords_[4*c+lv0] = p02;   bary_coords_[4*c+lv0] = bp02;
-                    tet_coords_[4*c+lv1] = p13;   bary_coords_[4*c+lv1] = bp13;
-                    tet_facet_cut_plane_[4*c+lv2] = GEO::NO_INDEX;
-                    tet_facet_cut_plane_[4*c+lv3] = GEO::NO_INDEX;
+                    coords_[4*c+lv0] = p02;   bary_coords_[4*c+lv0] = bp02;
+                    coords_[4*c+lv1] = p13;   bary_coords_[4*c+lv1] = bp13;
+                    facet_cut_plane_[4*c+lv2] = GEO::NO_INDEX;
+                    facet_cut_plane_[4*c+lv3] = GEO::NO_INDEX;
                 }
             }
         }

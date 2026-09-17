@@ -32,30 +32,17 @@ namespace geolio
         double& V0,
         double& V1);
 
-    class AxisAlignedTetClipper {
+    template <GEO::index_t DIM, GEO::index_t N>
+    class AxisAlignedSimplexClipper {
     public:
-        /**
-         * Constructs a clipper from the four vertices of one tetrahedron.
-         * @param[in] p0 First tetrahedron vertex in 3D space.
-         * @param[in] p1 Second tetrahedron vertex in 3D space.
-         * @param[in] p2 Third tetrahedron vertex in 3D space.
-         * @param[in] p3 Fourth tetrahedron vertex in 3D space.
-         * @note The vertex order (p0, p1, p2, p3) yield a positive signed tetrahedron volume.
-         */
-        AxisAlignedTetClipper(
-            const GEO::vec3& p0,
-            const GEO::vec3& p1,
-            const GEO::vec3& p2,
-            const GEO::vec3& p3);
+        virtual ~AxisAlignedSimplexClipper() = default;
 
         /**
          * Clips the current tetrahedral partition by an axis-aligned plane.
          * @param[in] dim Axis index of the clipping direction (0: x, 1: y, 2: z).
          * @param[in] t Plane offset/value along the selected axis.
          */
-        void clip(
-            GEO::index_t dim,
-            double t);
+        virtual void clip(GEO::index_t dim, double t) = 0;
 
         /**
          * Returns partition labels for each generated tetrahedron.
@@ -68,7 +55,7 @@ namespace geolio
          * Returns all generated tetrahedron vertex coordinates.
          * @note Size is 4 * number of generated tetrahedra.
          */
-        [[nodiscard]] const auto& tet_coords() const { return tet_coords_; }
+        [[nodiscard]] const auto& tet_coords() const { return coords_; }
 
         /**
          * Returns barycentric coordinates corresponding to `tet_coords()`.
@@ -81,17 +68,53 @@ namespace geolio
          * @note Size is 4 * number of generated tetrahedra.
          * @note Element [4*c + i] corresponds to the cut plane index of cell c's facet opposite to its i-th vertex.
          */
-        [[nodiscard]] const auto& tet_facet_cut_plane() const { return tet_facet_cut_plane_; }
+        [[nodiscard]] const auto& facet_cut_plane() const { return facet_cut_plane_; }
 
-    private:
+    protected:
         GEO::index_t cut_planes_nb_ = 0;
-        std::vector<GEO::index_t> partitions_; /* size == tets_nb,
+        std::vector<GEO::index_t> partitions_; /* size == simplex_nb,
             partitions_[c] & (1<<i) == true -> in the positive side of the ith cut plane */
 
-        std::vector<GEO::vec3> tet_coords_; // size == 4 * tets_nb
-        std::vector<GEO::vec4> bary_coords_; // size == 4 * tets_nb
-        std::vector<GEO::index_t> tet_facet_cut_plane_; /* size == 4 * tets_nb,
-            [4*c+i] -> cut plane (of cell c's facet opposite to ith vertex), or GEO::NO_INDEX */
+        std::vector<GEO::vecng<DIM, double>> coords_; // size == N * simplex_nb
+        std::vector<GEO::vecng<N, double>> bary_coords_; // size == N * simplex_nb
+        std::vector<GEO::index_t> facet_cut_plane_; /* size == N * simplex_nb,
+            [N*c+i] -> cut plane (of simplex c's border opposite to ith vertex), or GEO::NO_INDEX */
+    };
+
+    template <GEO::index_t DIM>
+    class AxisAlignedTriClipper : public AxisAlignedSimplexClipper<DIM, 3> {
+    public:
+        /**
+         * Constructs a clipper from the three vertices of one triangle.
+         * @param[in] p0 First triangle vertex in 3D space.
+         * @param[in] p1 Second triangle vertex in 3D space.
+         * @param[in] p2 Third triangle vertex in 3D space.
+         * @note The vertex order (p0, p1, p2) yield a positive signed triangle area.
+         */
+        AxisAlignedTriClipper(const GEO::vec3& p0, const GEO::vec3& p1, const GEO::vec3& p2);
+
+        /**
+         * @see AxisAlignedSimplexClipper::clip(GEO::index_t, double)
+         */
+        void clip(GEO::index_t dim, double t) override;
+    };
+
+    class AxisAlignedTetClipper : public AxisAlignedSimplexClipper<3, 4> {
+    public:
+        /**
+         * Constructs a clipper from the four vertices of one tetrahedron.
+         * @param[in] p0 First tetrahedron vertex in 3D space.
+         * @param[in] p1 Second tetrahedron vertex in 3D space.
+         * @param[in] p2 Third tetrahedron vertex in 3D space.
+         * @param[in] p3 Fourth tetrahedron vertex in 3D space.
+         * @note The vertex order (p0, p1, p2, p3) yield a positive signed tetrahedron volume.
+         */
+        AxisAlignedTetClipper(const GEO::vec3& p0, const GEO::vec3& p1, const GEO::vec3& p2, const GEO::vec3& p3);
+
+        /**
+         * @see AxisAlignedSimplexClipper::clip(GEO::index_t, double)
+         */
+        void clip(GEO::index_t dim, double t) override;
     };
 }
 #endif //GEOLIO_AXIS_ALIGNED_SIMPLEX_CLIPPER_H
