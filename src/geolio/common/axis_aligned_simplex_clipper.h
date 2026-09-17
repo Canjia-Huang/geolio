@@ -91,13 +91,16 @@ namespace geolio
          * @param[in] p2 Third triangle vertex in 3D space.
          * @note The vertex order (p0, p1, p2) yield a positive signed triangle area.
          */
-        AxisAlignedTriClipper(const GEO::vec3& p0, const GEO::vec3& p1, const GEO::vec3& p2);
+        AxisAlignedTriClipper(const GEO::vecng<DIM, double>& p0, const GEO::vecng<DIM, double>& p1, const GEO::vecng<DIM, double>& p2);
 
         /**
          * @see AxisAlignedSimplexClipper::clip(GEO::index_t, double)
          */
         void clip(GEO::index_t dim, double t) override;
     };
+
+    extern template class AxisAlignedTriClipper<2>;
+    extern template class AxisAlignedTriClipper<3>;
 
     class AxisAlignedTetClipper : public AxisAlignedSimplexClipper<3, 4> {
     public:

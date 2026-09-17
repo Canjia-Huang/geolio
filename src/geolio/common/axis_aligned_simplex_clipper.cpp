@@ -97,11 +97,26 @@ namespace geolio
 
     template <GEO::index_t DIM>
     AxisAlignedTriClipper<DIM>::AxisAlignedTriClipper(
-        const GEO::vec3& p0,
-        const GEO::vec3& p1,
-        const GEO::vec3& p2
+        const GEO::vecng<DIM, double>& p0,
+        const GEO::vecng<DIM, double>& p1,
+        const GEO::vecng<DIM, double>& p2
         ) {
+        this->partitions_.push_back(0);
 
+        this->coords_.reserve(3);
+        this->coords_.push_back(p0);
+        this->coords_.push_back(p1);
+        this->coords_.push_back(p2);
+
+        this->bary_coords_.reserve(3);
+        this->bary_coords_.emplace_back(1, 0, 0);
+        this->bary_coords_.emplace_back(0, 1, 0);
+        this->bary_coords_.emplace_back(0, 0, 1);
+
+        this->facet_cut_plane_.reserve(3);
+        this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+        this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+        this->facet_cut_plane_.push_back(GEO::NO_INDEX);
     }
 
     template <GEO::index_t DIM>
@@ -109,8 +124,153 @@ namespace geolio
         const GEO::index_t dim,
         const double t
         ) {
+        assert(dim < DIM);
+        assert(this->coords_.size()%3 == 0);
+        assert(this->bary_coords_.size()%3 == 0);
 
+        const GEO::index_t PREV_TRIS_NB = this->partitions_.size();
+        assert(this->coords_.size()/3 == PREV_TRIS_NB);
+        assert(this->bary_coords_.size()/3 == PREV_TRIS_NB);
+
+        /* Cut each triangle */
+        std::array<double, 3> dists{};
+        std::array<bool, 3> signs{};
+        for (GEO::index_t f = 0; f < PREV_TRIS_NB; ++f) {
+            const auto origin_partition = this->partitions_[f];
+
+            dists[0] = this->coords_[3*f][dim]-t;
+            dists[1] = this->coords_[3*f+1][dim]-t;
+            dists[2] = this->coords_[3*f+2][dim]-t;
+            signs[0] = dists[0]>0;
+            signs[1] = dists[1]>0;
+            signs[2] = dists[2]>0;
+
+            if (const GEO::index_t positive_nb = signs[0]+signs[1]+signs[2];
+                positive_nb == 0)
+                continue;
+            else if (positive_nb == 3)
+                this->partitions_[f] |= (1<<this->cut_planes_nb_);
+            else if (positive_nb == 1) {
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    if (!signs[lv])
+                        continue;
+
+                    const GEO::index_t lv0 = lv;
+                    const GEO::index_t lv1 = (lv+1)%3;
+                    const GEO::index_t lv2 = (lv+2)%3;
+
+                    const double r01 = std::abs(dists[lv0]) /  (std::abs(dists[lv0])+std::abs(dists[lv1]));
+                    const double r02 = std::abs(dists[lv0]) /  (std::abs(dists[lv0])+std::abs(dists[lv2]));
+                    assert(r01 >= 0 && r01 <=1);
+                    assert(r02 >= 0 && r02 <=1);
+
+                    const auto p0 = this->coords_[3*f+lv0];
+                    const auto p1 = this->coords_[3*f+lv1];
+                    const auto p2 = this->coords_[3*f+lv2];
+                    const auto p01 = (1-r01)*p0 + r01*p1;
+                    const auto p02 = (1-r02)*p0 + r02*p2;
+
+                    const auto bp0 = this->bary_coords_[3*f+lv0];
+                    const auto bp1 = this->bary_coords_[3*f+lv1];
+                    const auto bp2 = this->bary_coords_[3*f+lv2];
+                    const auto bp01 = (1-r01)*bp0 + r01*bp1;
+                    const auto bp02 = (1-r02)*bp0 + r02*bp2;
+
+                    this->partitions_.reserve(this->partitions_.size()+2);
+                    this->coords_.reserve(this->coords_.size()+6);
+                    this->bary_coords_.reserve(this->bary_coords_.size()+6);
+                    this->facet_cut_plane_.reserve(this->facet_cut_plane_.size()+6);
+
+                    this->partitions_.push_back(origin_partition);
+                    this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
+                    this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
+                    this->coords_.push_back(p01);   this->bary_coords_.push_back(bp01);
+                    this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    this->facet_cut_plane_.push_back(this->cut_planes_nb_);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv0]);
+
+                    this->partitions_.push_back(origin_partition);
+                    this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
+                    this->coords_.push_back(p2);    this->bary_coords_.push_back(bp2);
+                    this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv1]);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv2]);
+                    this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+
+                    this->partitions_[f] |= (1<<this->cut_planes_nb_);
+                    this->coords_[3*f+lv1] = p01;   this->bary_coords_[3*f+lv1] = bp01;
+                    this->coords_[3*f+lv2] = p02;   this->bary_coords_[3*f+lv2] = bp02;
+                    this->facet_cut_plane_[3*f+lv1] = this->cut_planes_nb_;
+
+                    break;
+                }
+            }
+            else {
+                assert(positive_nb == 2);
+
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    if (signs[lv])
+                        continue;
+
+                    const GEO::index_t lv0 = lv;
+                    const GEO::index_t lv1 = (lv+1)%3;
+                    const GEO::index_t lv2 = (lv+2)%3;
+
+                    const double r01 = std::abs(dists[lv0]) /  (std::abs(dists[lv0])+std::abs(dists[lv1]));
+                    const double r02 = std::abs(dists[lv0]) /  (std::abs(dists[lv0])+std::abs(dists[lv2]));
+                    assert(r01 >= 0 && r01 <=1);
+                    assert(r02 >= 0 && r02 <=1);
+
+                    const auto p0 = this->coords_[3*f+lv0];
+                    const auto p1 = this->coords_[3*f+lv1];
+                    const auto p2 = this->coords_[3*f+lv2];
+                    const auto p01 = (1-r01)*p0 + r01*p1;
+                    const auto p02 = (1-r02)*p0 + r02*p2;
+
+                    const auto bp0 = this->bary_coords_[3*f+lv0];
+                    const auto bp1 = this->bary_coords_[3*f+lv1];
+                    const auto bp2 = this->bary_coords_[3*f+lv2];
+                    const auto bp01 = (1-r01)*bp0 + r01*bp1;
+                    const auto bp02 = (1-r02)*bp0 + r02*bp2;
+
+                    this->partitions_.reserve(this->partitions_.size()+2);
+                    this->coords_.reserve(this->coords_.size()+6);
+                    this->bary_coords_.reserve(this->bary_coords_.size()+6);
+                    this->facet_cut_plane_.reserve(this->facet_cut_plane_.size()+6);
+
+                    this->partitions_.push_back(origin_partition | (1<<this->cut_planes_nb_));
+                    this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
+                    this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
+                    this->coords_.push_back(p01);   this->bary_coords_.push_back(bp01);
+                    this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    this->facet_cut_plane_.push_back(this->cut_planes_nb_);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv0]);
+
+                    this->partitions_.push_back(origin_partition | (1<<this->cut_planes_nb_));
+                    this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
+                    this->coords_.push_back(p2);    this->bary_coords_.push_back(bp2);
+                    this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv1]);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv2]);
+                    this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+
+                    // this->partitions_[f] = origin_partition;
+                    this->coords_[3*f+lv1] = p01;   this->bary_coords_[3*f+lv1] = bp01;
+                    this->coords_[3*f+lv2] = p02;   this->bary_coords_[3*f+lv2] = bp02;
+                    this->facet_cut_plane_[3*f+lv1] = this->cut_planes_nb_;
+
+                    break;
+                }
+            }
+        }
+
+        ++this->cut_planes_nb_;
+        if (this->cut_planes_nb_ > 32)
+            LOG::WARN("Cut planes nb == {} > 32, partitions out of uint32_t!", this->cut_planes_nb_);
     }
+
+    template class AxisAlignedTriClipper<2>;
+    template class AxisAlignedTriClipper<3>;
 
     AxisAlignedTetClipper::AxisAlignedTetClipper(
         const GEO::vec3& p0,
@@ -151,25 +311,26 @@ namespace geolio
         assert(coords_.size()/4 == PREV_TETS_NB);
         assert(bary_coords_.size()/4 == PREV_TETS_NB);
 
-        /* Cut each tet */
+        /* Cut each tetrahedron */
+        std::array<double, 4> dists{};
+        std::array<bool, 4> signs{};
         for (GEO::index_t c = 0; c < PREV_TETS_NB; ++c) {
-            assert(4*c+3 < coords_.size());
-
             const auto origin_partition = partitions_[c];
 
-            const std::array<double, 4> dists = {
-                coords_[4*c][dim]-t, coords_[4*c+1][dim]-t, coords_[4*c+2][dim]-t, coords_[4*c+3][dim]-t
-            };
-            const std::array<bool, 4> signs = {
-                dists[0]>0, dists[1]>0, dists[2]>0, dists[3]>0
-            };
+            dists[0] = coords_[4*c][dim]-t;
+            dists[1] = coords_[4*c+1][dim]-t;
+            dists[2] = coords_[4*c+2][dim]-t;
+            dists[3] = coords_[4*c+3][dim]-t;
+            signs[0] = dists[0]>0;
+            signs[1] = dists[1]>0;
+            signs[2] = dists[2]>0;
+            signs[3] = dists[3]>0;
 
             if (const GEO::index_t positive_nb = signs[0]+signs[1]+signs[2]+signs[3];
                 positive_nb == 0)
                 continue;
-            else if (positive_nb == 4) {
+            else if (positive_nb == 4)
                 partitions_[c] |= (1<<cut_planes_nb_);
-            }
             else if (positive_nb == 1) {
                 for (GEO::index_t lv = 0; lv < 4; ++lv) {
                     if (!signs[lv])
@@ -496,6 +657,6 @@ namespace geolio
 
         ++cut_planes_nb_;
         if (cut_planes_nb_ > 32)
-            LOG::WARN("Cut planes nb == {} > 32, partitions may out of uint32_t!", cut_planes_nb_);
+            LOG::WARN("Cut planes nb == {} > 32, partitions out of uint32_t!", cut_planes_nb_);
     }
 }
