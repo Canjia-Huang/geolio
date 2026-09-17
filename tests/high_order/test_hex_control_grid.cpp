@@ -11,7 +11,7 @@ namespace geolio::test
     constexpr GEO::index_t TEST_POINTS_NB = 10000;
 
     class ProjUVWTest : public ::testing::TestWithParam<GEO::index_t> {
-    public:
+    protected:
         void SetUp() override {
             M.vertices.create_vertices(8);
             M.vertices.point(0) = GEO::vec3(0,0,0);
@@ -54,7 +54,7 @@ namespace geolio::test
     /* == hex le =================================================================================================== */
 
     class ProjUVWHexEdgeTest : public ProjUVWTest {
-    public:
+    protected:
         void SetUp() override {
             ProjUVWTest::SetUp();
 
@@ -104,7 +104,7 @@ namespace geolio::test
     /* == hex lf =================================================================================================== */
 
     class ProjUVWHexFacetTest : public ProjUVWTest {
-    public:
+    protected:
         void SetUp() override {
             ProjUVWTest::SetUp();
 

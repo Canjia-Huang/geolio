@@ -21,7 +21,7 @@ namespace geolio
     * @return The projected 1D parameter t ∈ [0,1], representing the position on the edge
     *         (t=0 corresponds to the start of the edge, t=1 to the end)
     */
-    inline double project_uv_quad_le_t(const GEO::vec2& uv, const GEO::index_t le) {
+    inline double project_uv_to_quad_le_t(const GEO::vec2& uv, const GEO::index_t le) {
         assert(le < 4);
         switch (le) {
             case 0: return uv.x;
@@ -30,6 +30,55 @@ namespace geolio
             case 3: return 1-uv.y;
             default: return -1;
         }
+    }
+
+    /**
+     * @brief Projects a quadrilateral vertex to 2D parametric coordinates.
+     *
+     * Given a local vertex index in a quadrilateral (0-3), returns the corresponding
+     * 2D parametric coordinate (u,v) in the unit cube domain [0,1]^2 for that vertex.
+     * Vertex indexing follows standard quadrilateral topology.
+     *
+     * @param[in] lv Local vertex index in the quadrilateral, range [0, 3].
+     *
+     * @return The 2D parametric coordinate (u,v) ∈ {0,1}^2 corresponding to the vertex.
+     */
+    inline GEO::vec2 project_quad_lv_to_uv(const GEO::index_t lv) {
+        assert(lv < 4);
+        GEO::vec2 uvw;
+        switch (lv) {
+            case 0: uvw = GEO::vec2(0, 0); break;
+            case 1: uvw = GEO::vec2(1, 0); break;
+            case 2: uvw = GEO::vec2(1, 1); break;
+            case 3: uvw = GEO::vec2(0, 1); break;
+            default: uvw = GEO::vec2(-1, -1);
+        }
+        return uvw;
+    }
+
+    /**
+     * @brief Projects a 1D parameter on a quadrilateral edge back to 2D parametric coords.
+     *
+     * Given a scalar parameter t in [0,1] defined along the local quadrilateral edge
+     * identified by `le`, return the corresponding 2D parametric coordinate (u,v)
+     * in the unit cube domain [0,1]^2 that lies on that edge.
+     *
+     * @param[in] t  The 1D parameter along the edge (t=0 -> edge start, t=1 -> edge end).
+     * @param[in] le Local edge index in the quadrilateral (0..3).
+     * @return The 2D parametric coordinate (u,v) in [0,1]^2 corresponding to the edge
+     *         parameter.
+     */
+    inline GEO::vec2 project_quad_le_t_to_uv(const double t, const GEO::index_t le) {
+        assert(le < 4);
+        GEO::vec2 uv;
+        switch (le) {
+            case 0: uv = GEO::vec2(t, 0); break;
+            case 1: uv = GEO::vec2(1, t); break;
+            case 2: uv = GEO::vec2(1-t, 1); break;
+            case 3: uv = GEO::vec2(0, 1-t); break;
+            default: uv = GEO::vec2(-1, -1);;
+        }
+        return uv;
     }
 
     template<GEO::index_t DIM>

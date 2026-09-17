@@ -77,7 +77,6 @@ namespace geolio
      * @param[in] lv Local vertex index in the hexahedron, range [0, 7].
      *
      * @return The 3D parametric coordinate (u,v,w) ∈ {0,1}^3 corresponding to the vertex.
-     *         If `lv` is out of range, returns (-1,-1,-1).
      */
     inline GEO::vec3 project_hex_lv_to_uvw(const GEO::index_t lv) {
         assert(lv < 8);
@@ -106,7 +105,7 @@ namespace geolio
      * @param[in] t  The 1D parameter along the edge (t=0 -> edge start, t=1 -> edge end).
      * @param[in] le Local edge index in the hexahedron (0..11).
      * @return The 3D parametric coordinate (u,v,w) in [0,1]^3 corresponding to the edge
-     *         parameter. If `le` is out of range, returns (-1,-1,-1).
+     *         parameter.
      */
     inline GEO::vec3 project_hex_le_t_to_uvw(const double t, const GEO::index_t le) {
         assert(le < 12);

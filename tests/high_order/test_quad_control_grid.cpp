@@ -8,6 +8,96 @@
 
 namespace geolio::test
 {
+    constexpr GEO::index_t TEST_POINTS_NB = 10000;
+
+    class ProjUVTest : public ::testing::TestWithParam<GEO::index_t> {
+    protected:
+        void SetUp() override {
+            M.vertices.set_dimension(2);
+            M.vertices.create_vertices(4);
+            M.vertices.point<2>(0) = GEO::vec2(0,0);
+            M.vertices.point<2>(1) = GEO::vec2(1,0);
+            M.vertices.point<2>(2) = GEO::vec2(1,1);
+            M.vertices.point<2>(3) = GEO::vec2(0,1);
+            M.facets.create_quad(0,1,2,3);
+
+            uvs.reserve(TEST_POINTS_NB);
+            for (GEO::index_t i = 0; i < TEST_POINTS_NB; i++)
+                uvs.emplace_back(GEO::Numeric::random_float32(),
+                                  GEO::Numeric::random_float32());
+        }
+
+        GEO::Mesh M;
+        const GEO::index_t f = 0;
+        std::vector<GEO::vec2> uvs;
+    };
+
+    /* == quad lv =================================================================================================== */
+
+    class ProjUVQuadVertexTest : public ProjUVTest {};
+
+    TEST_P(ProjUVQuadVertexTest, project_hex_lv_to_uvw) {
+        const auto lv = GetParam();
+
+        ASSERT_LT(lv, 4);
+        const auto& p = M.vertices.point<2>(M.facets.vertex(f, lv));
+        const auto& uv = project_quad_lv_to_uv(lv);
+        EXPECT_NEAR(GEO::distance2(p, uv), 0, 1e-20);
+    }
+
+    INSTANTIATE_TEST_SUITE_P(ProjUVWTest, ProjUVQuadVertexTest, ::testing::Values(0, 1, 2, 3));
+
+    /* == hex le =================================================================================================== */
+
+    class ProjUVQuadEdgeTest : public ProjUVTest {
+    protected:
+        void SetUp() override {
+            ProjUVTest::SetUp();
+
+            ts.reserve(TEST_POINTS_NB);
+            for (GEO::index_t i = 0; i < TEST_POINTS_NB; i++)
+                ts.push_back(GEO::Numeric::random_float32());
+        }
+
+        std::vector<double> ts;
+    };
+
+    TEST_P(ProjUVQuadEdgeTest, project_uv_to_quad_le_t) {
+        const auto le = GetParam();
+
+        ASSERT_LT(le, 4);
+        for (const auto& uv : uvs) {
+            const auto t = project_uv_to_quad_le_t(uv, le);
+            EXPECT_GE(t, 0);
+            EXPECT_LE(t, 1);
+
+            const auto& ep0 = M.facets.point<2>(f, le);
+            const auto& ep1 = M.facets.point<2>(f, (le+1)%4);
+            const auto p = (1-t)*ep0 + t*ep1;
+
+            EXPECT_NEAR(GEO::dot(ep1-ep0, uv-p), 0, 1e-30); // orthogonal
+        }
+    }
+
+    TEST_P(ProjUVQuadEdgeTest, project_quad_le_t_to_uv) {
+        const auto le = GetParam();
+
+        ASSERT_LT(le, 4);
+        for (const auto& t : ts) {
+            const auto p = (1-t) * M.facets.point<2>(f, le) +
+                               t * M.facets.point<2>(f, (le+1)%4);
+
+            const auto uv = project_quad_le_t_to_uv(t, le);
+            EXPECT_GE(uv.x, 0);    EXPECT_LE(uv.x, 1);
+            EXPECT_GE(uv.y, 0);    EXPECT_LE(uv.y, 1);
+            EXPECT_NEAR(GEO::distance2(p, uv), 0, 1e-20);
+        }
+    }
+
+    INSTANTIATE_TEST_SUITE_P(ProjUVTest, ProjUVQuadEdgeTest, ::testing::Values(0, 1, 2, 3));
+}
+namespace geolio::test
+{
     template <GEO::index_t DIM>
     class QuadControlGridTest : public ::testing::Test {
     public:
