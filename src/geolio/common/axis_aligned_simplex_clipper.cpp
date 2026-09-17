@@ -5,7 +5,6 @@
 #include "axis_aligned_simplex_clipper.h"
 #include <cassert>
 #include "log.h"
-#include <array>
 
 namespace geolio
 {

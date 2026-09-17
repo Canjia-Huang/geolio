@@ -7,6 +7,7 @@
 #include <geogram/basic/geometry.h>
 #include <cassert>
 #include <geogram/basic/geometry_nd.h>
+#include <array>
 
 namespace geolio
 {
