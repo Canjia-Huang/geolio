@@ -7,6 +7,10 @@
 #include <geogram_gfx/third_party/imgui/imgui.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram_gfx/GLUP/GLUP.h>
+// glupPrivateVertex*()/glupPrivateTexCoord*(): the immediate-mode entry points
+// used by MeshGfx::draw_vertex() and MeshGfx::draw_attribute_as_tex_coord(),
+// which the cell-facet passes below reproduce (see GeoGram PR #386).
+#include <geogram_gfx/GLUP/GLUP_private.h>
 #include <geogram_gfx/basic/GL.h>
 
 #include "geolio/common/log.h"
@@ -292,8 +296,8 @@ namespace geolio::geobox
             mesh_gfx_.set_scalar_attribute(
                 attribute_subelements_,
                 attribute_name_,
-                static_cast<double>(attribute_min_),
-                static_cast<double>(attribute_max_),
+                colormap_range_min(),
+                colormap_range_max(),
                 colormaps_[current_colormap_index_].texture,
                 1);
         }
@@ -315,6 +319,8 @@ namespace geolio::geobox
             mesh.load(filepath_)) {
             mesh_.copy(mesh);
             bbox_diag_ = -1.0f; // invalidate the cached bounding-box diagonal
+            // The new mesh has its own attributes: rescan them on next draw.
+            colormap_range_ = ColormapRange();
         }
     }
 
@@ -414,8 +420,8 @@ namespace geolio::geobox
                     colormaps_[current_colormap_index_].texture
                 );
                 GEO::glupMapTexCoords1d(
-                    static_cast<double>(attribute_min_),
-                    static_cast<double>(attribute_max_),
+                    colormap_range_min(),
+                    colormap_range_max(),
                     1
                 );
                 glupSetColor3f(
@@ -580,7 +586,16 @@ namespace geolio::geobox
                 volume_mesh_color_.x, volume_mesh_color_.y, volume_mesh_color_.z);
             mesh_gfx_.set_mesh_width(
                 static_cast<GEO::index_t>(volume_mesh_width_ * 10.0f));
-            mesh_gfx_.draw_volume();
+
+            // A scalar attribute defined on the cell facets is attached to the
+            // half-facets of the cells, so MeshGfx::draw_volume() cannot render
+            // it with whole-cell primitives: the facets are drawn one by one
+            // instead (see draw_volume_cell_facets_attribute(), GeoGram PR #386).
+            if (cell_facets_attribute_active())
+                draw_volume_cell_facets_attribute();
+            else
+                mesh_gfx_.draw_volume();
+
             mesh_gfx_.set_show_mesh(saved_show_mesh);
             mesh_gfx_.set_mesh_color(
                 surface_mesh_color_.x, surface_mesh_color_.y, surface_mesh_color_.z);
@@ -589,6 +604,366 @@ namespace geolio::geobox
 
             mesh_gfx_.set_lighting(lighting);
         }
+    }
+
+    bool MeshObject::cell_facets_attribute_active(
+        ) const {
+        // GeoGram PR #386 also requires MeshGfx's picking mode to be MESH_NONE;
+        // GeoBox never picks in the mesh (MeshGfx::set_picking_mode() is not
+        // called anywhere in the application), so there is nothing to test here.
+        return show_attributes_ &&
+               attribute_subelements_ == GEO::MESH_CELL_FACETS;
+    }
+
+    double MeshObject::cells_shrink_factor(
+        ) const {
+        // GLUP shrinks a primitive by moving each of its vertices toward the
+        // average of the primitive's vertices (see
+        // GLUP::Context::shrink_cells_in_immediate_buffers()), and it skips the
+        // shrink entirely when the cells are cut by a slice, which the clip
+        // modes below test. The facet passes apply the same shrink to the cells
+        // the facets belong to, so they have to skip it in the same cases.
+        if (cells_shrink_ == 0.0f)
+            return 0.0;
+        if (glupIsEnabled(GLUP_CLIPPING) &&
+            glupGetClipMode() == GLUP_CLIP_SLICE_CELLS)
+            return 0.0;
+        return static_cast<double>(cells_shrink_);
+    }
+
+    void MeshObject::draw_volume_cell_facets_attribute(
+        ) {
+        // GeoBox implementation of the GeoGram PR #386 ("render volume-mesh
+        // cell_facets attributes") drawing paths, i.e. of what
+        // MeshGfx::draw_tets_immediate_attrib() and
+        // MeshGfx::draw_hybrid_immediate_attrib() do when the displayed
+        // attribute is on the cell facets.
+        //
+        // The pass cannot be delegated to MeshGfx::draw_volume(): the helpers
+        // it is built on (begin_attributes(), draw_vertex(),
+        // draw_sequences_if(), draw_volume_vertex_with_attribute()...) are
+        // protected members of MeshGfx, and MeshObject owns a MeshGfx instead of
+        // deriving from it. The GLUP state that MeshGfx::draw_volume() sets up
+        // is therefore reproduced here:
+        //   MeshGfx::set_GLUP_parameters() -> GLUP_DRAW_MESH, GLUP_MESH_COLOR,
+        //     GLUP_MESH_WIDTH and GLUP_LIGHTING;
+        //   MeshGfx::draw_tets()/draw_hybrid() -> the cells color;
+        //   MeshGfx::draw_volume() -> glupSetCellsShrink(shrink_), which is
+        //     replaced by a per facet vertex shrink (see
+        //     draw_volume_facet_vertex()).
+
+        // == MeshGfx::set_GLUP_parameters() ==================================
+        if (mesh_gfx_.get_show_mesh())
+            glupEnable(GLUP_DRAW_MESH);
+        else
+            glupDisable(GLUP_DRAW_MESH);
+
+        // The mesh color/width were set by draw_volume() for this pass (they are
+        // restored right after), so they are read back from MeshGfx rather than
+        // duplicated here.
+        float mesh_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        mesh_gfx_.get_mesh_color(
+            mesh_color[0], mesh_color[1], mesh_color[2], mesh_color[3]);
+        glupSetColor4fv(GLUP_MESH_COLOR, mesh_color);
+        glupSetMeshWidth(GLUPint(mesh_gfx_.get_mesh_width()));
+
+        if (mesh_gfx_.get_lighting())
+            glupEnable(GLUP_LIGHTING);
+        else
+            glupDisable(GLUP_LIGHTING);
+
+        // Cells color, as MeshGfx::draw_tets()/draw_hybrid() set it from their
+        // cells_color_ table before emitting the cells. It is only visible when
+        // no attribute is bound, since the GLUP_TEXTURE_REPLACE mode set up by
+        // begin_attributes() replaces it.
+        glupSetColor4fv(GLUP_FRONT_AND_BACK_COLOR, volume_color_.data());
+
+        // == MeshGfx::draw_volume() ==========================================
+        // GLUP shrinks whole-cell primitives only, and the facets are drawn as
+        // plain triangles/quads: disable GLUP's shrink and replicate it per
+        // facet vertex (see draw_volume_facet_vertex()).
+        const GLUPfloat saved_shrink = GLUPfloat(cells_shrink_);
+        glupSetCellsShrink(0.0f);
+
+        begin_attributes();
+
+        if (mesh_.cells.are_simplices()) {
+            // MeshGfx::draw_tets_immediate_attrib(): all the cells are
+            // tetrahedra, so all their facets are triangles.
+            if (mesh_gfx_.get_draw_cells(GEO::MESH_TET)) {
+                draw_volume_cell_facets(0, mesh_.cells.nb(), GLUP_TRIANGLES);
+                draw_volume_cell_facets(0, mesh_.cells.nb(), GLUP_QUADS);
+            }
+        } else {
+            // MeshGfx::draw_hybrid_immediate_attrib(): one pass per cell type,
+            // for the types that are displayed and present in the mesh.
+            bool has_cells[GEO::MESH_NB_CELL_TYPES] = {};
+            for (GEO::index_t c = 0; c < mesh_.cells.nb(); ++c)
+                has_cells[mesh_.cells.type(c)] = true;
+
+            for (GEO::index_t type = GEO::MESH_TET;
+                 type < GEO::MESH_NB_CELL_TYPES;
+                 ++type) {
+                if (!mesh_gfx_.get_draw_cells(
+                        static_cast<GEO::MeshCellType>(type)) ||
+                    !has_cells[type])
+                    continue;
+
+                // Equivalent of MeshGfx::draw_sequences_if(): the cells of a
+                // given type are drawn by runs of consecutive cells of that
+                // type (a hybrid mesh usually stores its types in blocks).
+                GEO::index_t c = 0;
+                while (c < mesh_.cells.nb()) {
+                    while (c < mesh_.cells.nb() &&
+                           GEO::index_t(mesh_.cells.type(c)) != type)
+                        ++c;
+                    const GEO::index_t begin_c = c;
+                    while (c < mesh_.cells.nb() &&
+                           GEO::index_t(mesh_.cells.type(c)) == type)
+                        ++c;
+                    if (begin_c == c)
+                        break;
+                    draw_volume_cell_facets(begin_c, c, GLUP_TRIANGLES);
+                    draw_volume_cell_facets(begin_c, c, GLUP_QUADS);
+                }
+            }
+        }
+
+        end_attributes();
+
+        glupSetCellsShrink(saved_shrink);
+    }
+
+    void MeshObject::draw_volume_cell_facets(
+        const GEO::index_t begin_c,
+        const GEO::index_t end_c,
+        const GLUPprimitive prim
+        ) {
+        glupBegin(prim);
+        for (GEO::index_t c = begin_c; c < end_c; ++c) {
+            // Center of the cell, toward which its facets are pulled when they
+            // are shrunk; only needed (and only computed) when shrink is set.
+            double centroid[3] = {0.0, 0.0, 0.0};
+            if (cells_shrink_factor() != 0.0) {
+                const GEO::index_t nb_vertices = mesh_.cells.nb_vertices(c);
+                for (GEO::index_t lv = 0; lv < nb_vertices; ++lv) {
+                    double p[3] = {0.0, 0.0, 0.0};
+                    get_vertex_position(mesh_.cells.vertex(c, lv), p);
+                    centroid[0] += p[0];
+                    centroid[1] += p[1];
+                    centroid[2] += p[2];
+                }
+                centroid[0] /= double(nb_vertices);
+                centroid[1] /= double(nb_vertices);
+                centroid[2] /= double(nb_vertices);
+            }
+
+            const GEO::index_t nb_facets = mesh_.cells.nb_facets(c);
+            for (GEO::index_t lf = 0; lf < nb_facets; ++lf) {
+                // Index of the half-facet (cell, facet) in mesh.cell_facets: the
+                // attribute of the facet is looked up with it.
+                const GEO::index_t cell_facet = mesh_.cells.facet(c, lf);
+                const GEO::index_t nb_vertices =
+                    mesh_.cells.facet_nb_vertices(c, lf);
+                if (prim == GLUP_QUADS) {
+                    if (nb_vertices == 4) {
+                        for (GEO::index_t lv = 0; lv < 4; ++lv)
+                            draw_volume_facet_vertex(
+                                c, lf, lv, cell_facet, centroid);
+                    }
+                }
+                else if (nb_vertices == 3) {
+                    for (GEO::index_t lv = 0; lv < 3; ++lv)
+                        draw_volume_facet_vertex(
+                            c, lf, lv, cell_facet, centroid);
+                }
+                else if (nb_vertices > 4) {
+                    // Defensive fan for unexpected facet sizes (a cell facet is
+                    // a triangle or a quad in GeoGram's cell descriptors).
+                    for (GEO::index_t lv = 1; lv + 1 < nb_vertices; ++lv) {
+                        for (const GEO::index_t k :
+                             {GEO::index_t(0), lv, lv + 1})
+                            draw_volume_facet_vertex(
+                                c, lf, k, cell_facet, centroid);
+                    }
+                }
+            }
+        }
+        glupEnd();
+    }
+
+    void MeshObject::draw_volume_facet_vertex(
+        const GEO::index_t cell,
+        const GEO::index_t lf,
+        const GEO::index_t lv,
+        const GEO::index_t cell_facet,
+        const double* centroid
+        ) {
+        // The color comes from the attribute of the cell facet, so the two
+        // facets shared by two adjacent cells can be colored differently.
+        draw_attribute_as_tex_coord(cell_facet);
+
+        const GEO::index_t v = mesh_.cells.facet_vertex(cell, lf, lv);
+
+        // Without shrink, the vertex is emitted as-is, so that the facets fit
+        // the mesh vertices exactly (and 2-D meshes are handled).
+        const double shrink = cells_shrink_factor();
+        if (shrink == 0.0) {
+            draw_vertex(v);
+            return;
+        }
+
+        // With shrink, the vertex is moved toward the center of its cell by the
+        // same amount as GLUP applies to whole-cell primitives.
+        double p[3] = {0.0, 0.0, 0.0};
+        if (mesh_gfx_.get_animate() && mesh_.vertices.dimension() >= 6) {
+            // Position of the vertex at the current animation time: the first
+            // three coordinates are the position at t=0, the last three at t=1
+            // (see MeshGfx::set_animate()).
+            const double t = mesh_gfx_.get_time();
+            const double s = 1.0 - t;
+            for (GEO::coord_index_t coords = 0; coords < 3; ++coords) {
+                if (mesh_.vertices.single_precision()) {
+                    const float* q =
+                        mesh_.vertices.single_precision_point_ptr(v);
+                    p[coords] = s * double(q[coords]) + t * double(q[coords + 3]);
+                }
+                else {
+                    const double* q = mesh_.vertices.point_ptr(v);
+                    p[coords] = s * q[coords] + t * q[coords + 3];
+                }
+            }
+        }
+        else
+            get_vertex_position(v, p);
+
+        glupPrivateVertex3d(
+            (1.0 - shrink) * p[0] + shrink * centroid[0],
+            (1.0 - shrink) * p[1] + shrink * centroid[1],
+            (1.0 - shrink) * p[2] + shrink * centroid[2]
+        );
+    }
+
+    void MeshObject::draw_vertex(
+        const GEO::index_t v
+        ) {
+        // Same as MeshGfx::draw_vertex(): when animation is active, the vertex
+        // moves between the two positions stored in its six coordinates.
+        if (mesh_gfx_.get_animate() && mesh_.vertices.dimension() >= 6) {
+            const double t = mesh_gfx_.get_time();
+            const double s = 1.0 - t;
+            if (mesh_.vertices.single_precision()) {
+                const float* p = mesh_.vertices.single_precision_point_ptr(v);
+                glupPrivateVertex3f(
+                    GLUPfloat(s * double(p[0]) + t * double(p[3])),
+                    GLUPfloat(s * double(p[1]) + t * double(p[4])),
+                    GLUPfloat(s * double(p[2]) + t * double(p[5]))
+                );
+            }
+            else {
+                const double* p = mesh_.vertices.point_ptr(v);
+                glupPrivateVertex3d(
+                    s * p[0] + t * p[3],
+                    s * p[1] + t * p[4],
+                    s * p[2] + t * p[5]
+                );
+            }
+        }
+        else if (mesh_.vertices.single_precision()) {
+            if (mesh_.vertices.dimension() < 3)
+                glupPrivateVertex2fv(
+                    mesh_.vertices.single_precision_point_ptr(v));
+            else
+                glupPrivateVertex3fv(
+                    mesh_.vertices.single_precision_point_ptr(v));
+        }
+        else {
+            if (mesh_.vertices.dimension() < 3)
+                glupPrivateVertex2dv(mesh_.vertices.point_ptr(v));
+            else
+                glupPrivateVertex3dv(mesh_.vertices.point_ptr(v));
+        }
+    }
+
+    void MeshObject::get_vertex_position(
+        const GEO::index_t v,
+        double* p
+        ) const {
+        // 2-D meshes have no z coordinate (see get_bbox()).
+        const GEO::coord_index_t dim = mesh_.vertices.dimension();
+        p[0] = p[1] = p[2] = 0.0;
+        if (mesh_.vertices.single_precision()) {
+            const float* q = mesh_.vertices.single_precision_point_ptr(v);
+            for (GEO::coord_index_t c = 0; c < dim && c < 3; ++c)
+                p[c] = static_cast<double>(q[c]);
+        }
+        else {
+            const double* q = mesh_.vertices.point_ptr(v);
+            for (GEO::coord_index_t c = 0; c < dim && c < 3; ++c)
+                p[c] = q[c];
+        }
+    }
+
+    void MeshObject::draw_attribute_as_tex_coord(
+        const GEO::index_t element
+        ) {
+        // GeoBox only displays scalar (1-D) attributes: draw_scene() always
+        // calls MeshGfx::set_scalar_attribute(), which sets attribute_dim_ = 1.
+        glupPrivateTexCoord1d(scalar_attribute_[element]);
+    }
+
+    void MeshObject::begin_attributes(
+        ) {
+        // Same as MeshGfx::begin_attributes() (a protected member there), for
+        // the 1-D scalar attributes displayed by GeoBox.
+        if (attribute_subelements_ == GEO::MESH_NONE)
+            return;
+
+        const GEO::MeshSubElementsStore& subelements =
+            mesh_.get_subelements_by_type(attribute_subelements_);
+        scalar_attribute_.bind_if_is_defined(
+            subelements.attributes(), attribute_name_);
+        if (!scalar_attribute_.is_bound()) {
+            // No attribute to display: keep the plain element color.
+            return;
+        }
+
+        glupEnable(GLUP_TEXTURING);
+        glupTextureMode(GLUP_TEXTURE_REPLACE);
+        glupTextureType(GLUP_TEXTURE_1D);
+
+        // The colormap selected in the UI is a 1-D texture (stored as a 2-D
+        // texture with a single row, see GLUP_TEXTURE_1D_TARGET).
+        glActiveTexture(GL_TEXTURE0 + GLUP_TEXTURE_1D_UNIT);
+        glBindTexture(
+            GLUP_TEXTURE_1D_TARGET,
+            colormaps_[current_colormap_index_].texture
+        );
+
+        // Rescale the attribute range [colormap_range_min(),
+        // colormap_range_max()] to [0,1] (the full range for a continuous
+        // attribute, one band per integer when the attribute holds
+        // GEO::NO_INDEX values).
+        GEO::glupMapTexCoords1d(
+            colormap_range_min(),
+            colormap_range_max(),
+            1
+        );
+
+        if (!glupIsEnabled(GLUP_NORMAL_MAPPING))
+            glupSetColor3f(GLUP_FRONT_AND_BACK_COLOR, 1.0f, 1.0f, 1.0f);
+    }
+
+    void MeshObject::end_attributes(
+        ) {
+        // Same as MeshGfx::end_attributes().
+        if (scalar_attribute_.is_bound()) {
+            glupDisable(GLUP_TEXTURING);
+            scalar_attribute_.unbind();
+        }
+        glupMatrixMode(GLUP_TEXTURE_MATRIX);
+        glupLoadIdentity();
+        glupMatrixMode(GLUP_MODELVIEW_MATRIX);
     }
 
     void MeshObject::autorange(
@@ -614,6 +989,98 @@ namespace geolio::geobox
                     std::max(attribute_max_, static_cast<float>(attribute[i]));
             }
         }
+    }
+
+    void MeshObject::update_colormap_range(
+        ) const {
+        if (attribute_subelements_ == GEO::MESH_NONE) {
+            colormap_range_ = ColormapRange();
+            return;
+        }
+
+        const GEO::MeshSubElementsStore& subelements =
+            mesh_.get_subelements_by_type(attribute_subelements_);
+        GEO::ReadOnlyScalarAttributeAdapter attribute(
+            subelements.attributes(), attribute_name_
+        );
+
+        // Scanning the attribute is only worth it when its range changed: the
+        // min/max fields, the attribute itself, or the mesh it belongs to.
+        const GEO::index_t nb_elements =
+            attribute.is_bound() ? subelements.nb() : 0;
+        if (colormap_range_.store == attribute.attribute_store() &&
+            colormap_range_.element_index == attribute.element_index() &&
+            colormap_range_.nb_elements == nb_elements &&
+            colormap_range_.attribute_min == attribute_min_ &&
+            colormap_range_.attribute_max == attribute_max_) {
+            return;
+        }
+        colormap_range_.store = attribute.attribute_store();
+        colormap_range_.element_index = attribute.element_index();
+        colormap_range_.nb_elements = nb_elements;
+        colormap_range_.attribute_min = attribute_min_;
+        colormap_range_.attribute_max = attribute_max_;
+
+        // Without a valid range to correct, the colormap is sampled with the
+        // range autorange() (or the user) set, as in GeoGram.
+        colormap_range_.min = static_cast<double>(attribute_min_);
+        colormap_range_.max = static_cast<double>(attribute_max_);
+
+        // Only an index attribute (GEO::index_t is uint32) can hold the
+        // GEO::NO_INDEX sentinel; for any other storage type, 4294967295 is an
+        // ordinary value of the attribute scale and nothing has to be done.
+        if (nb_elements == 0 ||
+            attribute.element_type() !=
+            GEO::ScalarAttributeAdapterBase::ET_UINT32) {
+            return;
+        }
+
+        // Range of the values that belong to the scale, i.e. of everything but
+        // the sentinel, within the range displayed by the min/max fields.
+        float min_value = GEO::Numeric::max_float32();
+        float max_value = GEO::Numeric::min_float32();
+        bool has_no_index = false;
+        for (GEO::index_t i = 0; i < nb_elements; ++i) {
+            const double value = attribute[i];
+            if (value == double(GEO::NO_INDEX)) {
+                has_no_index = true;
+                continue;
+            }
+            if (value < colormap_range_.min || value > colormap_range_.max)
+                continue;
+            min_value = std::min(min_value, static_cast<float>(value));
+            max_value = std::max(max_value, static_cast<float>(value));
+        }
+
+        // Plain index attribute: the linear mapping already gives every value
+        // of a small integer range a texel of its own.
+        if (!has_no_index || min_value > max_value)
+            return;
+
+        // The sentinel is not a value of the scale, and neither are the values
+        // above the max field: lay the colormap out as one band per integer of
+        // [min_value, max_value] plus one band for the sentinel. Starting half
+        // a band below min_value puts integer v at the center of its band, i.e.
+        // at (v - min_value + 0.5) / nb_bands of the colormap, and the band
+        // above max_value is reserved for GEO::NO_INDEX: its texcoord is far
+        // above 1 and GL_CLAMP_TO_EDGE samples it with the last texel of the
+        // colormap, so the sentinel gets a color of its own -- e.g. a random
+        // one with the "random" colormap -- instead of sharing the color of
+        // max_value.
+        colormap_range_.min = static_cast<double>(min_value) - 0.5;
+        colormap_range_.max = static_cast<double>(max_value) + 1.5;
+    }
+
+    double MeshObject::colormap_range_min(
+        ) const {
+        update_colormap_range();
+        return colormap_range_.min;
+    }
+
+    double MeshObject::colormap_range_max(
+        ) const {
+        update_colormap_range();
+        return colormap_range_.max;
     }
 
     void MeshObject::set_attribute(

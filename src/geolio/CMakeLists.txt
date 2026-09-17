@@ -17,25 +17,26 @@ target_include_directories(${CURRENT_LIB_NAME}
         $<INSTALL_INTERFACE:include>
 )
 
-# Add subdirectory (component library)
-add_subdirectory(common)
-add_subdirectory(geobox)
-#add_subdirectory(geogram_plus) // header only
-add_subdirectory(high_order)
-add_subdirectory(io)
-add_subdirectory(local_operation_optimization)
-add_subdirectory(mesh)
-add_subdirectory(motorcycle)
+file(GLOB SOURCE_FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/common/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/geobox/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/geobox/object/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/geobox/application/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/geogram_plus/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/high_order/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/io/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/local_operation_optimization/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/mesh/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/motorcycle/*.cpp
+)
+target_sources(${CURRENT_LIB_NAME}
+        PRIVATE
+        ${SOURCE_FILES}
+)
 
 target_link_libraries(${CURRENT_LIB_NAME}
         PUBLIC
-        ${PROJECT_NAME}::common
-        ${PROJECT_NAME}::geobox
-        ${PROJECT_NAME}::high_order
-        ${PROJECT_NAME}::io
-        ${PROJECT_NAME}::local_operation_optimization
-        ${PROJECT_NAME}::mesh
-        ${PROJECT_NAME}::motorcycle
         ${PROJECT_NAME}::third_party
 )
 
