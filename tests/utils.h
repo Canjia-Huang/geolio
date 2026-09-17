@@ -86,6 +86,15 @@ namespace geolio::test
                 + "_"
                 + std::string(current_test_info->name());
     }
+
+    template<GEO::index_t DIM>
+    struct DimWrapper {
+        static constexpr GEO::index_t value = DIM;
+    };
+
+    using Dim2 = std::integral_constant<GEO::index_t, 2>;
+    using Dim3 = std::integral_constant<GEO::index_t, 3>;
+    using DimTypes = ::testing::Types<Dim2, Dim3>;
 }
 
 

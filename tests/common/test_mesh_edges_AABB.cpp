@@ -119,15 +119,6 @@ namespace geolio::test
         std::vector<double>                  nearest_sq_dist;
     };
 
-    template<GEO::index_t DIM>
-    struct DimWrapper {
-        static constexpr GEO::index_t value = DIM;
-    };
-
-    using Dim2 = std::integral_constant<GEO::index_t, 2>;
-    using Dim3 = std::integral_constant<GEO::index_t, 3>;
-    using DimTypes = ::testing::Types<Dim2, Dim3>;
-
     template <typename DimType>
     class MeshEdgesAABBDimTest : public MeshEdgesAABBTest<DimType::value> {};
 

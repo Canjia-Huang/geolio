@@ -20,6 +20,15 @@
 namespace geolio::geobox
 {
     /**
+     * @brief Name of the random colormap GeoBox appends to the GeoGram ones.
+     * @details Every texel of that colormap is a random color, which makes it
+     *          suitable to display an attribute with few distinct values, one
+     *          color each: MeshObject lays the attribute range out
+     *          accordingly, see MeshObject::update_colormap_range().
+     */
+    inline constexpr const char* RANDOM_COLORMAP_NAME = "random";
+
+    /**
      * @brief Stores a generated OpenGL colormap texture and its display name.
      */
     struct ColormapInfo {

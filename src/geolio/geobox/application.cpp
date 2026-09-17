@@ -311,7 +311,7 @@ namespace geolio::geobox
         }
 
         geolio::geobox::ColormapInfo info;
-        info.name = "random";
+        info.name = geolio::geobox::RANDOM_COLORMAP_NAME;
         glGenTextures(1, &info.texture);
         glBindTexture(GL_TEXTURE_2D, info.texture);
         glTexImage2D(
