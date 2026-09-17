@@ -5,6 +5,7 @@
 #include "quad_control_grid.h"
 #include <geolio/common/pair_hash.h>
 #include "basis_functions.h"
+#include "geolio/common/Gauss_Legendre_quadrature_quad.h"
 #include "geolio/common/vecg.h"
 
 namespace geolio
@@ -298,6 +299,74 @@ namespace geolio
         }
         else
             static_assert(false);
+    }
+
+    template<GEO::index_t DIM>
+    void QuadControlGrid<DIM>::compute_facets_area(
+        std::vector<double>& areas
+        ) {
+        areas.resize(this->mesh_.facets.nb());
+
+        /*
+         * DIM == 2: 2n-1 >= 2p-1, n >= p
+         * DIM == 3: appro n = p+1 or p+2
+         */
+        std::vector<std::pair<GEO::vec2, double>> points_and_weights;
+        geolio::get_Gauss_Legendre_quadrature_quad(std::ceill(this->order_ + DIM-2), points_and_weights);
+
+        for (const auto& f : this->mesh_.facets) {
+            auto& S = areas[f];
+            S = 0;
+            for (const auto& [uv, w] : points_and_weights)
+                S += w * compute_facet_uv_measure(f, uv, QuadControlGrid::MeasureType::DET_JACOBIAN);
+
+        }
+    }
+
+    template<GEO::index_t DIM>
+    void QuadControlGrid<DIM>::compute_cell_vertices_position_matrix(
+        const GEO::index_t f,
+        Eigen::MatrixXd& P
+        ) const {
+        assert(f < this->mesh_.facets.nb());
+        assert(P.rows() == DIM);
+        assert(P.cols() == this->CONTROL_POINTS_NB_PER_FACET_);
+
+        for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_FACET_; ++i) {
+            const auto& nd = this->element_control_nodes_[this->CONTROL_POINTS_NB_PER_FACET_*f+i];
+            const auto& ndp = this->control_node(nd);
+            P(0, i) = ndp.x;
+            P(1, i) = ndp.y;
+            if constexpr (DIM == 3)
+                P(2, i) = ndp.z;
+        }
+    }
+
+    template<GEO::index_t DIM>
+    void QuadControlGrid<DIM>::compute_basis_gradient_matrix(
+        const GEO::vec2& uv,
+        Eigen::MatrixXd& Bg
+        ) const {
+        assert(uv.x >= 0 && uv.x <= 1);
+        assert(uv.y >= 0 && uv.y <= 1);
+        assert(Bg.rows() == this->CONTROL_POINTS_NB_PER_FACET_);
+        assert(Bg.cols() == 2);
+
+        std::vector<double> Bu(this->order_+1);
+        std::vector<double> Bv(this->order_+1);
+        std::vector<double> dBu(this->order_+1);
+        std::vector<double> dBv(this->order_+1);
+        Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
+        Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
+        Lagrange_basis_deriv_1D(uv.x, this->node_positions_1D_, dBu);
+        Lagrange_basis_deriv_1D(uv.y, this->node_positions_1D_, dBv);
+        for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
+            for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
+                const auto N = this->facet_lnd(i, j);
+                Bg(N, 0) = dBu[i]*Bv[j];
+                Bg(N, 1) = Bu[i]*dBv[j];
+            }
+        }
     }
 
     template<GEO::index_t DIM>

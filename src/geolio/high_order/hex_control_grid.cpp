@@ -353,27 +353,27 @@ namespace geolio
         geolio::get_Gauss_Legendre_quadrature_cube(std::ceil(1.5*order_), points_and_weights);
 
         for (const auto& c : mesh_.cells) {
-            double V = 0;
+            auto& V = volumes[c];
+            V = 0;
             for (const auto& [uvw, w] : points_and_weights)
                 V += w * compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
-            volumes[c] = V;
         }
     }
 
     void HexControlGrid::compute_cell_vertices_position_matrix(
         const GEO::index_t c,
         Eigen::MatrixXd& P
-        ) {
+        ) const {
         assert(c < mesh_.cells.nb());
         assert(P.rows() == 3);
         assert(P.cols() == CONTROL_POINTS_NB_PER_CELL_);
 
         for (GEO::index_t i = 0; i < CONTROL_POINTS_NB_PER_CELL_; ++i) {
-            const auto& cv = element_control_nodes_[CONTROL_POINTS_NB_PER_CELL_*c+i];
-            const auto& cp = control_node(cv);
-            P(0, i) = cp.x;
-            P(1, i) = cp.y;
-            P(2, i) = cp.z;
+            const auto& nd = element_control_nodes_[CONTROL_POINTS_NB_PER_CELL_*c+i];
+            const auto& ndp = control_node(nd);
+            P(0, i) = ndp.x;
+            P(1, i) = ndp.y;
+            P(2, i) = ndp.z;
         }
     }
 

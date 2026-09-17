@@ -336,9 +336,7 @@ namespace geolio
          * @param[in] c cell index, 0,1,...,hex_mesh.cells.nb()-1
          * @param[out] P matrix of control-point positions for cell \\p c
          */
-        void compute_cell_vertices_position_matrix(
-            GEO::index_t c,
-            Eigen::MatrixXd& P);
+        void compute_cell_vertices_position_matrix(GEO::index_t c, Eigen::MatrixXd& P) const;
 
         /**
          * Assemble basis gradients at a parameter point for all local control points.
@@ -346,9 +344,7 @@ namespace geolio
          * @param[out] Bg gradient matrix of tensor-product basis values
          * @pre Bg.size == CONTROL_POINTS_NB_PER_CELL * 3
          */
-        void compute_basis_gradient_matrix(
-            const GEO::vec3& uvw,
-            Eigen::MatrixXd& Bg) const;
+        void compute_basis_gradient_matrix(const GEO::vec3& uvw, Eigen::MatrixXd& Bg) const;
 
         /**
          * @brief Append a discretized surface mesh of all high-order cell facets (for visualization purposes).

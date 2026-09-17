@@ -5,6 +5,7 @@
 #ifndef HOSM_QUAD_CONTROL_GRID_H
 #define HOSM_QUAD_CONTROL_GRID_H
 #include "surf_control_grid.h"
+#include <Eigen/Dense>
 
 namespace geolio
 {
@@ -156,7 +157,44 @@ namespace geolio
          */
         [[nodiscard]] double compute_facet_uv_measure(GEO::index_t f, const GEO::vec2& uv, MeasureType quality_type) const;
 
+        /**
+         * Evaluate the gradient of the Jacobian determinant at a facet parameter point.
+         *
+         * The output stores \f$\partial\det(J)/\partial x\f$ with respect to all local control-point
+         * coordinates of facet \p f, flattened in xy order.
+         *
+         * @param[in] f Facet index, 0,1,...,quad_mesh.facets.nb()-1.
+         * @param[in] uv Parameter point in the cell parameter domain [0, 1]^2.
+         * @param[out] gradient Output buffer of size `2 * control_points_nb_per_facet()`.
+         *                      For local control point `N`, entries are:
+         *                      - `gradient[2*N+0] = d(detJ)/dP_N.x`
+         *                      - `gradient[2*N+1] = d(detJ)/dP_N.y`
+         */
         void compute_facet_uv_detJ_gradient(GEO::index_t f, const GEO::vec2& uv, std::vector<double>& gradient) const;
+
+        /**
+         * @brief Compute the reference area of every facet in the mesh.
+         *
+         * @param[out] areas Output array that receives one reference area per
+         *            facet, in the same order as `quad_mesh_.facets`.
+         * @note The caller is responsible for providing storage for all facets.
+         */
+        void compute_facets_area(std::vector<double>& areas);
+
+        /**
+         * Assemble physical control-point coordinates of one facet into a dense matrix.
+         * @param[in] f facet index, 0,1,...,quad_mesh.facets.nb()-1
+         * @param[out] P matrix of control-point positions for facet \\p f
+         */
+        void compute_cell_vertices_position_matrix(GEO::index_t f, Eigen::MatrixXd& P) const;
+
+        /**
+         * Assemble basis gradients at a parameter point for all local control points.
+         * @param[in] uv parameter point in [0,1]^2
+         * @param[out] Bg gradient matrix of tensor-product basis values
+         * @pre Bg.size == CONTROL_POINTS_NB_PER_FACET * 2
+         */
+        void compute_basis_gradient_matrix(const GEO::vec2& uv, Eigen::MatrixXd& Bg) const;
 
         /**
          * @brief Append a discretized surfacic mesh of all high-order facets (for visualization purposes).
