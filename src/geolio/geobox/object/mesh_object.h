@@ -100,6 +100,136 @@ namespace geolio::geobox
         void draw_volume(bool lighting);
 
         /**
+         * @brief Tests whether the volume must be drawn facet by facet.
+         * @details True when a scalar attribute is displayed on the cell facets
+         *          (GEO::MESH_CELL_FACETS). Such an attribute is defined per
+         *          half-facet, i.e. once per (cell, facet) incidence, so a cell
+         *          can no longer be sent to GLUP as a whole-cell primitive
+         *          (GLUP_TETRAHEDRA, GLUP_HEXAHEDRA, ...): its facets have to be
+         *          emitted one by one, each with the attribute of the cell facet
+         *          it comes from.
+         * @return true if the attribute display must use the cell-facet path.
+         * @ref <geogram_gfx/mesh/mesh_gfx.cpp> MeshGfx::draw_tets() and
+         *      MeshGfx::draw_hybrid(), GeoGram PR #386
+         */
+        bool cell_facets_attribute_active() const;
+
+        /**
+         * @brief Returns the shrink to apply to the cell facets.
+         * @details GLUP only shrinks whole-cell primitives, so the cell-facet
+         *          passes shrink their facets themselves and have to reproduce
+         *          the two cases in which GLUP does not shrink at all: no shrink
+         *          requested, and cells cut by a slice (see
+         *          GLUP::Context::shrink_cells_in_immediate_buffers()).
+         * @return The shrink coefficient, between 0.0 (no shrink) and 1.0.
+         */
+        double cells_shrink_factor() const;
+
+        /**
+         * @brief Draws the volume cells as individual facets, each coloured by
+         *        the scalar attribute of its cell facet.
+         * @details This is the GeoBox implementation of the GeoGram PR #386
+         *          drawing paths MeshGfx::draw_tets_immediate_attrib() and
+         *          MeshGfx::draw_hybrid_immediate_attrib(), which cannot be
+         *          reused here: the helpers they are built on
+         *          (MeshGfx::begin_attributes(), MeshGfx::draw_vertex(),
+         *          MeshGfx::draw_sequences_if(), MeshGfx::draw_vertex_with_
+         *          attribute()...) are protected members of MeshGfx, and
+         *          MeshObject owns a MeshGfx instead of deriving from it, so
+         *          this class reimplements the same drawing (see begin_
+         *          attributes(), draw_volume_cell_facets(), draw_volume_facet_
+         *          vertex()).
+         * @details GLUP shrinks whole-cell primitives only, so its cells shrink
+         *          is disabled for this pass and replicated per facet vertex.
+         */
+        void draw_volume_cell_facets_attribute();
+
+        /**
+         * @brief Draws the facets of the cells in [begin_c, end_c[ that have
+         *        \p prim as their GLUP primitive.
+         * @details The cells of a volumetric mesh are of mixed types, so their
+         *          facets are of mixed size: this pass emits the triangular
+         *          facets when \p prim is GLUP_TRIANGLES and the quadrilateral
+         *          ones when it is GLUP_QUADS, which is how MeshGfx does it too
+         *          (GLUP requires one primitive kind per glupBegin/glupEnd pair).
+         * @param[in] begin_c Index of the first cell of the range.
+         * @param[in] end_c One position past the last cell of the range.
+         * @param[in] prim GLUP_TRIANGLES or GLUP_QUADS.
+         * @ref <geogram_gfx/mesh/mesh_gfx.h> MeshGfx::draw_volume_cell_facets(),
+         *      GeoGram PR #386
+         */
+        void draw_volume_cell_facets(
+            GEO::index_t begin_c, GEO::index_t end_c, GLUPprimitive prim);
+
+        /**
+         * @brief Draws one vertex of one facet of one cell, with the attribute
+         *        of that cell facet.
+         * @details The attribute is fetched per cell facet (and not per cell),
+         *          so that the two facets shared by two adjacent cells can be
+         *          displayed with different colors.
+         * @param[in] cell Index of the cell the facet belongs to.
+         * @param[in] lf Local index of the facet in the cell.
+         * @param[in] lv Local index of the vertex in the facet.
+         * @param[in] cell_facet Index of the cell facet in mesh.cell_facets,
+         *            used as the attribute index.
+         * @param[in] centroid Center of \p cell, used to shrink the facet when
+         *            cells_shrink_ is set.
+         * @ref <geogram_gfx/mesh/mesh_gfx.h>
+         *      MeshGfx::draw_volume_facet_vertex(), GeoGram PR #386
+         */
+        void draw_volume_facet_vertex(
+            GEO::index_t cell, GEO::index_t lf, GEO::index_t lv,
+            GEO::index_t cell_facet, const double* centroid);
+
+        /**
+         * @brief Emits a mesh vertex as the current GLUP vertex.
+         * @details Same contract as MeshGfx::draw_vertex(): the vertex is
+         *          interpolated between the two positions stored in a 6-D
+         *          vertex when animation is active, and 2-D meshes are handled.
+         * @param[in] v Index of the vertex to emit.
+         * @ref <geogram_gfx/mesh/mesh_gfx.h> MeshGfx::draw_vertex()
+         */
+        void draw_vertex(GEO::index_t v);
+
+        /**
+         * @brief Reads the position of a mesh vertex as three coordinates.
+         * @details Missing coordinates of dimension-2 meshes are set to 0, as
+         *          in draw_points().
+         * @param[in] v Index of the vertex to read.
+         * @param[out] p The three coordinates of the vertex.
+         */
+        void get_vertex_position(GEO::index_t v, double* p) const;
+
+        /**
+         * @brief Sets the attribute value of \p element as the texture
+         *        coordinate of the next GLUP vertex.
+         * @details Same contract as MeshGfx::draw_attribute_as_tex_coord(),
+         *          restricted to the scalar (1-D) attributes displayed by
+         *          draw_scene().
+         * @param[in] element Index of the element the attribute is read from.
+         * @ref <geogram_gfx/mesh/mesh_gfx.h>
+         *      MeshGfx::draw_attribute_as_tex_coord()
+         */
+        void draw_attribute_as_tex_coord(GEO::index_t element);
+
+        /**
+         * @brief Binds the displayed scalar attribute and sets up the GLUP
+         *        texturing used to color the elements with it.
+         * @details Same contract as MeshGfx::begin_attributes(), which is a
+         *          protected member of MeshGfx and can therefore not be called
+         *          from this class; it must be paired with end_attributes().
+         * @ref <geogram_gfx/mesh/mesh_gfx.cpp> MeshGfx::begin_attributes()
+         */
+        void begin_attributes();
+
+        /**
+         * @brief Unbinds the scalar attribute and restores the GLUP state
+         *        changed by begin_attributes().
+         * @ref <geogram_gfx/mesh/mesh_gfx.cpp> MeshGfx::end_attributes()
+         */
+        void end_attributes();
+
+        /**
          * @brief Autoscales the attribute range for display.
          * @ref <geogram_gfx/gui/simple_mesh_application.cpp> autorange()
          */
@@ -183,6 +313,13 @@ namespace geolio::geobox
         GEO::MeshElementsFlags attribute_subelements_ = GEO::MESH_VERTICES;
         float attribute_min_ = 0;
         float attribute_max_ = 0;
+
+        /**
+         * Accessor to the displayed scalar attribute; bound by
+         * begin_attributes() and unbound by end_attributes(), as
+         * MeshGfx::scalar_attribute_ is (see MeshGfx::begin_attributes()).
+         */
+        GEO::ReadOnlyScalarAttributeAdapter scalar_attribute_;
     };
 }
 
