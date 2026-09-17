@@ -9,6 +9,7 @@
 #include <geolio/mesh/tet_descriptor.h>
 
 #include "geolio/common/vecg.h"
+#include <geogram/basic/geometry_nd.h>
 
 namespace
 {
@@ -370,37 +371,37 @@ namespace geolio::test
                 clipper->clip(d, t);
         }
 
-        // void check_area_computation() const {
-        //     ASSERT_EQ(cut_planes.size(), 1);
-        //     const auto& [d, t] = cut_planes[0];
-        //
-        //     double V, V0, V1;
-        //     axis_aligned_tet_clipped_volumes(
-        //         origin_p0, origin_p1, origin_p2, origin_p3,
-        //         d, t,
-        //         V, V0, V1);
-        //
-        //     ASSERT_FALSE(clipper == nullptr);
-        //     const auto& tet_coords = clipper->coords();
-        //     const auto& partitions = clipper->partitions();
-        //     EXPECT_EQ(tet_coords.size()%4, 0);
-        //     EXPECT_EQ(tet_coords.size()/4, partitions.size());
-        //
-        //     double exact_V{0}, exact_V0{0}, exact_V1{0};
-        //     for (GEO::index_t c = 0, c_end = tet_coords.size()/4; c < c_end; ++c) {
-        //         const auto v = GEO::Geom::tetra_signed_volume(
-        //             tet_coords[4*c], tet_coords[4*c+1], tet_coords[4*c+2], tet_coords[4*c+3]);
-        //         exact_V += v;
-        //         if (partitions[c] & 1)
-        //             exact_V1 += v;
-        //         else
-        //             exact_V0 += v;
-        //     }
-        //
-        //     EXPECT_NEAR(V, exact_V, 1e-10);
-        //     EXPECT_NEAR(V0, exact_V0, 1e-10);
-        //     EXPECT_NEAR(V1, exact_V1, 1e-10);
-        // }
+        void check_area_computation() const {
+            ASSERT_EQ(cut_planes.size(), 1);
+            const auto& [d, t] = cut_planes[0];
+
+            double V, V0, V1;
+            axis_aligned_tri_clipped_areas<DIM>(
+                origin_p0, origin_p1, origin_p2,
+                d, t,
+                V, V0, V1);
+
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            const auto& partitions = clipper->partitions();
+            EXPECT_EQ(coords.size()%3, 0);
+            EXPECT_EQ(coords.size()/3, partitions.size());
+
+            double exact_V{0}, exact_V0{0}, exact_V1{0};
+            for (GEO::index_t f = 0, f_end = coords.size()/3; f < f_end; ++f) {
+                const auto v = GEO::Geom::triangle_area(
+                    coords[3*f].data(), coords[3*f+1].data(), coords[3*f+2].data(), DIM);
+                exact_V += v;
+                if (partitions[f] & 1)
+                    exact_V1 += v;
+                else
+                    exact_V0 += v;
+            }
+
+            EXPECT_NEAR(V, exact_V, 1e-10);
+            EXPECT_NEAR(V0, exact_V0, 1e-10);
+            EXPECT_NEAR(V1, exact_V1, 1e-10);
+        }
 
         void check_signed_area() const {
             ASSERT_FALSE(clipper == nullptr);
@@ -530,7 +531,146 @@ namespace geolio::test
             this->cut_planes.emplace_back(0, 1);
             this->clip();
 
-            // this->check_area_computation();
+            this->check_area_computation();
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_partitions();
+            this->output(i);
+        }
+    }
+
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_1_2_y) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+            else
+                this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(1, -0.5);
+            this->clip();
+
+            this->check_area_computation();
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_partitions();
+            this->output(i);
+        }
+    }
+
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_2_1_x) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+            else
+                this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(0, -1);
+            this->clip();
+
+            this->check_area_computation();
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_partitions();
+            this->output(i);
+        }
+    }
+
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_z) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+        if constexpr (DIM == 2)
+            return;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+            else
+                this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(2, 0.1);
+            this->clip();
+
+            this->check_area_computation();
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_partitions();
+            this->output(i);
+        }
+    }
+
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_2_planes) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+            else
+                this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(0, 0.2);
+            this->cut_planes.emplace_back(1, -0.3);
+            this->clip();
+
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_partitions();
+            this->output(i);
+        }
+    }
+
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_3_planes) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+            else
+                this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(0, -0.4);
+            this->cut_planes.emplace_back(1, 0.5);
+            this->cut_planes.emplace_back(0, 0.1);
+            this->clip();
+
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_partitions();
+            this->output(i);
+        }
+    }
+
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_multi_planes) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+            else
+                this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(0, 0.4);
+            this->cut_planes.emplace_back(1, 0.2);
+            this->cut_planes.emplace_back(0, -0.1);
+            this->cut_planes.emplace_back(0, -0.7);
+            this->cut_planes.emplace_back(1, 2);
+            this->cut_planes.emplace_back(1, -0.3);
+            this->cut_planes.emplace_back(1, -2);
+            this->cut_planes.emplace_back(0, 0.2);
+            if constexpr (DIM == 3) {
+                this->cut_planes.emplace_back(2, 0.2);
+                this->cut_planes.emplace_back(2, 0.3);
+            }
+            this->clip();
+
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
