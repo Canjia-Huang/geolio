@@ -57,8 +57,8 @@ namespace
 
 namespace geolio
 {
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    MinimumJacobianDeterminant<DIM, CONTROL_GRID>::MinimumJacobianDeterminant(
+    template<typename CONTROL_GRID>
+    MinimumJacobianDeterminant<CONTROL_GRID>::MinimumJacobianDeterminant(
         const CONTROL_GRID& control_grid
         ) : control_grid_(control_grid),
             ORDER_(control_grid.order())
@@ -99,8 +99,8 @@ namespace geolio
         pre_compute_subdivision_matrices();
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    bool MinimumJacobianDeterminant<DIM, CONTROL_GRID>::contains_inverted_region(
+    template<typename CONTROL_GRID>
+    bool MinimumJacobianDeterminant<CONTROL_GRID>::contains_inverted_region(
         const GEO::index_t c,
         const double eps
         ) {
@@ -139,8 +139,8 @@ namespace geolio
         return false;
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    double MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_lower_bound(
+    template<typename CONTROL_GRID>
+    double MinimumJacobianDeterminant<CONTROL_GRID>::compute_lower_bound(
         const GEO::index_t c,
         const double eps,
         std::vector<Block>* travelled_sub_blocks
@@ -178,8 +178,8 @@ namespace geolio
         return global_upper_bound;
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::collect_invalid_sub_blocks(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::collect_invalid_sub_blocks(
         const GEO::index_t c,
         std::vector<Block>& invalid_sub_blocks,
         const double eps
@@ -209,8 +209,8 @@ namespace geolio
         }
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_untangling_funcgrad(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::compute_untangling_funcgrad(
         const GEO::index_t c,
         Eigen::VectorXd& detJ_b_coeffs,
         Eigen::MatrixXd& grad_detJ_b_coeffs
@@ -224,8 +224,8 @@ namespace geolio
         convert_to_bernstein_coeffs(grad_detJ, grad_detJ_b_coeffs);
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::append_blocks_to_mesh(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::append_blocks_to_mesh(
         const std::vector<Block>& blocks,
         GEO::Mesh& mesh_out
         ) const {
@@ -285,8 +285,8 @@ namespace geolio
         }
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::pre_compute_Lagrange_to_Bernstein_matrix(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::pre_compute_Lagrange_to_Bernstein_matrix(
         ) {
         // LOG::TRACE(__FUNCTION__);
 
@@ -309,8 +309,8 @@ namespace geolio
             M3D_ = kroneckerProduct(M_, M2D_).eval();
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::pre_compute_subdivision_matrices(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::pre_compute_subdivision_matrices(
         ) {
         // LOG::TRACE(__FUNCTION__);
 
@@ -336,8 +336,8 @@ namespace geolio
         }
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::initialize_priority_queue(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::initialize_priority_queue(
         const GEO::index_t c
         ) {
         /* Clean priority queue */
@@ -354,8 +354,8 @@ namespace geolio
         pq_.emplace(C);
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::subdivide(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::subdivide(
         const Block& block,
         std::vector<Block>& sub_blocks
         ) {
@@ -454,8 +454,8 @@ namespace geolio
         }
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_det_J(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::compute_samples_det_J(
         const GEO::index_t c,
         Eigen::VectorXd& det_J
         ) const {
@@ -465,7 +465,7 @@ namespace geolio
             for (GEO::index_t j = 0; j < N1_; ++j) {
                 for (GEO::index_t i = 0; i < N1_; ++i) {
                     const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
-                    det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
+                    det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, CONTROL_GRID::MeasureType::DET_JACOBIAN);
                 }
             }
         }
@@ -485,12 +485,14 @@ namespace geolio
             static_assert(false);
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::compute_samples_grad_det_J(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::compute_samples_grad_det_J(
         const GEO::index_t c,
         Eigen::MatrixXd& grad_det_J
         ) const {
         if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+            constexpr GEO::index_t DIM = std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> ? 2 : 3;
+
             const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_facet();
             grad_det_J = Eigen::MatrixXd::Zero(N2_, DIM*CONTROL_POINTS_NB);
             for (GEO::index_t j = 0; j < N1_; ++j) {
@@ -528,8 +530,8 @@ namespace geolio
             static_assert(false);
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::convert_to_bernstein_coeffs(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::convert_to_bernstein_coeffs(
         const Eigen::VectorXd& J,
         Eigen::VectorXd& C
         ) const {
@@ -541,8 +543,8 @@ namespace geolio
             static_assert(false);
     }
 
-    template<GEO::index_t DIM, typename CONTROL_GRID>
-    void MinimumJacobianDeterminant<DIM, CONTROL_GRID>::convert_to_bernstein_coeffs(
+    template<typename CONTROL_GRID>
+    void MinimumJacobianDeterminant<CONTROL_GRID>::convert_to_bernstein_coeffs(
         const Eigen::MatrixXd& J,
         Eigen::MatrixXd& C
         ) const {
@@ -554,7 +556,7 @@ namespace geolio
             static_assert(false);
     }
 
-    template class MinimumJacobianDeterminant<2, QuadControlGrid<2>>;
-    template class MinimumJacobianDeterminant<3, QuadControlGrid<3>>;
-    template class MinimumJacobianDeterminant<3, HexControlGrid>;
+    template class MinimumJacobianDeterminant<QuadControlGrid<2>>;
+    template class MinimumJacobianDeterminant<QuadControlGrid<3>>;
+    template class MinimumJacobianDeterminant<HexControlGrid>;
 }

@@ -24,7 +24,7 @@ namespace geolio
      * refined in a best-first order (smallest lower bound first) until each of them can be certified
      * either negative or non-negative, which locates inverted regions without a global minimisation.
      */
-    template<GEO::index_t DIM, typename CONTROL_GRID>
+    template<typename CONTROL_GRID>
     class MinimumJacobianDeterminant {
     public:
         /**
@@ -275,9 +275,9 @@ namespace geolio
         std::priority_queue<Block, std::vector<Block>, std::greater<Block>> pq_;
     };
 
-    extern template class MinimumJacobianDeterminant<2, QuadControlGrid<2>>;
-    extern template class MinimumJacobianDeterminant<3, QuadControlGrid<3>>;
-    extern template class MinimumJacobianDeterminant<3, HexControlGrid>;
+    extern template class MinimumJacobianDeterminant<QuadControlGrid<2>>;
+    extern template class MinimumJacobianDeterminant<QuadControlGrid<3>>;
+    extern template class MinimumJacobianDeterminant<HexControlGrid>;
 }
 
 #endif //GEOLIO_MINIMUM_JACOBIAN_DETERMINANT_H
