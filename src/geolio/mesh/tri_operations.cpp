@@ -148,10 +148,19 @@ namespace geolio
 
         const GEO::index_t lv0 = lv;
         const GEO::index_t lv1 = (lv+1)%3;
-        // const GEO::index_t lv2 = (lv+2)%3;
+        const GEO::index_t lv2 = (lv+2)%3;
         const GEO::index_t v0 = mesh.facets.vertex(f, lv0);
         const GEO::index_t v1 = mesh.facets.vertex(f, lv1);
+        const GEO::index_t v2 = mesh.facets.vertex(f, lv2);
         const auto af = mesh.facets.adjacent(f, lv);
+
+        /* The vertex of the facet opposite to the collapsed edge that is not on that edge. */
+        GEO::index_t v3 = GEO::NO_INDEX;
+        if (af != GEO::NO_FACET) {
+            const GEO::index_t nlv0 = mesh.facets.find_vertex(af, v1);
+            assert(nlv0 != GEO::NO_INDEX);
+            v3 = mesh.facets.vertex(af, (nlv0+2)%3);
+        }
 
         /* Find all incident facets */
         std::vector<std::pair<GEO::index_t, GEO::index_t>> v0_ordered_f_and_lv;
@@ -162,6 +171,29 @@ namespace geolio
 
         if (v0_on_boundary && v1_on_boundary && af != GEO::NO_FACET) // will create a new non-manifold vertex
             return false;
+
+        /* The neighbours of a vertex are the two other vertices of every facet incident to it. */
+        const auto ring_neighbours = [&mesh](const std::vector<std::pair<GEO::index_t, GEO::index_t>>& ring) {
+            std::unordered_set<GEO::index_t> neighbours;
+            for (const auto& [nf, nlv] : ring) {
+                neighbours.insert(mesh.facets.vertex(nf, (nlv+1)%3));
+                neighbours.insert(mesh.facets.vertex(nf, (nlv+2)%3));
+            }
+            return neighbours;
+        };
+
+        /* The collapse merges the star of v1 into the star of v0, so the edge (v1, u) of every neighbour u
+         * of v1 becomes the edge (v0, u). When u is also a neighbour of v0, that edge is already there and
+         * the mesh would end up holding it twice, which breaks its 2-manifoldness: v0 and v1 may only have
+         * in common the vertices opposite to the collapsed edge, that is v2 and, when the collapsed edge is
+         * interior, the third vertex of its opposite facet (link condition). */
+        const auto v1_neighbours = ring_neighbours(v1_ordered_f_and_lv);
+        for (const auto& nv : ring_neighbours(v0_ordered_f_and_lv)) {
+            if (!v1_neighbours.contains(nv))
+                continue;
+            if (nv != v2 && nv != v3)
+                return false; // v0 and v1 share a neighbour: the collapse would duplicate the edge to it.
+        }
 
         /* After collapse, no identical triangles can exist */
         std::unordered_set<std::pair<GEO::index_t, GEO::index_t>, PairHash> other_vertices_pair;

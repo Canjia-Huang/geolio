@@ -52,13 +52,16 @@ namespace geolio
         GEO::Mesh& mesh, GEO::index_t f, GEO::index_t lv, GEO::index_t new_v, GEO::index_t new_f0, GEO::index_t new_f1, bool update_attributes);
 
     /**
-     * @brief Check whether collapsing a triangle edge preserves local orientation.
+     * @brief Check whether collapsing a triangle edge keeps the mesh valid.
      * @details For facet @p f and local edge (lv -> lv+1), the function evaluates the collapse
      *          that moves vertex v(lv) to `(1-r)*p(lv) + r*p((lv+1)%3)` and merges v((lv+1)%3)
      *          into v(lv). It collects the one-rings of both endpoints via
      *          get_vertex_incident_facets(), rejects boundary configurations that would create a
-     *          non-manifold vertex, and checks for degenerate or duplicate triangles around the
-     *          collapsed edge.
+     *          non-manifold vertex, checks for degenerate or duplicate triangles around the
+     *          collapsed edge, and enforces the link condition: the two endpoints may only have in
+     *          common the vertices opposite to the collapsed edge. Merging the two stars indeed
+     *          turns the edge joining such a common neighbour to the surviving vertex into two
+     *          copies of the same edge, which would leave the mesh non-manifold.
      * @param[in] mesh Target triangle mesh used only for geometric/topological queries.
      * @param[in] f Index of a triangle facet adjacent to the candidate edge.
      * @param[in] lv Local vertex index in {0,1,2} identifying the oriented edge (lv -> lv+1).

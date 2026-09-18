@@ -430,6 +430,112 @@ namespace geolio::test
         GEO::mesh_save(mesh, get_current_test_name()+"_1.geogram");
     }
 
+    class TriEdgeCollapseSimpleTest : public TriOperationsSimpleTest {};
+
+    /**
+     * @brief Vertices of the collapsed edge neighbourhood used by the two tests below.
+     *
+     * The collapsed edge is (v0, v1), in the facet (v0, v1, v2); (v3, v1, v0) is the facet on the
+     * other side of that edge. Vertex 5 is joined to both endpoints by mesh edges, which is what
+     * the two tests below turn on.
+     */
+    const std::vector<GEO::vec3> COLLAPSED_EDGE_NEIGHBOURHOOD_VERTICES = {
+        GEO::vec3(-10.0, -10.0, 0.0),                             // v1
+        GEO::vec3(10.0, -10.0, 0.0),                              // v2
+        GEO::vec3(-10.0, 10.0, 0.0),
+        GEO::vec3(-2.075718879699707, -7.9290009811520576, 0.0),  // v0
+        GEO::vec3(-7.1111459136009216, -5.9281086921691895, 0.0),
+        GEO::vec3(-6.3337912559509277, -1.3703341484069824, 0.0), // neighbour of both v0 and v1
+        GEO::vec3(-6.1758983135223389, -6.9848983287811279, 0.0), // v3
+        GEO::vec3(1.2940673828125, -4.9864871501922607, 0.0),
+        GEO::vec3(3.8541994094848633, -7.1933146119117737, 0.0),
+    };
+
+    /** The facet whose edge 0 is collapsed, and the facet on the other side of that edge. */
+    const std::vector<GEO::index_t> COLLAPSED_EDGE_FACETS = {
+        3, 0, 1, // the collapsed facet (v0, v1, v2)
+        6, 0, 3, // its neighbour across the collapsed edge
+    };
+
+    /** The facets joining the neighbour shared by v0 and v1 to v0. */
+    const std::vector<GEO::index_t> COLLAPSED_EDGE_SHARED_NEIGHBOUR_V0_FACETS = {
+        6, 3, 5,
+        7, 5, 3,
+    };
+
+    /** The facets joining the neighbour shared by v0 and v1 to v1. */
+    const std::vector<GEO::index_t> COLLAPSED_EDGE_SHARED_NEIGHBOUR_V1_FACETS = {
+        5, 2, 0,
+        5, 0, 4,
+    };
+
+    /** The remaining facets of the two one-rings. */
+    const std::vector<GEO::index_t> COLLAPSED_EDGE_RING_FACETS = {
+        6, 4, 0,
+        8, 3, 1,
+        8, 7, 3,
+    };
+
+    /** Local edge of the collapsed facet: the collapsed edge joins local vertices 0 and 1. */
+    constexpr GEO::index_t COLLAPSED_EDGE_LV = 0;
+
+    /**
+     * @brief A collapse that would duplicate an edge must be rejected.
+     *
+     * @details Merging v1 into v0 turns the two edges (v0, u) and (v1, u) into the same edge whenever
+     *          u is a neighbour of both endpoints. Here vertex 5 is such a neighbour, which is not one
+     *          of the vertices opposite to the collapsed edge, so the collapse would leave the mesh
+     *          with two copies of the edge (v0, 5): it would stop being 2-manifold and the adjacency
+     *          maintained by the operation would no longer be the one mesh.facets.connect()
+     *          recomputes. This configuration comes from a random CDT mesh.
+     */
+    TEST_F(TriEdgeCollapseSimpleTest, rejects_collapse_creating_duplicate_edge) {
+        std::vector<GEO::index_t> facets = COLLAPSED_EDGE_FACETS;
+        facets.insert(facets.end(), COLLAPSED_EDGE_SHARED_NEIGHBOUR_V0_FACETS.begin(), COLLAPSED_EDGE_SHARED_NEIGHBOUR_V0_FACETS.end());
+        facets.insert(facets.end(), COLLAPSED_EDGE_SHARED_NEIGHBOUR_V1_FACETS.begin(), COLLAPSED_EDGE_SHARED_NEIGHBOUR_V1_FACETS.end());
+        facets.insert(facets.end(), COLLAPSED_EDGE_RING_FACETS.begin(), COLLAPSED_EDGE_RING_FACETS.end());
+        create_mesh(COLLAPSED_EDGE_NEIGHBOURHOOD_VERTICES, facets);
+
+        EXPECT_FALSE(is_tri_edge_collapse_valid(mesh, 0, COLLAPSED_EDGE_LV));
+
+        /* The rejected collapse leaves the mesh untouched and consistent. */
+        EXPECT_EQ(mesh.facets.vertex(0, 0), 3);
+        EXPECT_EQ(mesh.facets.vertex(0, 1), 0);
+        EXPECT_EQ(mesh.facets.vertex(0, 2), 1);
+        expect_adjacency_consistent();
+    }
+
+    /**
+     * @brief The same neighbourhood without the facets joining the shared neighbour to v1 collapses.
+     *
+     * @details This is the counterpart of the test above: vertex 5 is then only joined to v0, the two
+     *          endpoints no longer have any neighbour in common besides the vertices opposite to the
+     *          collapsed edge, and the collapse is valid.
+     */
+    TEST_F(TriEdgeCollapseSimpleTest, accepts_collapse_when_link_condition_holds) {
+        std::vector<GEO::index_t> facets = COLLAPSED_EDGE_FACETS;
+        facets.insert(facets.end(), COLLAPSED_EDGE_SHARED_NEIGHBOUR_V0_FACETS.begin(), COLLAPSED_EDGE_SHARED_NEIGHBOUR_V0_FACETS.end());
+        facets.insert(facets.end(), COLLAPSED_EDGE_RING_FACETS.begin(), COLLAPSED_EDGE_RING_FACETS.end());
+        create_mesh(COLLAPSED_EDGE_NEIGHBOURHOOD_VERTICES, facets);
+
+        ASSERT_TRUE(is_tri_edge_collapse_valid(mesh, 0, COLLAPSED_EDGE_LV));
+
+        GEO::index_t disuse_v, disuse_f0, disuse_f1;
+        tri_edge_collapse<3>(mesh, 0, COLLAPSED_EDGE_LV, disuse_v, disuse_f0, disuse_f1);
+
+        /* The two facets of the collapsed edge became degenerate and are not used any more. */
+        EXPECT_EQ(disuse_v, 0);
+        EXPECT_EQ(disuse_f0, 0);
+        EXPECT_EQ(disuse_f1, 1);
+        GEO::vector<GEO::index_t> facets_to_delete(mesh.facets.nb(), 0);
+        facets_to_delete[disuse_f0] = 1;
+        facets_to_delete[disuse_f1] = 1;
+        mesh.facets.delete_elements(facets_to_delete);
+        EXPECT_EQ(mesh.facets.nb(), 5);
+
+        expect_adjacency_consistent();
+    }
+
     /* ============================================================================================================= */
 
     class TriEdgeSwapTest : public TriOperationsTest {
