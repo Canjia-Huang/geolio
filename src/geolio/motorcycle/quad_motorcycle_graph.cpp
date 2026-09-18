@@ -47,6 +47,10 @@ namespace geolio
         /* Ignite */
         ignite(queue);
 
+        /* Scratch buffer for the facets around a vertex; reused across iterations so that the
+         * traversal does not allocate on every call. */
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_lv;
+
         /* Burning */
         while (!queue.empty()) {
             const auto& fire = queue.top();
@@ -54,6 +58,13 @@ namespace geolio
             const auto F_f = fire.f;
             const auto F_lv = fire.lv;
             queue.pop();
+
+            /* Already burnt: the same edge was already reached by an earlier (closer) fire.
+             * An edge only tags itself when it is popped, so an edge pushed by several of its
+             * neighbours is queued several times. Re-processing it burns nothing new but
+             * re-propagates the fire, which makes the queue never settle. */
+            if (mesh_fc_tagged_[mesh_.facets.corner(F_f, F_lv)] != GEO::NO_INDEX)
+                continue;
 
             /* Alive */
             bool alive = false;
@@ -65,9 +76,11 @@ namespace geolio
                     alive = true;
                 else {
                     /* Find all incident edges */
-                    std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_lv;
                     if (get_vertex_incident_facets(mesh_, F_f, F_lv, ordered_f_lv)) { // append the preceding border edge
-                        const auto& [f, lv] = ordered_f_lv[0];
+                        // Copy the pair instead of binding a reference to it: emplace_back() may
+                        // reallocate the vector and would read the referenced element from the
+                        // freed buffer.
+                        const auto [f, lv] = ordered_f_lv[0];
                         ordered_f_lv.emplace_back(f, (lv+3)%4);
                     }
 
@@ -99,7 +112,6 @@ namespace geolio
                 !mesh_v_singular_[v] && !mesh_v_border_[v]
                 ) {
                 /* Find all incident edges */
-                std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_lv;
                 const auto on_border = get_vertex_incident_facets(mesh_, F_f, F_lv1, ordered_f_lv);
                 assert(!on_border);
                 assert(ordered_f_lv[0].first == F_f);
@@ -234,6 +246,7 @@ namespace geolio
             queue.pop();
 
         std::vector<bool> processed_vertices(mesh_.vertices.nb(), false);
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_lv; // reused, see compute()
         for (const auto& f : mesh_.facets) {
             for (GEO::index_t lv = 0; lv < 4; ++lv) {
                 const auto& v = mesh_.facets.vertex(f, lv);
@@ -243,7 +256,6 @@ namespace geolio
                 processed_vertices[v] = true;
 
                 /* Find all incident interior edges */
-                std::vector<std::pair<GEO::index_t, GEO::index_t>> ordered_f_lv;
                 get_vertex_incident_facets(mesh_, f, lv, ordered_f_lv);
                 for (const auto& [adj_f, adj_lv] : ordered_f_lv) {
                     if (mesh_.facets.adjacent(adj_f, adj_lv) == GEO::NO_FACET)

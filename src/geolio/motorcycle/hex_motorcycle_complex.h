@@ -125,7 +125,10 @@ namespace geolio
             GEO::index_t lf;
 
             bool operator<(const Fire& other) const {
-                return d > other.d;
+                if (d != other.d) return d > other.d;
+                if (c != other.c) return c > other.c;
+                if (lf != other.lf) return lf > other.lf;
+                return le > other.le;
             }
         };
 

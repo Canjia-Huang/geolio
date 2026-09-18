@@ -3,6 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "mesh_operations.h"
+#include <algorithm>
 #include <cassert>
 #include <stack>
 #include <tuple>
@@ -27,13 +28,19 @@ namespace geolio
         const GEO::index_t v = mesh.facets.vertex(start_f, start_lv);
         bool is_on_border = false;
 
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> next_ordered_f_and_lv;
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> prev_ordered_f_and_lv;
+        /* Filled in place (see get_edge_incident_cells()): forward ring first, then the inverse
+         * travel for border vertices, reversed and rotated to the front. No local temporaries,
+         * and the capacity of a caller-provided vector is preserved across calls. */
+        ordered_f_lv.clear();
+        if (ordered_f_lv.capacity() < 4)
+            ordered_f_lv.reserve(4);
+
+        /* Forward travel */
         {
             GEO::index_t f = start_f;
             GEO::index_t lv = start_lv;
             do {
-                next_ordered_f_and_lv.emplace_back(f, lv);
+                ordered_f_lv.emplace_back(f, lv);
 
                 const GEO::index_t next_f = mesh.facets.adjacent(f, lv);
                 if (next_f == GEO::NO_FACET) { // is not 2-manifold vertex
@@ -45,8 +52,10 @@ namespace geolio
                 assert(lv != GEO::NO_INDEX);
             } while (f != start_f);
         }
+        const auto forward_nb = static_cast<std::ptrdiff_t>(ordered_f_lv.size());
 
-        if (is_on_border) { // inverse travel
+        /* Inverse travel */
+        if (is_on_border) {
             GEO::index_t f = start_f;
             GEO::index_t lv = (start_lv+mesh.facets.nb_vertices(f)-1)%mesh.facets.nb_vertices(f);
 
@@ -56,18 +65,14 @@ namespace geolio
                     break;
                 f = next_f;
                 lv = mesh.facets.find_vertex(f, v);
-                prev_ordered_f_and_lv.emplace_back(f, lv);
+                ordered_f_lv.emplace_back(f, lv);
                 lv = (lv+mesh.facets.nb_vertices(f)-1)%mesh.facets.nb_vertices(f);
             }
-        }
 
-        /* Output */
-        ordered_f_lv.clear();
-        ordered_f_lv.reserve(next_ordered_f_and_lv.size() + prev_ordered_f_and_lv.size());
-        for (GEO::index_t i = 0, i_end = prev_ordered_f_and_lv.size(); i < i_end; ++i)
-            ordered_f_lv.push_back(prev_ordered_f_and_lv[i_end-i-1]);
-        for (const auto& f_lv : next_ordered_f_and_lv)
-            ordered_f_lv.push_back(f_lv);
+            /* [forward..., reversed inverse...] -> [inverse..., forward...] */
+            std::reverse(ordered_f_lv.begin()+forward_nb, ordered_f_lv.end());
+            std::rotate(ordered_f_lv.begin(), ordered_f_lv.begin()+forward_nb, ordered_f_lv.end());
+        }
 
         return is_on_border;
     }
@@ -183,14 +188,22 @@ namespace geolio
         const auto ev1 = mesh.cells.edge_vertex(start_c, start_le, 1);
         bool is_on_border = false;
 
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> next_ordered_c_le_lf;
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> prev_ordered_c_le_lf;
+        /* The output is filled in place: the forward chain is appended first, then (for border
+         * edges) the backward chain, which is finally reversed and rotated to the front. Building
+         * the two chains in local temporaries and swapping an empty vector into the output (as
+         * this used to do) allocates and frees on every call, and it also throws away the
+         * capacity of a caller-provided vector, so callers cannot reuse one across a loop. */
+        ordered_c_le_lf.clear();
+        if (ordered_c_le_lf.capacity() < 4)
+            ordered_c_le_lf.reserve(4);
+
+        /* Forward travel */
         {
             GEO::index_t c = start_c;
             GEO::index_t le = start_le;
             GEO::index_t lf = mesh.cells.edge_adjacent_facet(start_c, start_le, 0);
             for (;;) {
-                next_ordered_c_le_lf.emplace_back(c, le, lf);
+                ordered_c_le_lf.emplace_back(c, le, lf);
 
                 const GEO::index_t nc = mesh.cells.adjacent(c, lf);
                 if (nc == GEO::NO_CELL) {
@@ -215,7 +228,9 @@ namespace geolio
                 c = nc;
             }
         }
+        const auto forward_nb = static_cast<std::ptrdiff_t>(ordered_c_le_lf.size());
 
+        /* Inverse travel */
         if (is_on_border) {
             GEO::index_t c = start_c;
             GEO::index_t lf = mesh.cells.edge_adjacent_facet(start_c, start_le, 1);
@@ -240,17 +255,13 @@ namespace geolio
                 assert(mesh.cells.adjacent(nc, lf) != c && mesh.cells.adjacent(nc, lf1) == c);
                 c = nc;
 
-                prev_ordered_c_le_lf.emplace_back(c, le, lf1);
+                ordered_c_le_lf.emplace_back(c, le, lf1);
             }
-        }
 
-        /* Output */
-        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>().swap(ordered_c_le_lf);
-        ordered_c_le_lf.reserve(next_ordered_c_le_lf.size() + prev_ordered_c_le_lf.size());
-        for (GEO::index_t i = 0, i_end = prev_ordered_c_le_lf.size(); i < i_end; ++i)
-            ordered_c_le_lf.push_back(prev_ordered_c_le_lf[i_end-i-1]);
-        for (const auto& c_lf : next_ordered_c_le_lf)
-            ordered_c_le_lf.push_back(c_lf);
+            /* [forward..., reversed inverse...] -> [inverse..., forward...] */
+            std::reverse(ordered_c_le_lf.begin()+forward_nb, ordered_c_le_lf.end());
+            std::rotate(ordered_c_le_lf.begin(), ordered_c_le_lf.begin()+forward_nb, ordered_c_le_lf.end());
+        }
 
         return is_on_border;
     }

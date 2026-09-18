@@ -3,12 +3,13 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "hex_motorcycle_complex.h"
+#include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <geogram/mesh/mesh_io.h>
 #include <geolio/common/utils.h>
 #include <geolio/mesh/hex_operations.h>
 #include "geolio/mesh/mesh_operations.h"
-#include <geolio/common/pair_hash.h>
 
 namespace geolio
 {
@@ -42,6 +43,10 @@ namespace geolio
         /* Ignite */
         ignite(queue);
 
+        /* Scratch buffer for the cells around an edge; reused across iterations so that the
+         * traversal does not allocate on every call. */
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> ordered_c_le_lf;
+
         /* Burning */
         while (!queue.empty()) {
             const auto& fire = queue.top();
@@ -50,6 +55,13 @@ namespace geolio
             const auto F_le = fire.le;
             const auto F_lf = fire.lf;
             queue.pop();
+
+            /* Already burnt: the same facet was already reached by an earlier (closer) fire.
+             * Every facet only tags itself when it is popped, so a facet that is pushed by
+             * several of its neighbours is queued several times. Re-processing it burns
+             * nothing new but re-propagates the fire, which makes the queue never settle. */
+            if (mesh_cf_tagged_[8*F_c+F_lf] != GEO::NO_INDEX)
+                continue;
 
             /* Alive */
             bool alive = false;
@@ -61,9 +73,8 @@ namespace geolio
                     alive = true;
                 else {
                     /* Find all incident facets */
-                    std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> ordered_c_le_lf;
                     if (get_edge_incident_cells(mesh_, F_c, F_le, ordered_c_le_lf)) { // append the preceding border facet
-                        const auto& pre_lf = get<2>(ordered_c_le_lf[0]);
+                        const auto pre_lf = get<2>(ordered_c_le_lf[0]);
                         const auto& lf0 = HEX_LE_INCIDENT_LF[F_le][0];
                         const auto& lf1 = HEX_LE_INCIDENT_LF[F_le][1];
                         if (pre_lf == lf0) // append lf1
@@ -107,7 +118,6 @@ namespace geolio
                     continue;
 
                 /* Find all incident facets */
-                std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> ordered_c_le_lf;
                 const auto on_border = get_edge_incident_cells(mesh_, F_c, F_le1, ordered_c_le_lf);
                 assert(!on_border);
                 assert(get<0>(ordered_c_le_lf[0]) == F_c);
@@ -199,48 +209,90 @@ namespace geolio
         }
     }
 
+    namespace
+    {
+        /* Hash of a mesh edge key (v0 < v1), used by the flat edge table in
+         * find_all_singular_and_border_edges(). */
+        GEO::index_t edge_key_hash(
+            const GEO::index_t v0,
+            const GEO::index_t v1
+            ) {
+            // Fibonacci hashing of the packed key: the low bits of v1 alone are too regular
+            // for linear probing on a structured grid mesh.
+            const auto key = (static_cast<uint64_t>(v0) << 32) | static_cast<uint64_t>(v1);
+            return static_cast<GEO::index_t>((key * 0x9E3779B97F4A7C15ull) >> 32);
+        }
+    }
+
     void HexMotorCycleComplex::find_all_singular_and_border_edges(
         ) {
-        mesh_ce_singular_.assign(12*mesh_.cells.nb(), false);
-        mesh_ce_border_.assign(12*mesh_.cells.nb(), false);
+        const GEO::index_t cell_edges_nb = 12*mesh_.cells.nb();
+        mesh_ce_singular_.assign(cell_edges_nb, false);
+        mesh_ce_border_.assign(cell_edges_nb, false);
 
-        std::unordered_map<std::pair<GEO::index_t, GEO::index_t>, std::pair<GEO::index_t, bool>, PairHash> cell_edges; /*
-            edge (ev0, ev1), ev0 < ev1 -> (incident cells nb, is on boundary?) */
+        /* Group the cell-edges by mesh edge (ev0, ev1), ev0 < ev1 -> (incident cells nb, is on boundary?).
+         * A flat open-addressed table is used instead of std::unordered_map: the latter is node based,
+         * so it allocates once per distinct edge and was the bottleneck of this pass. */
+        GEO::index_t cap = 16;
+        while (cap < cell_edges_nb)
+            cap <<= 1; // cap >= nb of distinct edges, so the table is never full
+        const GEO::index_t mask = cap - 1;
+        std::vector<GEO::index_t> slot_v0(cap, GEO::NO_INDEX); // GEO::NO_INDEX -> free slot
+        std::vector<GEO::index_t> slot_v1(cap, GEO::NO_INDEX);
+        std::vector<GEO::index_t> slot_edge(cap, GEO::NO_INDEX); // mesh edge id
+        std::vector<GEO::index_t> ce_edge(cell_edges_nb, GEO::NO_INDEX); // [12*c+le] -> mesh edge id
+        std::vector<GEO::index_t> edge_incident_cells_nb;
+        std::vector<bool> edge_on_boundary;
+        edge_incident_cells_nb.reserve(cell_edges_nb/3);
+        edge_on_boundary.reserve(cell_edges_nb/3);
+
         for (const auto& c : mesh_.cells) {
             for (GEO::index_t le = 0; le < 12; ++le) {
-                bool is_on_boundary = (mesh_.cells.adjacent(c, mesh_.cells.edge_adjacent_facet(c, le, 0)) == GEO::NO_FACET) ||
-                                      (mesh_.cells.adjacent(c, mesh_.cells.edge_adjacent_facet(c, le, 1)) == GEO::NO_FACET);
-                const auto& ev0 = mesh_.cells.edge_vertex(c, le, 0);
-                const auto& ev1 = mesh_.cells.edge_vertex(c, le, 1);
-                const std::pair<GEO::index_t, GEO::index_t> edge = std::minmax(ev0 ,ev1);
-                if (auto it = cell_edges.find(edge);
-                    it == cell_edges.end())
-                    cell_edges.emplace(edge, std::pair(1, is_on_boundary));
-                else {
-                    ++it->second.first;
-                    if (is_on_boundary)
-                        it->second.second = true;
+                const bool is_on_boundary =
+                    (mesh_.cells.adjacent(c, mesh_.cells.edge_adjacent_facet(c, le, 0)) == GEO::NO_FACET) ||
+                    (mesh_.cells.adjacent(c, mesh_.cells.edge_adjacent_facet(c, le, 1)) == GEO::NO_FACET);
+                const auto ev0 = mesh_.cells.edge_vertex(c, le, 0);
+                const auto ev1 = mesh_.cells.edge_vertex(c, le, 1);
+                const auto v0 = std::min(ev0, ev1);
+                const auto v1 = std::max(ev0, ev1);
+
+                GEO::index_t slot = edge_key_hash(v0, v1) & mask;
+                for (;;) {
+                    if (slot_v0[slot] == GEO::NO_INDEX) { // new mesh edge
+                        const GEO::index_t e = edge_incident_cells_nb.size();
+                        slot_v0[slot] = v0;
+                        slot_v1[slot] = v1;
+                        slot_edge[slot] = e;
+                        ce_edge[12*c+le] = e;
+                        edge_incident_cells_nb.push_back(1);
+                        edge_on_boundary.push_back(is_on_boundary);
+                        break;
+                    }
+                    if (slot_v0[slot] == v0 && slot_v1[slot] == v1) { // known mesh edge
+                        const auto e = slot_edge[slot];
+                        ce_edge[12*c+le] = e;
+                        ++edge_incident_cells_nb[e];
+                        edge_on_boundary[e] = edge_on_boundary[e] || is_on_boundary;
+                        break;
+                    }
+                    slot = (slot+1) & mask;
                 }
             }
         }
 
         /* Label le */
-        for (const auto& c : mesh_.cells) {
+        for (GEO::index_t c = 0, c_end = mesh_.cells.nb(); c < c_end; ++c) {
             for (GEO::index_t le = 0; le < 12; ++le) {
-                const auto& ev0 = mesh_.cells.edge_vertex(c, le, 0);
-                const auto& ev1 = mesh_.cells.edge_vertex(c, le, 1);
-                const std::pair<GEO::index_t, GEO::index_t> edge = std::minmax(ev0 ,ev1);
-                assert(cell_edges.contains(edge));
+                const auto e = ce_edge[12*c+le];
+                assert(e != GEO::NO_INDEX);
 
-                if (const auto& [nb, is_on_boundary] = cell_edges.at(edge);
-                    is_on_boundary
-                    ) {
+                if (edge_on_boundary[e]) {
                     mesh_ce_border_[12*c+le] = true;
-                    if (nb != 2)
+                    if (edge_incident_cells_nb[e] != 2)
                         mesh_ce_singular_[12*c+le] = true;
-                    }
+                }
                 else {
-                    if (nb != 4)
+                    if (edge_incident_cells_nb[e] != 4)
                         mesh_ce_singular_[12*c+le] = true;
                 }
             }
@@ -256,13 +308,13 @@ namespace geolio
             queue.pop();
 
         std::vector<bool> processed_edges(12*mesh_.cells.nb(), false);
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> ordered_c_le_lf; // reused, see compute()
         for (const auto& c : mesh_.cells) {
             for (GEO::index_t le = 0; le < 12; ++le) {
                 if (processed_edges[12*c+le] || !mesh_ce_singular_[12*c+le]) // for all singular edge
                     continue;
 
                 /* Find all incident interior facets */
-                std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> ordered_c_le_lf;
                 get_edge_incident_cells(mesh_, c, le, ordered_c_le_lf);
                 for (const auto& [adj_c, adj_le, adj_lf] : ordered_c_le_lf) {
                     processed_edges[12*adj_c+adj_le] = true;
