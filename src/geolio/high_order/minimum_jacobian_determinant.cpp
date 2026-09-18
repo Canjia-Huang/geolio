@@ -115,7 +115,7 @@ namespace geolio
             const auto& B = pq_.top();
 
             for (unsigned int& i : CORNER_INDICES_) {
-                if (B.C[i] < (use_absolute_area_ ? 1e-10 : 0)) // corner values are exact
+                if (B.C[i] < (use_absolute_area_ ? absolute_area_tolerance_ : 0)) // corner values are exact
                     return true;
             }
 
@@ -193,12 +193,12 @@ namespace geolio
 
         while (!pq_.empty()) {
             if (const auto& B = pq_.top();
-                B.min_c > 0
+                B.min_c > (use_absolute_area_ ? absolute_area_tolerance_ : 0)
                 ) {
                 /* Do nothing */
                 pq_.pop();
             }
-            else if (B.max_c < (use_absolute_area_ ? 1e-10 : 0) || B.max_c - B.min_c < eps) {
+            else if (B.max_c < (use_absolute_area_ ? absolute_area_tolerance_ : 0) || B.max_c - B.min_c < eps) {
                 invalid_sub_blocks.push_back(B);
                 pq_.pop();
             }

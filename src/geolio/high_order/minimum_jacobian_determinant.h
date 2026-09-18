@@ -253,6 +253,7 @@ namespace geolio
         void convert_to_bernstein_coeffs(const Eigen::MatrixXd& J, Eigen::MatrixXd& C) const;
 
         const bool use_absolute_area_;
+        const double absolute_area_tolerance_ = 1e-8;
 
         const CONTROL_GRID& control_grid_;
 

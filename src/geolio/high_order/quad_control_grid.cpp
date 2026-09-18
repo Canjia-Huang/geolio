@@ -236,7 +236,7 @@ namespace geolio
         double det_J = 0;
         if constexpr (DIM == 2)
             det_J = geolio::cross(du, dv);
-        else if constexpr (DIM == 3) { // Equivalent Jacobian determinant
+        else if constexpr (DIM == 3) { // Pseudo-Jacobian
             const auto cross = GEO::cross(du, dv);
             if (quality_type == MeasureType::ABSOLUTE_SQ_AREA)
                 det_J = GEO::length(cross);
