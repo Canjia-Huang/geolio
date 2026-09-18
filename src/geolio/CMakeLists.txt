@@ -28,9 +28,19 @@ file(GLOB SOURCE_FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/io/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/local_operation_optimization/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/mesh/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/miq/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/motorcycle/*.cpp
 )
+
+# miq/ is compiled only when GEOLIO_ENABLE_MIQ is ON: it needs CoMISo and an
+# installed libigl (see the GEOLIO_ENABLE_MIQ option in the top-level
+# CMakeLists.txt), neither of which the default build brings in.
+if(GEOLIO_ENABLE_MIQ)
+    file(GLOB MIQ_SOURCE_FILES
+            ${CMAKE_CURRENT_SOURCE_DIR}/miq/*.cpp
+    )
+    list(APPEND SOURCE_FILES ${MIQ_SOURCE_FILES})
+endif()
+
 target_sources(${CURRENT_LIB_NAME}
         PRIVATE
         ${SOURCE_FILES}

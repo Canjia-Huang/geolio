@@ -32,9 +32,31 @@ option(GEOLIO_ENABLE_LBFGS_LITE "Build with the LBFGS-Lite header-only L-BFGS op
 # that consumes it.
 option(GEOLIO_ENABLE_COMISO "Build with the CoMISo mixed-integer constrained solver" ON)
 
+# Build the Mixed-Integer Quadrangulation (MIQ) pipeline in src/geolio/miq. MIQ
+# needs both the CoMISo mixed-integer solver and libigl, so turning this ON forces
+# GEOLIO_ENABLE_COMISO ON below and makes libigl a hard requirement: an installed
+# libigl package is preferred, otherwise the header-only source tree in LIBIGL_DIR is
+# used instead (see cmake/libigl.cmake). Neither present is a configure error.
+option(GEOLIO_ENABLE_MIQ "Build the Mixed-Integer Quadrangulation (MIQ) pipeline" OFF)
+
+if(GEOLIO_ENABLE_MIQ)
+    # MIQ cannot be built without CoMISo, so it is not a free choice here. FORCE in
+    # the cache (rather than a plain set()) so the effective value is the one every
+    # subdirectory sees and the one CMakeCache.txt reports, even when the user passed
+    # -DGEOLIO_ENABLE_COMISO=OFF on the configure line.
+    set(GEOLIO_ENABLE_COMISO ON CACHE BOOL "Build with the CoMISo mixed-integer constrained solver" FORCE)
+endif()
+
 # Location of the Geogram source tree. Defaults to the GEOGRAM_DIR environment
 # variable; overridable at configure time with -DGEOGRAM_DIR=...
 set(GEOGRAM_DIR "$ENV{GEOGRAM_DIR}" CACHE PATH "Path to the Geogram source directory (defaults to the GEOGRAM_DIR environment variable)")
+
+# Location of the libigl source tree, used only as a fallback for MIQ: libigl is
+# header-only, so when no installed libigl package is found this include directory is
+# used directly and no install is needed. Defaults to the LIBIGL_DIR environment
+# variable; overridable at configure time with -DLIBIGL_DIR=... Distinguished from the
+# lowercase `libigl_DIR` that find_package itself sets for an installed package.
+set(LIBIGL_DIR "$ENV{LIBIGL_DIR}" CACHE PATH "Path to the libigl source directory (defaults to the LIBIGL_DIR environment variable)")
 
 if(WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
