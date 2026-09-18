@@ -225,8 +225,13 @@ namespace geolio
         if constexpr (DIM == 2)
             det_J = geolio::cross(du, dv);
         else if constexpr (DIM == 3) { // Equivalent Jacobian determinant
+            const auto nd0 = this->control_node(this->facet_vertex_nd(f, 0));
+            const auto nd1 = this->control_node(this->facet_vertex_nd(f, 1));
+            const auto nd2 = this->control_node(this->facet_vertex_nd(f, 2));
+            const auto nd3 = this->control_node(this->facet_vertex_nd(f, 3));
+            const auto ref_normal = GEO::normalize(GEO::cross(nd2-nd0, nd3-nd1));
             const auto cross = GEO::cross(du, dv);
-            det_J = GEO::length(cross);
+            det_J = GEO::dot(cross, ref_normal);
         }
 
         switch (quality_type) {
@@ -235,14 +240,14 @@ namespace geolio
             }
             case MeasureType::MIPS: {
                 const double F_sq_norm = du.length2()+dv.length2();
-                return F_sq_norm / (2.0 * det_J);
+                return F_sq_norm / (2.0 * std::abs(det_J));
             }
             case MeasureType::SCALED_JACOBIAN: {
                 return det_J/(du.length()*dv.length());
             }
             case MeasureType::INVERSE_MEAN_RATIO: {
                 const double F_sq_norm = du.length2()+dv.length2();
-                return 2.0*det_J/F_sq_norm;
+                return 2.0*std::abs(det_J)/F_sq_norm;
             }
             default: assert(0);
         }
