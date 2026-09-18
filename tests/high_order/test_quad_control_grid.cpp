@@ -143,6 +143,8 @@ namespace geolio::test
                 &mesh_out_v_uv,
                 &mesh_out_f_facet);
 
+            eval_vertices_quality(mesh_out, mesh_out_v_facet, mesh_out_v_uv);
+
             if (const auto& v_quantities = control_grid->control_nodes_quantities();
                 v_quantities.is_bound()
                 ) {
@@ -161,6 +163,29 @@ namespace geolio::test
         }
 
     protected:
+        void eval_vertices_quality(
+            const GEO::Mesh& mesh_out,
+            const GEO::Attribute<GEO::index_t>& mesh_out_v_facet,
+            const GEO::Attribute<GEO::vec2>& mesh_out_v_uv
+            ) const {
+            GEO::Attribute<double> mesh_out_v_det_jacobian(mesh_out.vertices.attributes(), "det_jacobian");
+            GEO::Attribute<double> mesh_out_v_scaled_jacobian(mesh_out.vertices.attributes(), "scaled_jacobian");
+            GEO::Attribute<double> mesh_out_v_inverse_mean_ratio(mesh_out.vertices.attributes(), "inverse_mean_ratio");
+            GEO::Attribute<double> mesh_out_v_MIPS(mesh_out.vertices.attributes(), "MIPS");
+            for (const auto& v : mesh_out.vertices) {
+                const auto& c = mesh_out_v_facet[v];
+                const auto& uv = mesh_out_v_uv[v];
+                mesh_out_v_det_jacobian[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
+                mesh_out_v_scaled_jacobian[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::SCALED_JACOBIAN);
+                mesh_out_v_inverse_mean_ratio[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::INVERSE_MEAN_RATIO);
+                mesh_out_v_MIPS[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::MIPS);
+            }
+        }
+
         GEO::Mesh mesh;
         std::unique_ptr<QuadControlGrid<DIM>> control_grid;
     };
@@ -339,6 +364,62 @@ namespace geolio::test
 
         this->control_grid->append_discretized_high_order_facets(mesh_out, 30);
         mesh_out.save(get_current_test_name()+".geogram");
+    }
+
+    TYPED_TEST(SingleQuadControlGridTest, measure_not_inverse) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+        if constexpr (DIM == 2)
+            return;
+
+        constexpr GEO::index_t f = 0;
+        {
+            for (GEO::index_t i = 0, i_end = this->control_grid->control_nodes_nb_per_edge(); i < i_end; ++i) {
+                {
+                    auto& p = this->control_grid->control_node(this->control_grid->facet_nd(f, 1, i));
+                    p[2] += 0.5;
+                }
+                {
+                    auto& p = this->control_grid->control_node(this->control_grid->facet_nd(f, 2, i));
+                    p[2] += 1;
+                }
+                {
+                    auto& p = this->control_grid->control_node(this->control_grid->facet_nd(f, 3, i));
+                    p[2] += 0.5;
+                }
+            }
+        }
+
+        this->save_control_nodes(get_current_test_name()+"_nodes.geogram");
+        this->save_high_order_mesh_facets(get_current_test_name()+"_facets.geogram");
+    }
+
+    TYPED_TEST(SingleQuadControlGridTest, measure_inverse) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+        if constexpr (DIM == 2)
+            return;
+
+        constexpr GEO::index_t f = 0;
+        {
+            for (GEO::index_t i = 0, i_end = this->control_grid->control_nodes_nb_per_edge(); i < i_end; ++i) {
+                {
+                    auto& p = this->control_grid->control_node(this->control_grid->facet_nd(f, 1, i));
+                    p[0] -= 1;
+                    p[2] += 0.5;
+                }
+                {
+                    auto& p = this->control_grid->control_node(this->control_grid->facet_nd(f, 2, i));
+                    p[2] += 1;
+                }
+                {
+                    auto& p = this->control_grid->control_node(this->control_grid->facet_nd(f, 3, i));
+                    p[0] += 1;
+                    p[2] += 0.5;
+                }
+            }
+        }
+
+        this->save_control_nodes(get_current_test_name()+"_nodes.geogram");
+        this->save_high_order_mesh_facets(get_current_test_name()+"_facets.geogram");
     }
 
     template <typename DimType>
