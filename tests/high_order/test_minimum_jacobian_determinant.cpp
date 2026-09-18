@@ -129,7 +129,7 @@ namespace geolio::test
 
     TYPED_TEST(QuadMimimumJacobianDeterminantDIMTest, check) {
         constexpr GEO::index_t DIM = TypeParam::value;
-        MinimumJacobianDeterminant<QuadControlGrid<DIM>> MJD(*(this->control_grid));
+        MinimumJacobianDeterminant<QuadControlGrid<DIM>> MJD(*(this->control_grid), true);
 
         EXPECT_FALSE(MJD.contains_inverted_region(0));
         EXPECT_TRUE(MJD.contains_inverted_region(1));

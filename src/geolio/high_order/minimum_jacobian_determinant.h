@@ -31,6 +31,7 @@ namespace geolio
          * Create a MinJacobianDet analyzer for the given control grid.
          * @param[in] control_grid Reference to the control grid that defines the polynomial (or spline)
          * coefficients of the mapping. The analyzer holds a reference and does not take ownership.
+         * @param[in] use_absolute_area use detJ or absolute_area
          */
         explicit MinimumJacobianDeterminant(const CONTROL_GRID& control_grid, bool use_absolute_area = false);
 
