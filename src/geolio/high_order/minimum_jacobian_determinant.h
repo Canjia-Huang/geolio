@@ -32,7 +32,7 @@ namespace geolio
          * @param[in] control_grid Reference to the control grid that defines the polynomial (or spline)
          * coefficients of the mapping. The analyzer holds a reference and does not take ownership.
          */
-        explicit MinimumJacobianDeterminant(const CONTROL_GRID& control_grid);
+        explicit MinimumJacobianDeterminant(const CONTROL_GRID& control_grid, bool use_absolute_area = false);
 
         /**
          * Represents an axis-aligned sub-block in the parametric (u,v,w) domain together with interval
@@ -250,6 +250,8 @@ namespace geolio
          * @param[out] C Output matrix in the Bernstein basis.
          */
         void convert_to_bernstein_coeffs(const Eigen::MatrixXd& J, Eigen::MatrixXd& C) const;
+
+        const bool use_absolute_area_;
 
         const CONTROL_GRID& control_grid_;
 

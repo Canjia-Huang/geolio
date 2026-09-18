@@ -59,12 +59,17 @@ namespace geolio
 {
     template<typename CONTROL_GRID>
     MinimumJacobianDeterminant<CONTROL_GRID>::MinimumJacobianDeterminant(
-        const CONTROL_GRID& control_grid
-        ) : control_grid_(control_grid),
+        const CONTROL_GRID& control_grid,
+        const bool use_absolute_area
+        ) : use_absolute_area_(use_absolute_area),
+            control_grid_(control_grid),
             ORDER_(control_grid.order())
     {
         if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
-            n_ = 2*ORDER_-1;
+            if (use_absolute_area_)
+                n_ = 4*ORDER_-2;
+            else
+                n_ = 2*ORDER_-1;
             N1_ = n_+1;
             N2_ = N1_*N1_;
             CORNER_INDICES_.resize(4);
@@ -465,7 +470,10 @@ namespace geolio
             for (GEO::index_t j = 0; j < N1_; ++j) {
                 for (GEO::index_t i = 0; i < N1_; ++i) {
                     const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
-                    det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, CONTROL_GRID::MeasureType::DET_JACOBIAN);
+                    if (use_absolute_area_)
+                        det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, CONTROL_GRID::MeasureType::ABSOLUTE_SQ_AREA);
+                    else
+                        det_J(i+j*N1_) = control_grid_.compute_facet_uv_measure(c, uv, CONTROL_GRID::MeasureType::DET_JACOBIAN);
                 }
             }
         }
@@ -476,7 +484,7 @@ namespace geolio
                 for (GEO::index_t j = 0; j < N1_; ++j) {
                     for (GEO::index_t i = 0; i < N1_; ++i) {
                         const GEO::vec3 uvw(samples_1D_[i], samples_1D_[j], samples_1D_[k]);
-                        det_J(i+j*N1_+k*N2_) = control_grid_.compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
+                        det_J(i+j*N1_+k*N2_) = control_grid_.compute_cell_uvw_measure(c, uvw, CONTROL_GRID::MeasureType::DET_JACOBIAN);
                     }
                 }
             }
@@ -499,7 +507,10 @@ namespace geolio
                 for (GEO::index_t i = 0; i < N1_; ++i) {
                     const GEO::vec2 uv(samples_1D_[i], samples_1D_[j]);
                     std::vector<double> grads;
-                    control_grid_.compute_facet_uv_detJ_gradient(c, uv, grads);
+                    if (use_absolute_area_)
+                        control_grid_.compute_facet_uv_absolute_area_sq_gradient(c, uv, grads);
+                    else
+                        control_grid_.compute_facet_uv_detJ_gradient(c, uv, grads);
                     assert(grads.size() == DIM*CONTROL_POINTS_NB);
 
                     const GEO::index_t I = i+j*N1_;
