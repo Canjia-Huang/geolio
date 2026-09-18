@@ -42,10 +42,60 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libeigen3-dev
 
+      # == Install Dependency BLAS ====================================================================================
+
+      # CoMISo - fetched by GEOLIO_ENABLE_COMISO, which GEOLIO_ENABLE_MIQ forces ON -
+      # runs find_package(BLAS REQUIRED) on non-Apple UNIX. macOS links Accelerate
+      # instead, so this step is Linux-only.
+      - name: Install Dependency BLAS
+        run: sudo apt-get install -y libblas-dev liblapack-dev
+
+      # == Install Dependency libigl ==================================================================================
+
+      # libigl is header-only: igl::core is an INTERFACE target, so this step only
+      # configures and copies headers, nothing is compiled. GEOLIO_ENABLE_MIQ consumes
+      # it through find_package(libigl).
+      - name: Install Dependency libigl
+        run: |
+          git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
+          # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
+          # they are switched off explicitly: only igl::core is needed here, and the rest
+          # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
+          cmake -S libigl -B libigl-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/libigl-install" \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DLIBIGL_INSTALL=ON \
+            -DLIBIGL_USE_STATIC_LIBRARY=OFF \
+            -DLIBIGL_BUILD_TESTS=OFF \
+            -DLIBIGL_BUILD_TUTORIALS=OFF \
+            -DLIBIGL_COPYLEFT_CGAL=OFF \
+            -DLIBIGL_COPYLEFT_COMISO=OFF \
+            -DLIBIGL_COPYLEFT_TETGEN=OFF \
+            -DLIBIGL_OPENGL=OFF \
+            -DLIBIGL_IMGUI=OFF \
+            -DLIBIGL_GLFW=OFF \
+            -DLIBIGL_EMBREE=OFF \
+            -DLIBIGL_SPECTRA=OFF \
+            -DLIBIGL_XML=OFF \
+            -DLIBIGL_STB=OFF \
+            -DLIBIGL_PREDICATES=OFF \
+            -DLIBIGL_CYCODEBASE=OFF \
+            -DLIBIGL_RESTRICTED_TRIANGLE=OFF \
+            -DLIBIGL_RESTRICTED_MATLAB=OFF \
+            -DLIBIGL_RESTRICTED_MOSEK=OFF
+          cmake --install libigl-build --config Release
+          # find_package(libigl) reads libigl-config.cmake, which libigl installs to
+          # <prefix>/lib/cmake/igl. The package is named `libigl` but that directory is
+          # named `igl`, so CMAKE_PREFIX_PATH=<prefix> would NOT find it; the exact
+          # <package>_DIR is used instead, and find_package also reads it from the
+          # environment.
+          echo "libigl_DIR=$PWD/libigl-install/lib/cmake/igl" >> "$GITHUB_ENV"
+
       # == Configure and make =========================================================================================
 
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGEOLIO_ENABLE_MIQ=ON
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
