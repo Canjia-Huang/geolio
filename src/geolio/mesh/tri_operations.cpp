@@ -314,44 +314,22 @@ namespace geolio
 
         const GEO::index_t lv1 = (lv+1)%3;
         const GEO::index_t lv2 = (lv+2)%3;
-        // const GEO::index_t v0 = M.facets.vertex(f, lv);
         const GEO::index_t v1 = mesh.facets.vertex(f, lv1);
-        const GEO::index_t v2 = mesh.facets.vertex(f, lv2);
 
         const GEO::index_t nlv0 = mesh.facets.find_vertex(af, v1);
         assert(nlv0 != GEO::NO_INDEX);
-        const GEO::index_t nlv1 = (nlv0+1)%3;
-        const GEO::index_t nlv2 = (nlv0+2)%3;
-        const GEO::index_t v3 = mesh.facets.vertex(af, nlv2);
+        const GEO::index_t v3 = mesh.facets.vertex(af, (nlv0+2)%3);
 
-        /* Not allow two existing edges to exist in an adjacent facet */
-        if (const auto nf1 = mesh.facets.adjacent(f, lv1);
-            nf1 != GEO::NO_FACET) {
-            for (GEO::index_t nlv = 0; nlv < 3; ++nlv) {
-                if (mesh.facets.vertex(nf1, nlv) == v3)
-                    return false;
-            }
-        }
-        if (const auto nf2 = mesh.facets.adjacent(f, lv2);
-            nf2 != GEO::NO_FACET) {
-            for (GEO::index_t nlv = 0; nlv < 3; ++nlv) {
-                if (mesh.facets.vertex(nf2, nlv) == v3)
-                    return false;
-            }
-        }
-        if (const auto& anf1 = mesh.facets.adjacent(af, nlv1);
-            anf1 != GEO::NO_FACET) {
-            for (GEO::index_t nlv = 0; nlv < 3; ++nlv) {
-                if (mesh.facets.vertex(anf1, nlv) == v2)
-                    return false;
-            }
-        }
-        if (const auto& anf2 = mesh.facets.adjacent(af, nlv2);
-            anf2 != GEO::NO_FACET) {
-            for (GEO::index_t nlv = 0; nlv < 3; ++nlv) {
-                if (mesh.facets.vertex(anf2, nlv) == v2)
-                    return false;
-            }
+        /* The flip replaces the diagonal (v1, v2) by the other diagonal (v2, v3), v2 being the vertex
+         * opposite to lv2. The new diagonal must not be an edge of the mesh yet: the two flipped
+         * facets would otherwise share it with the facets that already own it, and the mesh would
+         * stop being 2-manifold. Every facet that may own that edge contains v2, so walking the
+         * one-ring of v2 is enough. */
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> v2_incident_f_lv;
+        get_vertex_incident_facets(mesh, f, lv2, v2_incident_f_lv);
+        for (const auto& [nf, nlv] : v2_incident_f_lv) {
+            if (mesh.facets.find_vertex(nf, v3) != GEO::NO_INDEX)
+                return false;
         }
 
         return true;
@@ -369,6 +347,10 @@ namespace geolio
 
         const GEO::index_t af = mesh.facets.adjacent(f, lv);
         if (af == GEO::NO_FACET)
+            return false;
+
+        /* Refuse a flip that would leave the mesh with an inconsistent topology. */
+        if (!is_tri_edge_swap_valid(mesh, f, lv))
             return false;
 
         /*

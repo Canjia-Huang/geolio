@@ -105,17 +105,25 @@ namespace geolio
         GEO::index_t& disuse_f1);
 
     /**
-     * @brief Check whether swapping a triangle edge is geometrically valid.
+     * @brief Check whether swapping a triangle edge keeps the mesh consistent.
      * @details The function inspects the interior edge shared by facet @p f and its adjacent
-     *          facet across local edge @p lv. It first requires the edge to have an adjacent
-     *          facet, then rejects the flip if the opposite vertex of the adjacent facet already
-     *          appears in any neighbour across the quad, which would create duplicate edges or
-     *          non-manifold connectivity.
-     * @param[in] mesh Target triangle mesh used for geometric/topological queries.
+     *          facet across local edge @p lv: together they form a quadrilateral whose diagonal is
+     *          that edge, and the flip replaces it by the other diagonal (the edge joining the
+     *          vertex opposite to @p lv in @p f to the vertex opposite to the shared edge in the
+     *          adjacent facet). It first requires the edge to have an adjacent facet, then rejects
+     *          the flip when that other diagonal is already an edge of the mesh, which would make
+     *          the two flipped facets share it with the facets that already own it and break the
+     *          2-manifoldness of the mesh. Every facet that may own that edge is incident to the
+     *          vertex opposite to @p lv, so inspecting the one-ring of that vertex is complete.
+     * @note This is a topological test. The caller is responsible for the geometric part of the
+     *       validity, namely that the quadrilateral is convex, so that the flipped triangles stay
+     *       inside the quad and keep their orientation: a non-convex quad must not be flipped (the
+     *       Delaunay criterion of SwapOperation rejects exactly those flips).
+     * @param[in] mesh Target triangle mesh used for topological queries.
      * @param[in] f Index of one incident facet of the interior edge to consider.
      * @param[in] lv Local edge index in {0,1,2} in facet @p f identifying the edge opposite local vertex @p lv.
-     * @return true if the edge flip preserves triangle orientations and produces valid, non-degenerate geometry;
-     *         false if the edge is on the boundary or the flip would create inverted/degenerate triangles.
+     * @return true if the edge is interior and flipping it keeps the connectivity of the mesh
+     *         manifold and consistent; false otherwise.
      */
     bool is_tri_edge_swap_valid(
         const GEO::Mesh& mesh,
