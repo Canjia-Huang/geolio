@@ -29,6 +29,21 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(comiso)
 message(STATUS "CoMISo fetched at ${comiso_SOURCE_DIR}")
 
+# The gmm library vendored inside CoMISo (ext/gmm-4.2) still uses the `register`
+# storage class, which C++17 removed. Clang diagnoses that as an error by default
+# (group -Wregister), not as a warning, so CoMISo cannot be compiled at all under the
+# project's CMAKE_CXX_STANDARD 20 (first hit: gmm/gmm_domain_decomp.h). Suppress it
+# for this third-party target only, instead of weakening warnings project-wide;
+# -Wno-register is used rather than -Wno-error=register because the latter only
+# downgrades the diagnostic, leaving a warning behind for every use.
+# Note: gmm's headers are also included by first-party translation units, which need
+# the same flag -- this only covers CoMISo's own sources. See src/geolio/CMakeLists.txt.
+# Clang and GCC both spell the option this way; MSVC has no equivalent and accepts
+# `register` anyway, hence the compiler check.
+if(TARGET CoMISo AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(CoMISo PRIVATE -Wno-register)
+endif()
+
 if(COMMAND geolio_end_file)
     geolio_end_file()
 endif()

@@ -39,6 +39,16 @@ if(GEOLIO_ENABLE_MIQ)
             ${CMAKE_CURRENT_SOURCE_DIR}/miq/*.cpp
     )
     list(APPEND SOURCE_FILES ${MIQ_SOURCE_FILES})
+
+    # miq/*.cpp include <CoMISo/Solver/GMM_Tools.hh>, which unconditionally includes
+    # <gmm/gmm.h> -> <gmm/gmm_domain_decomp.h>, so gmm's removed-in-C++17 `register`
+    # storage class is diagnosed in these first-party translation units too (same
+    # default-error group -Wregister that CoMISo itself is exempted from in
+    # cmake/CoMISo.cmake). Scoped to just these sources rather than the whole geolio
+    # target, so the rest of the library keeps its -Wall -Wextra -Wpedantic -Werror.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set_source_files_properties(${MIQ_SOURCE_FILES} PROPERTIES COMPILE_OPTIONS "-Wno-register")
+    endif()
 endif()
 
 target_sources(${CURRENT_LIB_NAME}
