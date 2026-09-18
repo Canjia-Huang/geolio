@@ -206,6 +206,7 @@ namespace geolio
 
         enum class MeasureType {
             DET_JACOBIAN,         // Signed Jacobian determinant; non-positive values indicate inversion or degeneration.
+            ABSOLUTE_SQ_AREA,     // 0.5 * detJ^2
             SCALED_JACOBIAN,      // Skew measure / normalized Jacobian; 1.0 is ideal, and non-positive values indicate collapse or inversion.
             INVERSE_MEAN_RATIO,   // Shape-quality metric combining angle and aspect-ratio distortion; 1.0 is best and 0 indicates degeneration.
             MIPS                  // Minimizes shear and anisotropic stretching; 1.0 is best and the value grows toward infinity near degeneration.
@@ -239,6 +240,32 @@ namespace geolio
          *                      - `gradient[2*N+1] = d(detJ)/dP_N.y`
          */
         void compute_facet_uv_detJ_gradient(GEO::index_t f, const GEO::vec2& uv, std::vector<double>& gradient) const;
+
+        /**
+         * @brief Compute gradient of the squared absolute surface area objective at a parametric point.
+         *
+         * Computes the gradient of the objective
+         *   F = 0.5 * (det(J))^2  (when DIM==2)
+         * or
+         *   F = 0.5 * || du x dv ||^2  (when DIM==3)
+         * with respect to all local control-point coordinates of facet \p f. The routine
+         * internally evaluates the first-order parametric derivatives (du, dv) and
+         * assembles the per-control-point contribution using the tensor-product basis
+         * derivatives.
+         *
+         * @param[in] f Facet index (0..mesh_.facets.nb()-1).
+         * @param[in] uv Parameter point in the facet parameter domain [0,1]^2.
+         * @param[out] gradient Output buffer that receives the gradient flattened per-control-point.
+         *                      The buffer is resized to DIM * CONTROL_POINTS_NB_PER_FACET_. For
+         *                      DIM==2 entries are stored as [dF/dP0.x, dF/dP0.y, dF/dP1.x, dF/dP1.y, ...].
+         *                      For DIM==3 entries are stored as [dF/dP0.x, dF/dP0.y, dF/dP0.z, ...].
+         * @pre f < mesh_.facets.nb()
+         * @pre uv.x and uv.y in [0,1]
+         * @note The function supports both 2D and 3D control grids (templated by DIM) and will
+         *       compute the appropriate analytical gradient for each case using the Lagrange
+         *       basis derivatives returned by compute_facet_uv_dudv.
+         */
+        void compute_facet_uv_absolute_area_sq_gradient(GEO::index_t f, const GEO::vec2& uv, std::vector<double>& gradient) const;
 
         /**
          * @brief Compute the reference area of every facet in the mesh.
