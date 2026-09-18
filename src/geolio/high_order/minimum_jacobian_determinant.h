@@ -24,15 +24,16 @@ namespace geolio
      * refined in a best-first order (smallest lower bound first) until each of them can be certified
      * either negative or non-negative, which locates inverted regions without a global minimisation.
      */
-    template<GEO::index_t DIM, typename CONTROL_GRID>
+    template<typename CONTROL_GRID>
     class MinimumJacobianDeterminant {
     public:
         /**
          * Create a MinJacobianDet analyzer for the given control grid.
          * @param[in] control_grid Reference to the control grid that defines the polynomial (or spline)
          * coefficients of the mapping. The analyzer holds a reference and does not take ownership.
+         * @param[in] use_absolute_area use detJ or absolute_area
          */
-        explicit MinimumJacobianDeterminant(const CONTROL_GRID& control_grid);
+        explicit MinimumJacobianDeterminant(const CONTROL_GRID& control_grid, bool use_absolute_area = false);
 
         /**
          * Represents an axis-aligned sub-block in the parametric (u,v,w) domain together with interval
@@ -251,6 +252,9 @@ namespace geolio
          */
         void convert_to_bernstein_coeffs(const Eigen::MatrixXd& J, Eigen::MatrixXd& C) const;
 
+        const bool use_absolute_area_;
+        const double absolute_area_tolerance_ = 1e-8;
+
         const CONTROL_GRID& control_grid_;
 
         const GEO::index_t ORDER_;
@@ -275,9 +279,9 @@ namespace geolio
         std::priority_queue<Block, std::vector<Block>, std::greater<Block>> pq_;
     };
 
-    extern template class MinimumJacobianDeterminant<2, QuadControlGrid<2>>;
-    extern template class MinimumJacobianDeterminant<3, QuadControlGrid<3>>;
-    extern template class MinimumJacobianDeterminant<3, HexControlGrid>;
+    extern template class MinimumJacobianDeterminant<QuadControlGrid<2>>;
+    extern template class MinimumJacobianDeterminant<QuadControlGrid<3>>;
+    extern template class MinimumJacobianDeterminant<HexControlGrid>;
 }
 
 #endif //GEOLIO_MINIMUM_JACOBIAN_DETERMINANT_H

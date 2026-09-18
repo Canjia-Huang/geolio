@@ -208,6 +208,18 @@ namespace geolio
     }
 
     template<GEO::index_t DIM>
+    GEO::vec3 QuadControlGrid<DIM>::compute_facet_reference_normal(
+        GEO::index_t f
+        ) const requires (DIM == 3) {
+        assert(f < this->mesh_.facets.nb());
+        const auto nd0 = this->control_node(this->facet_vertex_nd(f, 0));
+        const auto nd1 = this->control_node(this->facet_vertex_nd(f, 1));
+        const auto nd2 = this->control_node(this->facet_vertex_nd(f, 2));
+        const auto nd3 = this->control_node(this->facet_vertex_nd(f, 3));
+        return GEO::normalize(GEO::cross(nd2-nd0, nd3-nd1));
+    }
+
+    template<GEO::index_t DIM>
     double QuadControlGrid<DIM>::compute_facet_uv_measure(
         const GEO::index_t f,
         const GEO::vec2& uv,
@@ -224,25 +236,33 @@ namespace geolio
         double det_J = 0;
         if constexpr (DIM == 2)
             det_J = geolio::cross(du, dv);
-        else if constexpr (DIM == 3) { // Equivalent Jacobian determinant
+        else if constexpr (DIM == 3) { // Pseudo-Jacobian
             const auto cross = GEO::cross(du, dv);
-            det_J = GEO::length(cross);
+            if (quality_type == MeasureType::ABSOLUTE_SQ_AREA)
+                det_J = GEO::length(cross);
+            else {
+                const auto ref_normal = compute_facet_reference_normal(f);
+                det_J = GEO::dot(cross, ref_normal);
+            }
         }
 
         switch (quality_type) {
             case MeasureType::DET_JACOBIAN: {
                 return det_J;
             }
+            case MeasureType::ABSOLUTE_SQ_AREA: {
+                return 0.5*det_J*det_J;
+            }
             case MeasureType::MIPS: {
                 const double F_sq_norm = du.length2()+dv.length2();
-                return F_sq_norm / (2.0 * det_J);
+                return F_sq_norm / (2.0 * std::abs(det_J));
             }
             case MeasureType::SCALED_JACOBIAN: {
                 return det_J/(du.length()*dv.length());
             }
             case MeasureType::INVERSE_MEAN_RATIO: {
                 const double F_sq_norm = du.length2()+dv.length2();
-                return 2.0*det_J/F_sq_norm;
+                return 2.0*std::abs(det_J)/F_sq_norm;
             }
             default: assert(0);
         }
@@ -273,27 +293,98 @@ namespace geolio
                 for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                     const double lag_basis_duv = dBu[i] * Bv[j];
                     const double lag_basis_udv = Bu[i] * dBv[j];
-                    const auto& lcv = this->facet_lnd(i, j);
+                    const auto& lnd = this->facet_lnd(i, j);
                     const auto& g = lag_basis_duv*perp_dv + lag_basis_udv*perp_du;
-                    gradient[2*lcv] = g.x;
-                    gradient[2*lcv+1] = g.y;
+                    gradient[2*lnd] = g.x;
+                    gradient[2*lnd+1] = g.y;
                 }
             }
         }
         else if constexpr (DIM == 3) { // gradient 0.5 * \Vert cross(du, dv) \Vert^2
-            const GEO::vec3 cross_dudv = GEO::cross(du, dv);
+            const auto ref_normal = compute_facet_reference_normal(f);
+            const auto perp_du = GEO::cross(ref_normal, du);
+            const auto perp_dv = GEO::cross(dv, ref_normal);
+
             for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
                 for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                     const double lag_basis_duv = dBu[i] * Bv[j];
                     const double lag_basis_udv = Bu[i] * dBv[j];
-                    const auto& lcv = this->facet_lnd(i, j);
-                    // g = d(basis)/du * (cross_dudv x dv) + d(basis)/dv * (du x cross_dudv)
-                    const GEO::vec3 term_u = GEO::cross(cross_dudv, dv);
-                    const GEO::vec3 term_v = GEO::cross(du, cross_dudv); // -GEO::cross(cross_dudv, du)
-                    const auto& g = lag_basis_duv*term_u + lag_basis_udv*term_v;
-                    gradient[3*lcv] = g.x;
-                    gradient[3*lcv+1] = g.y;
-                    gradient[3*lcv+2] = g.z;
+                    const auto& lnd = this->facet_lnd(i, j);
+                    const auto g = lag_basis_duv * perp_dv + lag_basis_udv * perp_du;
+                    gradient[3*lnd] = g.x;
+                    gradient[3*lnd+1] = g.y;
+                    gradient[3*lnd+2] = g.z;
+                }
+            }
+        }
+        else
+            static_assert(false);
+    }
+
+    template<GEO::index_t DIM>
+    void QuadControlGrid<DIM>::compute_facet_uv_absolute_area_sq_gradient(
+        const GEO::index_t f,
+        const GEO::vec2& uv,
+        std::vector<double>& gradient
+        ) const {
+        assert(f < this->mesh_.facets.nb());
+        assert(uv.x >= 0 && uv.x <= 1);
+        assert(uv.y >= 0 && uv.y <= 1);
+
+        GEO::vecng<DIM, double> du, dv;
+        std::vector<double> Bu, Bv, dBu, dBv;
+        this->compute_facet_uv_dudv(f, uv, du, dv, Bu, Bv, dBu, dBv);
+
+        gradient.resize(DIM * this->CONTROL_POINTS_NB_PER_FACET_);
+
+        if constexpr (DIM == 2) {
+            // 2D objective function: f = 0.5 * det(J)^2
+            // det(J) = du.x * dv.y - du.y * dv.x
+            const double detJ = du.x * dv.y - du.y * dv.x;
+            const GEO::vec2 perp_dv(dv.y, -dv.x);
+            const GEO::vec2 perp_du(-du.y, du.x);
+
+            for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
+                for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
+                    const double lag_basis_duv = dBu[i] * Bv[j]; // α
+                    const double lag_basis_udv = Bu[i] * dBv[j]; // β
+                    const auto& lnd = this->facet_lnd(i, j);
+
+                    const auto g_detJ = lag_basis_duv * perp_dv + lag_basis_udv * perp_du;
+
+                    // ∇(0.5 * det(J)^2) = det(J) * ∇(det(J))
+                    gradient[2*lnd]   = detJ * g_detJ.x;
+                    gradient[2*lnd+1] = detJ * g_detJ.y;
+                }
+            }
+        }
+        else if constexpr (DIM == 3) {
+            // 3D objective function: f = 0.5 * || du x dv ||^2
+            const GEO::vec3 du_3d(du.x, du.y, du.z);
+            const GEO::vec3 dv_3d(dv.x, dv.y, dv.z);
+
+            // normal: N = du x dv
+            const GEO::vec3 N = GEO::cross(du_3d, dv_3d);
+
+            for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
+                for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
+                    const double lag_basis_duv = dBu[i] * Bv[j]; // α
+                    const double lag_basis_udv = Bu[i] * dBv[j]; // β
+                    const auto& lnd = this->facet_lnd(i, j);
+
+                    // V_ij = α * dv - β * du
+                    const GEO::vec3 V_ij(
+                        lag_basis_duv * dv.x - lag_basis_udv * du.x,
+                        lag_basis_duv * dv.y - lag_basis_udv * du.y,
+                        lag_basis_duv * dv.z - lag_basis_udv * du.z
+                    );
+
+                    // 0.5 * ||N||^2 -> V_ij x N
+                    const auto g = GEO::cross(V_ij, N);
+
+                    gradient[3*lnd]   = g.x;
+                    gradient[3*lnd+1] = g.y;
+                    gradient[3*lnd+2] = g.z;
                 }
             }
         }

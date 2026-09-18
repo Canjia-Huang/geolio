@@ -7,6 +7,7 @@
 #include <geolio/high_order/hex_control_grid.h>
 #include <geolio/high_order/quad_control_grid.h>
 #include "../utils.h"
+#include <geolio/common/log.h>
 
 namespace geolio::test
 {
@@ -43,14 +44,14 @@ namespace geolio::test
     };
 
     TEST_F(HexMimimumJacobianDeterminantTest, check) {
-        MinimumJacobianDeterminant<3, HexControlGrid> MJD(*control_grid);
+        MinimumJacobianDeterminant<HexControlGrid> MJD(*control_grid);
 
         EXPECT_TRUE(MJD.contains_inverted_region(0));
         EXPECT_FALSE(MJD.contains_inverted_region(1));
 
         {
-            std::vector<MinimumJacobianDeterminant<3, HexControlGrid>::Block> c0_travelled_sub_blocks;
-            std::vector<MinimumJacobianDeterminant<3, HexControlGrid>::Block> c1_travelled_sub_blocks;
+            std::vector<MinimumJacobianDeterminant<HexControlGrid>::Block> c0_travelled_sub_blocks;
+            std::vector<MinimumJacobianDeterminant<HexControlGrid>::Block> c1_travelled_sub_blocks;
             const auto c0_bound = MJD.compute_lower_bound(0, 1e-10, &c0_travelled_sub_blocks);
             const auto c1_bound = MJD.compute_lower_bound(1, 1e-10, &c1_travelled_sub_blocks);
             EXPECT_LT(c0_bound, 0);
@@ -68,8 +69,8 @@ namespace geolio::test
         }
 
         {
-            std::vector<MinimumJacobianDeterminant<3, HexControlGrid>::Block> c0_invalid_sub_blocks;
-            std::vector<MinimumJacobianDeterminant<3, HexControlGrid>::Block> c1_invalid_sub_blocks;
+            std::vector<MinimumJacobianDeterminant<HexControlGrid>::Block> c0_invalid_sub_blocks;
+            std::vector<MinimumJacobianDeterminant<HexControlGrid>::Block> c1_invalid_sub_blocks;
             MJD.collect_invalid_sub_blocks(0, c0_invalid_sub_blocks, 1);
             MJD.collect_invalid_sub_blocks(1, c1_invalid_sub_blocks, 1);
             EXPECT_TRUE(c1_invalid_sub_blocks.empty());
@@ -84,6 +85,66 @@ namespace geolio::test
     template <GEO::index_t DIM>
     class QuadMimimumJacobianDeterminantTest : public ::testing::Test {
     protected:
+        void save_high_order_mesh_facets(const std::string& filepath) {
+            ASSERT_FALSE(control_grid == nullptr);
+
+            GEO::Mesh mesh_out(DIM);
+            GEO::Attribute<GEO::index_t> mesh_out_v_facet(mesh_out.vertices.attributes(), "facet");
+            GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
+            GEO::Attribute<GEO::index_t> mesh_out_f_facet(mesh_out.facets.attributes(), "facet");
+
+            control_grid->append_discretized_high_order_facets(
+                mesh_out,
+                20,
+                &mesh_out_v_facet,
+                &mesh_out_v_uv,
+                &mesh_out_f_facet);
+
+            eval_vertices_quality(mesh_out, mesh_out_v_facet, mesh_out_v_uv);
+
+            if (const auto& v_quantities = control_grid->control_nodes_quantities();
+                v_quantities.is_bound()
+                ) {
+                const auto dim = v_quantities.dimension();
+                GEO::Attribute<double> mesh_out_v_quantities;
+                mesh_out_v_quantities.create_vector_attribute(mesh_out.vertices.attributes(), "quantities", dim);
+                for (const auto& v : mesh_out.vertices) {
+                    control_grid->compute_facet_uv_quantities(
+                        mesh_out_v_facet[v],
+                        mesh_out_v_uv[v],
+                        &mesh_out_v_quantities[dim*v]);
+                }
+                }
+
+            EXPECT_TRUE(mesh_out.save(filepath));
+        }
+
+        void eval_vertices_quality(
+            const GEO::Mesh& mesh_out,
+            const GEO::Attribute<GEO::index_t>& mesh_out_v_facet,
+            const GEO::Attribute<GEO::vec2>& mesh_out_v_uv
+            ) const {
+            GEO::Attribute<double> mesh_out_v_det_jacobian(mesh_out.vertices.attributes(), "det_jacobian");
+            GEO::Attribute<double> mesh_out_v_absolute_area(mesh_out.vertices.attributes(), "absolute_area");
+            GEO::Attribute<double> mesh_out_v_scaled_jacobian(mesh_out.vertices.attributes(), "scaled_jacobian");
+            GEO::Attribute<double> mesh_out_v_inverse_mean_ratio(mesh_out.vertices.attributes(), "inverse_mean_ratio");
+            GEO::Attribute<double> mesh_out_v_MIPS(mesh_out.vertices.attributes(), "MIPS");
+            for (const auto& v : mesh_out.vertices) {
+                const auto& c = mesh_out_v_facet[v];
+                const auto& uv = mesh_out_v_uv[v];
+                mesh_out_v_det_jacobian[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
+                mesh_out_v_absolute_area[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::ABSOLUTE_SQ_AREA);
+                mesh_out_v_scaled_jacobian[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::SCALED_JACOBIAN);
+                mesh_out_v_inverse_mean_ratio[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::INVERSE_MEAN_RATIO);
+                mesh_out_v_MIPS[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::MIPS);
+            }
+        }
+
         GEO::Mesh mesh;
         std::unique_ptr<QuadControlGrid<DIM>> control_grid;
     };
@@ -127,18 +188,21 @@ namespace geolio::test
 
     TYPED_TEST_SUITE(QuadMimimumJacobianDeterminantDIMTest, DimTypes);
 
-    TYPED_TEST(QuadMimimumJacobianDeterminantDIMTest, check) {
+    TYPED_TEST(QuadMimimumJacobianDeterminantDIMTest, check_detJ) {
         constexpr GEO::index_t DIM = TypeParam::value;
-        MinimumJacobianDeterminant<DIM, QuadControlGrid<DIM>> MJD(*(this->control_grid));
+        MinimumJacobianDeterminant<QuadControlGrid<DIM>> MJD(*(this->control_grid));
+
+        this->save_high_order_mesh_facets(get_current_test_name()+"_ho_mesh.geogram");
 
         EXPECT_FALSE(MJD.contains_inverted_region(0));
         EXPECT_TRUE(MJD.contains_inverted_region(1));
 
         {
-            std::vector<typename MinimumJacobianDeterminant<DIM, QuadControlGrid<DIM>>::Block> f0_travelled_sub_blocks;
-            std::vector<typename MinimumJacobianDeterminant<DIM, QuadControlGrid<DIM>>::Block> f1_travelled_sub_blocks;
+            std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f0_travelled_sub_blocks;
+            std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f1_travelled_sub_blocks;
             const auto c0_bound = MJD.compute_lower_bound(0, 1e-10, &f0_travelled_sub_blocks);
             const auto c1_bound = MJD.compute_lower_bound(1, 1e-10, &f1_travelled_sub_blocks);
+            LOG::DEBUG("c0_bound: {}, c1_bound: {}", c0_bound, c1_bound);
             EXPECT_GT(c0_bound, 0);
             EXPECT_LT(c1_bound, 0);
             {
@@ -154,8 +218,8 @@ namespace geolio::test
         }
 
         {
-            std::vector<typename MinimumJacobianDeterminant<DIM, QuadControlGrid<DIM>>::Block> f0_invalid_sub_blocks;
-            std::vector<typename MinimumJacobianDeterminant<DIM, QuadControlGrid<DIM>>::Block> f1_invalid_sub_blocks;
+            std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f0_invalid_sub_blocks;
+            std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f1_invalid_sub_blocks;
             MJD.collect_invalid_sub_blocks(0, f0_invalid_sub_blocks, 1);
             MJD.collect_invalid_sub_blocks(1, f1_invalid_sub_blocks, 1);
             EXPECT_TRUE(f0_invalid_sub_blocks.empty());
@@ -166,4 +230,58 @@ namespace geolio::test
             }
         }
     }
+
+    // TYPED_TEST(QuadMimimumJacobianDeterminantDIMTest, check_absolute_area) {
+    //     constexpr GEO::index_t DIM = TypeParam::value;
+    //     MinimumJacobianDeterminant<QuadControlGrid<DIM>> MJD(*(this->control_grid), true);
+    //
+    //     this->save_high_order_mesh_facets(get_current_test_name()+"_ho_mesh.geogram");
+    //
+    //     EXPECT_FALSE(MJD.contains_inverted_region(0));
+    //     if constexpr (DIM == 2)
+    //         EXPECT_TRUE(MJD.contains_inverted_region(1));
+    //     else
+    //         EXPECT_FALSE(MJD.contains_inverted_region(1));
+    //
+    //     {
+    //         std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f0_travelled_sub_blocks;
+    //         std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f1_travelled_sub_blocks;
+    //         const auto c0_bound = MJD.compute_lower_bound(0, 1e-10, &f0_travelled_sub_blocks);
+    //         const auto c1_bound = MJD.compute_lower_bound(1, 1e-10, &f1_travelled_sub_blocks);
+    //         LOG::DEBUG("c0_bound: {}, c1_bound: {}", c0_bound, c1_bound);
+    //         EXPECT_GT(c0_bound, 0);
+    //         if constexpr (DIM == 2)
+    //             EXPECT_LT(c1_bound, 0);
+    //         else
+    //             EXPECT_GT(c1_bound, 0);
+    //         {
+    //             GEO::Mesh mesh_out;
+    //             MJD.append_blocks_to_mesh(f0_travelled_sub_blocks, mesh_out);
+    //             mesh_out.save(get_current_test_name()+"_f0_travelled_blocks.geogram");
+    //         }
+    //         {
+    //             GEO::Mesh mesh_out;
+    //             MJD.append_blocks_to_mesh(f1_travelled_sub_blocks, mesh_out);
+    //             mesh_out.save(get_current_test_name()+"_f1_travelled_blocks.geogram");
+    //         }
+    //     }
+    //
+    //     {
+    //         std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f0_invalid_sub_blocks;
+    //         std::vector<typename MinimumJacobianDeterminant<QuadControlGrid<DIM>>::Block> f1_invalid_sub_blocks;
+    //         MJD.collect_invalid_sub_blocks(0, f0_invalid_sub_blocks, 1);
+    //         MJD.collect_invalid_sub_blocks(1, f1_invalid_sub_blocks, 1);
+    //         EXPECT_TRUE(f0_invalid_sub_blocks.empty());
+    //         // if constexpr (DIM == 2)
+    //         //     EXPECT_TRUE(f1_invalid_sub_blocks.empty());
+    //         // else {
+    //             EXPECT_FALSE(f1_invalid_sub_blocks.empty());
+    //             {
+    //                 GEO::Mesh mesh_out;
+    //                 MJD.append_blocks_to_mesh(f1_invalid_sub_blocks, mesh_out);
+    //                 mesh_out.save(get_current_test_name()+"_f1_invalid_blocks.geogram");
+    //             }
+    //         // }
+    //     }
+    // }
 }
