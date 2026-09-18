@@ -120,6 +120,15 @@ namespace geolio::test
         }
 
         /**
+         * Number of operations the test actually performed.
+         *
+         * The operations guarded by a validity predicate may be rejected; the tests assert that at
+         * least one of them went through, so that a predicate that becomes too strict cannot turn
+         * them into empty loops.
+         */
+        GEO::index_t performed_operations_nb = 0;
+
+        /**
          * Verify that reconnecting the mesh preserves the current cell adjacency layout.
          */
         void check_connections() {
@@ -706,6 +715,7 @@ namespace geolio::test
             if (!is_tet_edge_collapse_valid(mesh, c, le))
                 return;
 
+            ++performed_operations_nb;
             GEO::index_t disuse_v;
             std::vector<GEO::index_t> disuse_cs;
             tet_edge_collapse(mesh, c, le, disuse_v, disuse_cs);
@@ -720,6 +730,7 @@ namespace geolio::test
 
     TEST_F(TetEdgeCollapseTest, tet_edge_collapse) {
         for_each_c_le();
+        EXPECT_GT(performed_operations_nb, 0) << "the collapse validity check rejected every edge";
     }
 
     /* ============================================================================================================= */
@@ -732,6 +743,7 @@ namespace geolio::test
             if (!is_tet_edge_swap_2_3_valid(mesh, c, lf))
                 return;
 
+            ++performed_operations_nb;
             const GEO::index_t new_c = mesh.cells.create_tets(1);
             tet_edge_swap_2_3(mesh, c, lf, new_c);
         }
@@ -739,6 +751,7 @@ namespace geolio::test
 
     TEST_F(TetEdgeSwap23Test, tet_edge_swap) {
         for_each_c_lf();
+        EXPECT_GT(performed_operations_nb, 0) << "the swap validity check rejected every facet";
     }
 
     class TetEdgeSwap23SimpleTest : public TetOperationsAttributeTest {};
@@ -869,20 +882,27 @@ namespace geolio::test
     class TetEdgeSwap32Test : public TetOperationsTest {
     protected:
         void perform_operation(const GEO::index_t c, const GEO::index_t le) override {
-            // GEO::index_t disuse_c;
-            //
-            // if (const bool processed = tet_edge_swap_3_2(mesh, c, le, disuse_c)) {
-            //     /* Clean disuse vertices and cells */
-            //     ASSERT_LT(disuse_c, mesh.cells.nb());
-            //     GEO::vector<GEO::index_t> cells_to_delete(mesh.cells.nb(), 0);
-            //     cells_to_delete[disuse_c] = 1;
-            //     mesh.cells.delete_elements(cells_to_delete);
-            // }
+            LOG::TRACE("{}(c: {}, le: {})", __FUNCTION__, c, le);
+
+            std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> ordered_c_le_lf;
+            get_edge_incident_cells(mesh, c, le, ordered_c_le_lf);
+
+            GEO::index_t disuse_c = GEO::NO_CELL;
+            if (!tet_edge_swap_3_2(mesh, ordered_c_le_lf, disuse_c))
+                return;
+            ++performed_operations_nb;
+
+            /* Clean disuse vertices and cells */
+            ASSERT_LT(disuse_c, mesh.cells.nb());
+            GEO::vector<GEO::index_t> cells_to_delete(mesh.cells.nb(), 0);
+            cells_to_delete[disuse_c] = 1;
+            mesh.cells.delete_elements(cells_to_delete);
         }
     };
 
     TEST_F(TetEdgeSwap32Test, tet_edge_swap) {
         for_each_c_le();
+        EXPECT_GT(performed_operations_nb, 0) << "the 3-2 swap was rejected for every edge";
     }
 
     class TetEdgeSwap32AttributeTest : public TetOperationsAttributeTest {};

@@ -12,7 +12,6 @@
 #include <vector>
 #include "mesh_operations.h"
 #include "geolio/common/array_hash.h"
-#include "geolio/common/pair_hash.h"
 
 namespace geolio
 {
@@ -194,11 +193,11 @@ namespace geolio
             mesh.cells.set_adjacent(new_c0, lv0, nc0);
             mesh.cells.set_adjacent(new_c0, lv1, new_c1);
             mesh.cells.set_adjacent(new_c0, lv2, c);
-            mesh.cells.set_adjacent(new_c0, lv3, new_c2);
+            mesh.cells.set_adjacent(new_c0, lv3, GEO::NO_CELL); // border facet, unless the split facet has an opposite cell
             mesh.cells.set_adjacent(new_c1, lv0, new_c0);
             mesh.cells.set_adjacent(new_c1, lv1, nc1);
             mesh.cells.set_adjacent(new_c1, lv2, c);
-            mesh.cells.set_adjacent(new_c1, lv3, new_c3);
+            mesh.cells.set_adjacent(new_c1, lv3, GEO::NO_CELL);
             if (nc0 != GEO::NO_CELL) {
                 const GEO::index_t nlf = mesh.cells.find_tet_facet(
                     nc0,
@@ -298,6 +297,9 @@ namespace geolio
             mesh.cells.set_adjacent(new_c3, lv1, ac);
             mesh.cells.set_adjacent(new_c3, lv2, nc2);
             mesh.cells.set_adjacent(new_c3, lv3, new_c1);
+            /* The split facet is interior: the new cells of both sides face each other. */
+            mesh.cells.set_adjacent(new_c0, lf, new_c2);
+            mesh.cells.set_adjacent(new_c1, lf, new_c3);
             if (nc0 != GEO::NO_CELL) {
                 const GEO::index_t nlf = mesh.cells.find_tet_facet(
                     nc0,
@@ -469,8 +471,40 @@ namespace geolio
         for (const auto& [c, _, __] : ordered_c_le_lf)
             adjacent_cells.insert(c);
 
+        /* The vertices opposite the collapsed edge in the cells that contain it. */
+        std::unordered_set<GEO::index_t> edge_ring_vertices;
+        for (const auto& [nc, _, __] : ordered_c_le_lf) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                const auto nv = mesh.cells.vertex(nc, lv);
+                if (nv != v0 && nv != v1)
+                    edge_ring_vertices.insert(nv);
+            }
+        }
+
+        /* The neighbours of a vertex are the three other vertices of every cell incident to it. */
+        const auto ring_neighbours = [&mesh](const std::vector<std::pair<GEO::index_t, GEO::index_t>>& ring) {
+            std::unordered_set<GEO::index_t> neighbours;
+            for (const auto& [nc, nlv] : ring) {
+                neighbours.insert(mesh.cells.vertex(nc, (nlv+1)%4));
+                neighbours.insert(mesh.cells.vertex(nc, (nlv+2)%4));
+                neighbours.insert(mesh.cells.vertex(nc, (nlv+3)%4));
+            }
+            return neighbours;
+        };
+
+        /* The collapse merges the star of v1 into the star of v0, so the edge (v1, u) of every neighbour
+         * u of v1 becomes the edge (v0, u). When u is also a neighbour of v0, that edge is already there
+         * and the mesh would end up holding it twice, which breaks its 3-manifoldness: v0 and v1 may only
+         * have in common the vertices opposite the collapsed edge (link condition). */
+        const auto v1_neighbours = ring_neighbours(v1_c_and_lv);
+        for (const auto& nv : ring_neighbours(v0_c_and_lv)) {
+            if (!v1_neighbours.contains(nv))
+                continue;
+            if (!edge_ring_vertices.contains(nv))
+                return false; // v0 and v1 share a neighbour: the collapse would duplicate the edge to it.
+        }
+
         /* After collapse, no identical tetrahedra can exist */
-        std::unordered_set<std::pair<GEO::index_t, GEO::index_t>, PairHash> other_vertices_pair;
         std::unordered_set<std::array<GEO::index_t, 3>, ArrayHash<GEO::index_t, 3>> other_vertices_array;
         for (const auto& [nc, nlv] : v0_c_and_lv) {
             const auto& nv1 = mesh.cells.vertex(nc, (nlv+1)%4);
@@ -484,16 +518,6 @@ namespace geolio
 
             if (nv1 == v1 || nv2 == v1 || nv3 == v1) {
                 if (!adjacent_cells.contains(nc)) // Non-manifold edge.
-                    return false;
-
-                std::pair<GEO::index_t, GEO::index_t> cvs;
-                if (nv1 == v1)
-                    cvs = std::minmax(nv2, nv3);
-                else if (nv2 == v1)
-                    cvs = std::minmax(nv1, nv3);
-                else // nv3 == v1
-                    cvs = std::minmax(nv1, nv2);
-                if (!other_vertices_pair.insert(cvs).second) // Result in identical facet after collapsing
                     return false;
             }
 
@@ -514,16 +538,6 @@ namespace geolio
 
             if (nv1 == v0 || nv2 == v0 || nv3 == v0) {
                 if (!adjacent_cells.contains(nc)) // Non-manifold edge.
-                    return false;
-
-                std::pair<GEO::index_t, GEO::index_t> cvs;
-                if (nv1 == v0)
-                    cvs = std::minmax(nv2, nv3);
-                else if (nv2 == v0)
-                    cvs = std::minmax(nv1, nv3);
-                else // nv3 == v1
-                    cvs = std::minmax(nv1, nv2);
-                if (!other_vertices_pair.insert(cvs).second) // Result in identical facet after collapsing
                     return false;
             }
 
@@ -814,34 +828,62 @@ namespace geolio
         GEO::index_t& disuse_c,
         const bool update_attributes
         ) {
-        assert(ordered_c_le_lf.size() == 3);
-        assert(mesh.cells.adjacent(get<0>(ordered_c_le_lf.back()), get<2>(ordered_c_le_lf.back())) != GEO::NO_CELL);
+        /* The swap requires the three distinct cells that share an interior edge, in ring order. */
+        if (ordered_c_le_lf.size() != 3)
+            return false;
 
         const GEO::index_t c0 = get<0>(ordered_c_le_lf[0]);
         const GEO::index_t c1 = get<0>(ordered_c_le_lf[1]);
         const GEO::index_t c2 = get<0>(ordered_c_le_lf[2]);
-        disuse_c = c2;
+        if (c0 == c1 || c1 == c2 || c2 == c0)
+            return false;
+        for (const auto cc : {c0, c1, c2}) {
+            if (cc >= mesh.cells.nb() || mesh.cells.type(cc) != GEO::MeshCellType::MESH_TET)
+                return false;
+        }
+        if (mesh.cells.adjacent(c2, get<2>(ordered_c_le_lf[2])) == GEO::NO_CELL) // edge on the boundary: no ring to flip
+            return false;
 
-        const GEO::index_t v0 = mesh.cells.edge_vertex(get<0>(ordered_c_le_lf[0]), get<1>(ordered_c_le_lf[0]), 0);
-        const GEO::index_t v1 = mesh.cells.edge_vertex(get<0>(ordered_c_le_lf[0]), get<1>(ordered_c_le_lf[0]), 1);
+        const GEO::index_t v0 = mesh.cells.edge_vertex(c0, get<1>(ordered_c_le_lf[0]), 0);
+        const GEO::index_t v1 = mesh.cells.edge_vertex(c0, get<1>(ordered_c_le_lf[0]), 1);
+        for (const auto cc : {c1, c2}) { // the three cells must share the edge
+            if (mesh.cells.find_tet_vertex(cc, v0) == GEO::NO_INDEX ||
+                mesh.cells.find_tet_vertex(cc, v1) == GEO::NO_INDEX)
+                return false;
+        }
+
         const GEO::index_t v2 = get_tet_facet_another_vertex(mesh, c0, get<2>(ordered_c_le_lf[0]), v0, v1);
         const GEO::index_t v4 = get_tet_facet_another_vertex(mesh, c1, get<2>(ordered_c_le_lf[1]), v0, v1);
+        if (v2 == GEO::NO_INDEX || v4 == GEO::NO_INDEX)
+            return false;
 
         const GEO::index_t c0_lv0 = mesh.cells.find_tet_vertex(c0, v0);
         const GEO::index_t c0_lv1 = mesh.cells.find_tet_vertex(c0, v1);
         const GEO::index_t c0_lv2 = mesh.cells.find_tet_vertex(c0, v2);
-        assert(c0_lv0 != GEO::NO_INDEX && c0_lv1 != GEO::NO_INDEX && c0_lv2 != GEO::NO_INDEX);
+        if (c0_lv0 == GEO::NO_INDEX || c0_lv1 == GEO::NO_INDEX || c0_lv2 == GEO::NO_INDEX)
+            return false;
         const GEO::index_t c0_lv3 = 0^1^2^3^c0_lv0^c0_lv1^c0_lv2;
-        assert(c0_lv3 < 4 && c0_lv3 != c0_lv0 && c0_lv3 != c0_lv1 && c0_lv3 != c0_lv2);
 
         const GEO::index_t v3 = mesh.cells.vertex(c0, c0_lv3);
 
         const GEO::index_t c1_lv0 = mesh.cells.find_tet_vertex(c1, v0);
         const GEO::index_t c1_lv1 = mesh.cells.find_tet_vertex(c1, v1);
         const GEO::index_t c1_lv4 = mesh.cells.find_tet_vertex(c1, v4);
-        assert(c1_lv0 != GEO::NO_INDEX && c1_lv1 != GEO::NO_INDEX && c1_lv4 != GEO::NO_INDEX);
+        if (c1_lv0 == GEO::NO_INDEX || c1_lv1 == GEO::NO_INDEX || c1_lv4 == GEO::NO_INDEX)
+            return false;
         const GEO::index_t c1_lv2 = 0^1^2^3^c1_lv0^c1_lv1^c1_lv4;
-        assert(c1_lv2 < 4 && c1_lv2 != c1_lv0 && c1_lv2 != c1_lv1 && c1_lv2 != c1_lv4);
+
+        /* The two resulting cells share the facet (v2, v3, v4): if a cell already holds those three
+         * vertices, adding them would duplicate existing tetrahedra and break the manifoldness. */
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> v2_incident_c_and_lv;
+        get_vertex_incident_cells(mesh, c0, c0_lv2, v2_incident_c_and_lv);
+        for (const auto& [nc, nlv] : v2_incident_c_and_lv) {
+            if (mesh.cells.find_tet_vertex(nc, v3) != GEO::NO_INDEX &&
+                mesh.cells.find_tet_vertex(nc, v4) != GEO::NO_INDEX)
+                return false;
+        }
+
+        disuse_c = c2;
 
         // const GEO::index_t nc00 = M.cells.adjacent(c0, c0_lv0);
         const GEO::index_t nc01 = mesh.cells.adjacent(c0, c0_lv1);

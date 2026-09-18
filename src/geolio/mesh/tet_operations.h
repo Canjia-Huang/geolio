@@ -155,8 +155,8 @@ namespace geolio
      * @param[in]     new_v          Index of a pre-allocated vertex used as the split vertex.
      * @param[in]     new_c0         Index of the first pre-allocated tetrahedron created by the split.
      * @param[in]     new_c1         Index of the second pre-allocated tetrahedron created by the split.
-     * @param[in]     new_c2         Index of the third pre-allocated tetrahedron used for interior facets; set to GEO::NO_CELL for boundary facets.
-     * @param[in]     new_c3         Index of the fourth pre-allocated tetrahedron used for interior facets; set to GEO::NO_CELL for boundary facets.
+     * @param[in]     new_c2         Index of the third pre-allocated tetrahedron used for interior facets; unused (and typically GEO::NO_CELL) for boundary facets.
+     * @param[in]     new_c3         Index of the fourth pre-allocated tetrahedron used for interior facets; unused (and typically GEO::NO_CELL) for boundary facets.
      * @param[in]     update_attributes If true, per-cell attributes are preserved on all new tetrahedra.
      */
     void tet_facet_split(
@@ -199,7 +199,11 @@ namespace geolio
      * @details The operation removes one endpoint of the edge by merging it into the other,
      *          and then rewrites all incident cells. This validation rejects cases that would
      *          create a non-manifold vertex, degenerate facets, or duplicate tetrahedra in the
-     *          surrounding cavity.
+     *          surrounding cavity. It also enforces the link condition: the two endpoints may only
+     *          have in common the vertices opposite the collapsed edge in the cells that contain
+     *          it. Merging the two stars indeed turns the edge joining such a common neighbour to
+     *          the surviving vertex into two copies of the same edge, which would leave the mesh
+     *          non-manifold.
      * @param[in] mesh Input tetrahedral mesh.
      * @param[in] c    Index of a tetrahedron containing the target edge.
      * @param[in] le   Local edge index (0-5) in cell @p c.
@@ -217,6 +221,8 @@ namespace geolio
      *          endpoint to the surviving vertex in all remaining cells, relinks the adjacency of
      *          the surviving cavity cells, and reports the removed vertex and cells through output
      *          arguments.
+     * @note The collapse is assumed valid: test the edge with is_tet_edge_collapse_valid()
+     *       beforehand, otherwise the resulting mesh may not be a valid tetrahedralization.
      * @param[in,out] mesh         The tetrahedral mesh to modify.
      * @param[in]     _c           Index of a cell containing the target edge.
      * @param[in]     _le          Local edge index (0-5) in cell @p _c.
@@ -276,6 +282,10 @@ namespace geolio
      *          vertices of the two surviving cells, relinks adjacent cells around the modified
      *          cavity, and reports the removed cell index through @p disuse_c.
      * @param[in,out] mesh               The tetrahedral mesh to modify.
+     *          The ring is validated before anything is modified: it must hold three distinct cells
+     *          that share the same interior edge, and the two resulting cells must not already exist
+     *          in the mesh (that is, no cell may already hold the three vertices of their common
+     *          facet).
      * @param[in]     ordered_c_le_lf    Three ordered tuples describing the edge-connected cell ring.
      * @param[out]    disuse_c           Reference to receive the index of the cell removed by the 3-2 swap.
      * @param[in]     update_attributes  If true, per-cell attributes are copied/restored around the modified cavity.
