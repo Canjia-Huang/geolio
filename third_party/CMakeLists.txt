@@ -46,6 +46,25 @@ if(GEOLIO_ENABLE_LBFGS_LITE)
     endif()
 endif()
 
+# Optional CoMISo mixed-integer constrained solver (https://github.com/libigl/CoMISo).
+# Downloaded at configure time via FetchContent when GEOLIO_ENABLE_COMISO is ON.
+if(GEOLIO_ENABLE_COMISO)
+    include(CoMISo)
+    # CoMISo is not header-only: the fetched CMakeLists.txt defines the static
+    # library target `CoMISo`, whose PUBLIC include directories already expose both
+    # the <CoMISo/...> prefix and its bundled GMM headers, so nothing extra has to
+    # be added to the include list below. CoMISo builds with POSITION_INDEPENDENT_CODE,
+    # so it links into the SHARED geolio target.
+    target_link_libraries(${CURRENT_LIB_NAME} INTERFACE CoMISo)
+
+    # Feature macro: defined when CoMISo is enabled (see the GEOLIO_ENABLE_COMISO
+    # option in the top-level CMakeLists.txt). INTERFACE so the macro is also visible
+    # to consumers of geolio::third_party in their own translation units; code may
+    # guard CoMISo-specific includes/implementations with
+    #   #if GEOLIO_ENABLE_COMISO
+    target_compile_definitions(${CURRENT_LIB_NAME} INTERFACE GEOLIO_ENABLE_COMISO=1)
+endif()
+
 target_include_directories(${CURRENT_LIB_NAME} INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/CLI11/include"

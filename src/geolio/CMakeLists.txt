@@ -28,6 +28,7 @@ file(GLOB SOURCE_FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/io/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/local_operation_optimization/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/mesh/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/miq/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/motorcycle/*.cpp
 )
 target_sources(${CURRENT_LIB_NAME}
