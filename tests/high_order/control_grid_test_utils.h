@@ -231,14 +231,14 @@ namespace geolio::test
          * @param[in] with_absolute_area Also store the absolute squared area; grids that do not
          *            define it (the hexahedral one) leave the attribute unbound.
          */
-        explicit MeshQualityAttributes(GEO::Mesh& mesh, const bool with_absolute_area = true)
+        explicit MeshQualityAttributes(const GEO::Mesh& mesh, const bool with_absolute_area = true)
             : det_jacobian(mesh.vertices.attributes(), "det_jacobian"),
-              absolute_sq_area(with_absolute_area
-                  ? GEO::Attribute<double>(mesh.vertices.attributes(), "absolute_area")
-                  : GEO::Attribute<double>()),
               scaled_jacobian(mesh.vertices.attributes(), "scaled_jacobian"),
               inverse_mean_ratio(mesh.vertices.attributes(), "inverse_mean_ratio"),
-              MIPS(mesh.vertices.attributes(), "MIPS") {
+              MIPS(mesh.vertices.attributes(), "MIPS")
+        {
+            if (with_absolute_area)
+                absolute_sq_area.bind(mesh.vertices.attributes(), "absolute_area");
         }
 
         /**
