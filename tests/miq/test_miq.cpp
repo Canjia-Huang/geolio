@@ -41,11 +41,17 @@ namespace geolio::test
         save_results();
     }
 
-    // TEST_F(MIQTest, pre_compute_cross) {
-    //     GEO::FrameField cross_field;
-    //     cross_field.create_from_surface_mesh(mesh, false);
-    //     cross_field.frames();
-    // }
+    TEST_F(MIQTest, pre_compute_cross) {
+        GEO::FrameField cross_field;
+        cross_field.create_from_surface_mesh(mesh, false);
+
+        MIQParameters params;
+        params.cross = cross_field.frames().data();
+        params.cross_dim = 9;
+
+        miq<3>(mesh, mesh_fc_uv, params);
+        save_results();
+    }
 }
 
 #endif

@@ -11,8 +11,9 @@
 namespace geolio
 {
     struct MIQParameters {
-        const double* mesh_f_cross = nullptr;
-        GEO::index_t cross_dim = 6; // For the input 4-NoSy field, are 2 vectors (2*3=6) or 4 vectors (4*3=12) provided?
+        const double* cross = nullptr;
+        GEO::index_t cross_dim = 6; // For the input 4-NoSy field, are N vectors (N*3=3N) provided?
+
         double scale = 30.0;
         double stiffness = 5.0;
         bool direct_round = false;
@@ -57,7 +58,7 @@ namespace geolio
         /* Load cross field */
         Eigen::MatrixXd PD1(mesh.facets.nb(), 3);
         Eigen::MatrixXd PD2(mesh.facets.nb(), 3);
-        if (params.mesh_f_cross == nullptr) {
+        if (params.cross == nullptr) {
             Eigen::VectorXi b(1);
             b << 0;
             Eigen::MatrixXd bc(1, 3);
@@ -82,12 +83,12 @@ namespace geolio
         }
         else {
             for (const auto& f : mesh.facets) {
-                PD1(f, 0) = params.mesh_f_cross[params.cross_dim*f];
-                PD1(f, 1) = params.mesh_f_cross[params.cross_dim*f+1];
-                PD1(f, 2) = params.mesh_f_cross[params.cross_dim*f+2];
-                PD2(f, 0) = params.mesh_f_cross[params.cross_dim*f+3];
-                PD2(f, 1) = params.mesh_f_cross[params.cross_dim*f+4];
-                PD2(f, 2) = params.mesh_f_cross[params.cross_dim*f+5];
+                PD1(f, 0) = params.cross[params.cross_dim*f];
+                PD1(f, 1) = params.cross[params.cross_dim*f+1];
+                PD1(f, 2) = params.cross[params.cross_dim*f+2];
+                PD2(f, 0) = params.cross[params.cross_dim*f+3];
+                PD2(f, 1) = params.cross[params.cross_dim*f+4];
+                PD2(f, 2) = params.cross[params.cross_dim*f+5];
             }
         }
 
