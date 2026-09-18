@@ -80,12 +80,12 @@ namespace geolio
             for (GEO::index_t j = 0; j <= order_; ++j) {
                 const double basis_uv = Bu[i] * Bv[j];
                 for (GEO::index_t k = 0; k <= order_; ++k) {
-                    const auto& cv = cell_nd(c, i, j, k);
+                    const auto& nd = cell_nd(c, i, j, k);
                     const double lag_basis = basis_uv * Bw[k];
                     p += lag_basis * GEO::vec3(
-                        cur_control_nodes_ptr[3*cv],
-                        cur_control_nodes_ptr[3*cv+1],
-                        cur_control_nodes_ptr[3*cv+2]);
+                        cur_control_nodes_ptr[3*nd],
+                        cur_control_nodes_ptr[3*nd+1],
+                        cur_control_nodes_ptr[3*nd+2]);
                 }
             }
         }
