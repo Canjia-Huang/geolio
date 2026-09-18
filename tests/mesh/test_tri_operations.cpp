@@ -107,6 +107,27 @@ namespace geolio::test
                 mesh_fc_idx[mesh.facets.corner(f, i)] = GEO::Numeric::random_int32();
         }
 
+        /**
+         * Verify that the adjacency stored in the mesh is the one a fresh connectivity pass builds.
+         *
+         * @details The operations maintain the facet-to-facet adjacency incrementally; this check
+         *          states that the incremental result is the one mesh.facets.connect() recomputes.
+         */
+        void expect_adjacency_consistent() {
+            std::vector<GEO::index_t> stored_adjacency(3*mesh.facets.nb(), GEO::NO_FACET);
+            for (const auto& f : mesh.facets)
+                for (GEO::index_t lv = 0; lv < 3; ++lv)
+                    stored_adjacency[3*f+lv] = mesh.facets.adjacent(f, lv);
+
+            mesh.facets.connect();
+            for (const auto& f : mesh.facets) {
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    EXPECT_EQ(stored_adjacency[3*f+lv], mesh.facets.adjacent(f, lv))
+                        << "facet " << f << ", local edge " << lv;
+                }
+            }
+        }
+
         GEO::Mesh mesh;
         GEO::Attribute<GEO::index_t> mesh_f_idx;
         GEO::Attribute<GEO::index_t> mesh_fc_idx;
@@ -507,5 +528,90 @@ namespace geolio::test
                 }
             }
         }
+    }
+
+    /**
+     * @brief Vertices of the quad used by the two tests below, and of its neighbourhood.
+     *
+     * The quad is (v1, v2, v0, v3), flipped along the diagonal (v0, v1) opposite to its local
+     * vertex 2. It is non-convex and its other diagonal (v2, v3) is the segment the flip would
+     * introduce. The last two vertices complete the one-rings of the endpoints of that diagonal.
+     */
+    const std::vector<GEO::vec3> QUAD_NEIGHBOURHOOD_VERTICES = {
+        GEO::vec3(-10.0, -10.0, 0.0),                             // v2
+        GEO::vec3(10.0, -10.0, 0.0),
+        GEO::vec3(-10.0, 10.0, 0.0),
+        GEO::vec3(-2.075718879699707, -7.9290009811520576, 0.0),  // v0
+        GEO::vec3(-7.1111459136009216, -5.9281086921691895, 0.0),
+        GEO::vec3(-6.3337912559509277, -1.3703341484069824, 0.0), // v3
+        GEO::vec3(-6.1758983135223389, -6.9848983287811279, 0.0), // v1
+    };
+
+    /** The two facets of the quad: the flipped one first, then its neighbour across the diagonal. */
+    const std::vector<GEO::index_t> QUAD_FACETS = {
+        6, 0, 3, // the flipped facet (v1, v2, v0)
+        6, 3, 5, // its neighbour across (v0, v1)
+    };
+
+    /** The two facets owning the other diagonal (v2, v3) of the quad. */
+    const std::vector<GEO::index_t> QUAD_OTHER_DIAGONAL_FACETS = {
+        5, 2, 0, // owns the directed edge (v2 -> v3)
+        5, 0, 4, // owns the directed edge (v3 -> v2)
+    };
+
+    /** The neighbours of the quad along its two edges (v1, v2) and (v2, v0). */
+    const std::vector<GEO::index_t> QUAD_SIDE_FACETS = {
+        6, 4, 0,
+        3, 0, 1,
+    };
+
+    /** Local index of the flipped facet whose edge (lv -> lv+1) is the diagonal (v0 -> v1). */
+    constexpr GEO::index_t QUAD_FLIPPED_EDGE_LV = 2;
+
+    /**
+     * @brief A flip whose other diagonal is already an edge of the mesh must be rejected.
+     *
+     * @details Flipping it would make the two flipped facets share that edge with the two facets
+     *          that already own it: the mesh would stop being 2-manifold and the adjacency
+     *          maintained by the operation would no longer be the one mesh.facets.connect()
+     *          recomputes. This configuration comes from a random CDT mesh; note that the facets
+     *          owning the other diagonal are not neighbours of the quad, so inspecting only the
+     *          neighbours of the quad (as the previous implementation did) misses it.
+     */
+    TEST_F(TriEdgeSwapSimpleTest, rejects_flip_creating_duplicate_edge) {
+        std::vector<GEO::index_t> facets = QUAD_FACETS;
+        facets.insert(facets.end(), QUAD_OTHER_DIAGONAL_FACETS.begin(), QUAD_OTHER_DIAGONAL_FACETS.end());
+        facets.insert(facets.end(), QUAD_SIDE_FACETS.begin(), QUAD_SIDE_FACETS.end());
+        create_mesh(QUAD_NEIGHBOURHOOD_VERTICES, facets);
+
+        EXPECT_FALSE(is_tri_edge_swap_valid(mesh, 0, QUAD_FLIPPED_EDGE_LV));
+        EXPECT_FALSE(tri_edge_swap(mesh, 0, QUAD_FLIPPED_EDGE_LV));
+
+        /* The rejected flip must leave the facet and the connectivity untouched. */
+        EXPECT_EQ(mesh.facets.vertex(0, 0), QUAD_FACETS[0]);
+        EXPECT_EQ(mesh.facets.vertex(0, 1), QUAD_FACETS[1]);
+        EXPECT_EQ(mesh.facets.vertex(0, 2), QUAD_FACETS[2]);
+        expect_adjacency_consistent();
+    }
+
+    /**
+     * @brief The same quad, without the facets owning its other diagonal, can be flipped.
+     *
+     * @details This is the counterpart of the test above: it states that the check rejects only the
+     *          flips that would duplicate an existing edge.
+     */
+    TEST_F(TriEdgeSwapSimpleTest, accepts_flip_when_other_diagonal_is_free) {
+        std::vector<GEO::index_t> facets = QUAD_FACETS;
+        facets.insert(facets.end(), QUAD_SIDE_FACETS.begin(), QUAD_SIDE_FACETS.end());
+        create_mesh(QUAD_NEIGHBOURHOOD_VERTICES, facets);
+
+        EXPECT_TRUE(is_tri_edge_swap_valid(mesh, 0, QUAD_FLIPPED_EDGE_LV));
+        EXPECT_TRUE(tri_edge_swap(mesh, 0, QUAD_FLIPPED_EDGE_LV));
+
+        /* The flipped facet (v1, v2, v0) now uses the other diagonal: v3 takes the place of v1. */
+        EXPECT_EQ(mesh.facets.vertex(0, 0), 5);
+        EXPECT_EQ(mesh.facets.vertex(0, 1), 0);
+        EXPECT_EQ(mesh.facets.vertex(0, 2), 3);
+        expect_adjacency_consistent();
     }
 }
