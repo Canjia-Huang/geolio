@@ -185,6 +185,25 @@ namespace geolio
          */
         void compute_facet_uv_quantities(GEO::index_t f, const GEO::vec2& uv, double* q) const;
 
+        /**
+         * @brief Compute a unit-length reference normal for a 3D quadrilateral facet.
+         *
+         * The reference normal is computed from the four corner control-node positions
+         * using the cross product of the two diagonal directions:
+         *   n_ref = normalize( (p2 - p0) x (p3 - p1) )
+         *
+         * It provides a stable, consistently-oriented unit normal associated with the facet
+         * (orientation follows the facet's vertex ordering). The reference normal is used
+         * to determine the sign of the Jacobian (via dot(cross(du,dv), n_ref)) and for
+         * other orientation-dependent computations.
+         *
+         * @param[in] f Facet index (0..mesh_.facets.nb()-1)
+         * @return Unit-length reference normal vector in physical space.
+         * @pre DIM == 3
+         * @pre f < mesh_.facets.nb()
+         */
+        [[nodiscard]] GEO::vec3 compute_facet_reference_normal(GEO::index_t f) const requires (DIM == 3);
+
         enum class MeasureType {
             DET_JACOBIAN,         // Signed Jacobian determinant; non-positive values indicate inversion or degeneration.
             SCALED_JACOBIAN,      // Skew measure / normalized Jacobian; 1.0 is ideal, and non-positive values indicate collapse or inversion.

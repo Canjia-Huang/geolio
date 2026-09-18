@@ -208,6 +208,18 @@ namespace geolio
     }
 
     template<GEO::index_t DIM>
+    GEO::vec3 QuadControlGrid<DIM>::compute_facet_reference_normal(
+        GEO::index_t f
+        ) const requires (DIM == 3) {
+        assert(f < this->mesh_.facets.nb());
+        const auto nd0 = this->control_node(this->facet_vertex_nd(f, 0));
+        const auto nd1 = this->control_node(this->facet_vertex_nd(f, 1));
+        const auto nd2 = this->control_node(this->facet_vertex_nd(f, 2));
+        const auto nd3 = this->control_node(this->facet_vertex_nd(f, 3));
+        return GEO::normalize(GEO::cross(nd2-nd0, nd3-nd1));
+    }
+
+    template<GEO::index_t DIM>
     double QuadControlGrid<DIM>::compute_facet_uv_measure(
         const GEO::index_t f,
         const GEO::vec2& uv,
@@ -225,11 +237,7 @@ namespace geolio
         if constexpr (DIM == 2)
             det_J = geolio::cross(du, dv);
         else if constexpr (DIM == 3) { // Equivalent Jacobian determinant
-            const auto nd0 = this->control_node(this->facet_vertex_nd(f, 0));
-            const auto nd1 = this->control_node(this->facet_vertex_nd(f, 1));
-            const auto nd2 = this->control_node(this->facet_vertex_nd(f, 2));
-            const auto nd3 = this->control_node(this->facet_vertex_nd(f, 3));
-            const auto ref_normal = GEO::normalize(GEO::cross(nd2-nd0, nd3-nd1));
+            const auto ref_normal = compute_facet_reference_normal(f);
             const auto cross = GEO::cross(du, dv);
             det_J = GEO::dot(cross, ref_normal);
         }
