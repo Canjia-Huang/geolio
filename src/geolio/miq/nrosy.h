@@ -43,9 +43,9 @@ namespace igl
           // Init
           bool __Inited_TopologicalRelations;
           bool IsInited;
-          IGL_INLINE NRosyField();
+          NRosyField();
           //IGL_INLINE NRosyField(const MatrixXd& _V, const MatrixXi& _F);
-          IGL_INLINE NRosyField(const MatrixXd& _V, const MatrixXi& _F,
+          NRosyField(const MatrixXd& _V, const MatrixXi& _F,
               const MatrixXd &_N,
               const MatrixXi &_EV, const MatrixXi &_FE, const MatrixXi &_EF,
               const MatrixXi &_TT, const MatrixXi &_TTi,
@@ -55,66 +55,66 @@ namespace igl
           // Generate the N-rosy field
           // N degree of the rosy field
           // roundseparately: round the integer variables one at a time, slower but higher quality
-          IGL_INLINE void solve(const int N = 4, NRosySolver solverType = NRosySolver::multiple_rounding);
+          void solve(const int N = 4, NRosySolver solverType = NRosySolver::multiple_rounding);
 
           // Set a hard constraint on fid
           // fid: face id
           // v: direction to fix (in 3d)
-          IGL_INLINE void setConstraintHard(const int fid, const Eigen::Vector3d& v);
+          void setConstraintHard(const int fid, const Eigen::Vector3d& v);
 
           // Set a soft constraint on fid
           // fid: face id
           // w: weight of the soft constraint, clipped between 0 and 1
           // v: direction to fix (in 3d)
-          IGL_INLINE void setConstraintSoft(const int fid, const double w, const Eigen::Vector3d& v);
+          void setConstraintSoft(const int fid, const double w, const Eigen::Vector3d& v);
 
           // Set the ratio between smoothness and soft constraints (0 -> smoothness only, 1 -> soft constr only)
-          IGL_INLINE void setSoftAlpha(double alpha);
+          void setSoftAlpha(double alpha);
 
           // Reset constraints (at least one constraint must be present or solve will fail)
-          IGL_INLINE void resetConstraints();
+          void resetConstraints();
 
           // Return the current field
-          IGL_INLINE Eigen::MatrixX3d getFieldPerFace();
+          Eigen::MatrixX3d getFieldPerFace();
 
           // Return the current field (in Ahish's ffield format)
-          IGL_INLINE Eigen::MatrixXd getFFieldPerFace();
+          Eigen::MatrixXd getFFieldPerFace();
 
           // Compute singularity indexes
-          IGL_INLINE void findSingularities(int N);
+          void findSingularities(int N);
 
           // Return the singularities
-          IGL_INLINE Eigen::VectorXd getSingularityIndexPerVertex();
+          Eigen::VectorXd getSingularityIndexPerVertex();
 
 
 
 
           // Remove useless matchings
-          IGL_INLINE void reduceSpace();
+          void reduceSpace();
 
           // Prepare the system matrix
-          IGL_INLINE void prepareSystemMatrix(const int N);
+          void prepareSystemMatrix(const int N);
 
           // Solve without roundings
-          IGL_INLINE void solveNoRoundings();
+          void solveNoRoundings();
 
           // Solve with roundings using CoMIso
-          IGL_INLINE void solveRoundings(NRosySolver solverType);
+          void solveRoundings(NRosySolver solverType);
 
           // Round all p to 0 and fix
-          IGL_INLINE void roundAndFixToZero();
+          void roundAndFixToZero();
 
           // Round all p and fix
-          IGL_INLINE void roundAndFix();
+          void roundAndFix();
 
           // Convert a vector in 3d to an angle wrt the local reference system
-          IGL_INLINE double convert3DtoLocal(unsigned fid, const Eigen::Vector3d& v);
+          double convert3DtoLocal(unsigned fid, const Eigen::Vector3d& v);
 
           // Convert an angle wrt the local reference system to a 3d vector
-          IGL_INLINE Eigen::Vector3d convertLocalto3D(unsigned fid, double a);
+          Eigen::Vector3d convertLocalto3D(unsigned fid, double a);
 
           // Compute the per vertex angle defect
-          IGL_INLINE Eigen::VectorXd angleDefect();
+          Eigen::VectorXd angleDefect();
 
 
           // Temporary variable for the field
@@ -218,7 +218,7 @@ namespace igl
     // Outputs:
     //   R       #F by 3 the representative vectors of the interpolated field
     //   S       #V by 1 the singularity index for each vertex (0 = regular)
-    IGL_INLINE void nrosy(
+    void nrosy(
       const Eigen::MatrixXd& V,
       const Eigen::MatrixXi& F,
       const Eigen::VectorXi& b,
@@ -232,7 +232,7 @@ namespace igl
       Eigen::VectorXd& S
       );
     //wrapper for the case without soft constraints
-    IGL_INLINE void nrosy(
+    void nrosy(
      const Eigen::MatrixXd& V,
      const Eigen::MatrixXi& F,
      const Eigen::VectorXi& b,
@@ -246,8 +246,8 @@ namespace igl
 }
 }
 
-#ifndef IGL_STATIC_LIBRARY
-#  include "nrosy.cpp"
-#endif
+// #ifndef IGL_STATIC_LIBRARY
+// #  include "nrosy.cpp"
+// #endif
 
 #endif

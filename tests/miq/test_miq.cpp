@@ -5,6 +5,7 @@
 #ifdef GEOLIO_ENABLE_MIQ
 #include <gtest/gtest.h>
 #include <geolio/miq/miq_interface.h>
+#include <geogram/mesh/mesh_frame_field.h>
 #include "../utils.h"
 
 namespace geolio::test
@@ -12,7 +13,7 @@ namespace geolio::test
     class MIQTest : public ::testing::Test {
     protected:
         void SetUp() override {
-            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"fandisk.obj"));
+            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"fandisk.geogram"));
             mesh_fc_uv.bind(mesh.facet_corners.attributes(), "uv");
         }
 
@@ -38,6 +39,12 @@ namespace geolio::test
     TEST_F(MIQTest, nrosy) {
         miq<3>(mesh, mesh_fc_uv);
         save_results();
+    }
+
+    TEST_F(MIQTest, pre_compute_cross) {
+        GEO::FrameField cross_field;
+        cross_field.create_from_surface_mesh(mesh, false);
+        cross_field.frames();
     }
 }
 

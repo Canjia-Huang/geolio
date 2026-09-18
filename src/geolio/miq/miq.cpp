@@ -1423,7 +1423,7 @@ IGL_INLINE bool igl::copyleft::comiso::MIQ_class<DerivedV, DerivedF, DerivedU>::
 
 
 template <typename DerivedV, typename DerivedF, typename DerivedU>
-IGL_INLINE void igl::copyleft::comiso::miq(
+void igl::copyleft::comiso::miq(
   const Eigen::PlainObjectBase<DerivedV> &V,
   const Eigen::PlainObjectBase<DerivedF> &F,
   const Eigen::PlainObjectBase<DerivedV> &PD1_combed,
@@ -1468,7 +1468,7 @@ IGL_INLINE void igl::copyleft::comiso::miq(
 }
 
 template <typename DerivedV, typename DerivedF, typename DerivedU>
-IGL_INLINE void igl::copyleft::comiso::miq(
+void igl::copyleft::comiso::miq(
     const Eigen::PlainObjectBase<DerivedV> &V,
     const Eigen::PlainObjectBase<DerivedF> &F,
     const Eigen::PlainObjectBase<DerivedV> &PD1,
@@ -1525,9 +1525,9 @@ IGL_INLINE void igl::copyleft::comiso::miq(
 
 }
 
-#ifdef IGL_STATIC_LIBRARY
+// #ifdef IGL_STATIC_LIBRARY
 // Explicit template specialization
 template void igl::copyleft::comiso::miq<Eigen::MatrixX3d, Eigen::MatrixX3i, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixX3i > const&, Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixX3i >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >);
 template void igl::copyleft::comiso::miq<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXi > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::MatrixX3i const&, Eigen::VectorXi const&, Eigen::MatrixX3i const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixXi >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >);
 template void igl::copyleft::comiso::miq<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXi > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixXi >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >);
-#endif
+// #endif

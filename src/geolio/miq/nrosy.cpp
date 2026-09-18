@@ -25,8 +25,38 @@
 #include <CoMISo/Solver/GMM_Tools.hh>
 using namespace Eigen;
 
+namespace
+{
+    // Backing store for the references held by a default-constructed NRosyField.
+    // The class keeps its mesh inputs as const references (the caller's matrices must
+    // outlive the object -- that is libigl's design), so its default constructor has
+    // nothing real to bind them to. It used to bind temporaries -- V(MatrixXd()) and
+    // friends -- which are destroyed as soon as the constructor returns, leaving all
+    // nine references dangling. That was undefined behaviour, and since C++20 it is a
+    // hard error (-Wdangling-field).
+    // These objects have static storage duration, so the references stay valid for the
+    // whole program and a default-constructed field simply stays inert (IsInited is
+    // false) until someone calls Init().
+    // Note that references cannot be rebound: a default-constructed NRosyField can
+    // never be pointed at real data afterwards. Use the full constructor for that.
+    const Eigen::MatrixXd emptyMatrixD;
+    const Eigen::MatrixXi emptyMatrixI;
+    const Eigen::VectorXd emptyVectorD;
+}
+
 igl::copyleft::comiso::NRosyField::NRosyField()
-    : V(MatrixXd()), F(MatrixXi()), N(MatrixXd()), EV(MatrixXi()), FE(MatrixXi()), EF(MatrixXi()), TT(MatrixXi()), TTi(MatrixXi()), k(VectorXd())
+    // Members are initialised in declaration order (see nrosy.h): the
+    // __Inited_TopologicalRelations flag, then softAlpha, then the mesh references,
+    // with k preceding TT/TTi. The previous order put TT/TTi before k, which trips
+    // -Wreorder-ctor. The two scalar members are set here because the default
+    // constructor would otherwise leave them indeterminate while solve() ->
+    // prepareSystemMatrix() reads softAlpha, and __Init_TopologicalRelation() reads
+    // the __Inited_TopologicalRelations flag.
+    : __Inited_TopologicalRelations(false),
+      softAlpha(0.5),
+      V(emptyMatrixD), F(emptyMatrixI), N(emptyMatrixD),
+      EV(emptyMatrixI), FE(emptyMatrixI), EF(emptyMatrixI),
+      k(emptyVectorD), TT(emptyMatrixI), TTi(emptyMatrixI)
 {
     IsInited = false;
 }
@@ -43,7 +73,7 @@ igl::copyleft::comiso::NRosyField::NRosyField(
     const MatrixXi& _TT, const MatrixXi& _TTi,
     const VectorXd& _k
 ) :
-    __Inited_TopologicalRelations(false), V(_V), F(_F), N(_N), EV(_EV), FE(_FE), EF(_EF), TT(_TT), TTi(_TTi), k(_k)
+    __Inited_TopologicalRelations(false), V(_V), F(_F), N(_N), EV(_EV), FE(_FE), EF(_EF), k(_k), TT(_TT), TTi(_TTi)
 {
     if (V.rows() == 0)
     {
@@ -634,8 +664,14 @@ void igl::copyleft::comiso::NRosyField::computek(const MatrixXd& V, const Matrix
 
             tmp = R2*ref0.head<2>();
 
-            assert(tmp(0) - ref1(0) < 10 ^ 10);
-            assert(tmp(1) - ref1(1) < 10 ^ 10);
+            // ^ is XOR in C++ and binds looser than <, so the original
+            // `tmp(0) - ref1(0) < 10 ^ 10` parsed as `(tmp(0) - ref1(0) < 10) ^ 10`,
+            // which is non-zero -- and therefore true in an assert -- whether or not
+            // the comparison holds. The check could never fire. 1e10 is the bound the
+            // expression was plainly after (10^10 as a coarse sanity limit); use
+            // 10e-10, as the checks above do, to actually validate the rotation.
+            assert(tmp(0) - ref1(0) < 1e10);
+            assert(tmp(1) - ref1(1) < 1e10);
 
             k[eid] = ktemp;
             //cout << ktemp << endl;
@@ -844,7 +880,7 @@ VectorXd igl::copyleft::comiso::NRosyField::getSingularityIndexPerVertex()
     return singularityIndex;
 }
 
-IGL_INLINE void igl::copyleft::comiso::nrosy(
+void igl::copyleft::comiso::nrosy(
     const MatrixXd& V,
     const MatrixXi& F,
     //hard constraints
@@ -908,7 +944,7 @@ IGL_INLINE void igl::copyleft::comiso::nrosy(
     S = solver.getSingularityIndexPerVertex();
 }
 
-IGL_INLINE void igl::copyleft::comiso::nrosy(
+void igl::copyleft::comiso::nrosy(
     const Eigen::MatrixXd& V,
     const Eigen::MatrixXi& F,
     const Eigen::VectorXi& b,

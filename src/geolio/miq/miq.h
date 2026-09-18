@@ -47,7 +47,7 @@ namespace igl
     //       improve the handling of hard_features, right now it might fail in difficult cases
 
     template <typename DerivedV, typename DerivedF, typename DerivedU>
-    IGL_INLINE void miq(
+    void miq(
       const Eigen::PlainObjectBase<DerivedV> &V,
       const Eigen::PlainObjectBase<DerivedF> &F,
       const Eigen::PlainObjectBase<DerivedV> &PD1,
@@ -73,7 +73,7 @@ namespace igl
     // Seams:                      #F by 3 list of per-corner flag that denotes seams
 
     template <typename DerivedV, typename DerivedF, typename DerivedU>
-    IGL_INLINE void miq(const Eigen::PlainObjectBase<DerivedV> &V,
+    void miq(const Eigen::PlainObjectBase<DerivedV> &V,
       const Eigen::PlainObjectBase<DerivedF> &F,
       const Eigen::PlainObjectBase<DerivedV> &PD1_combed,
       const Eigen::PlainObjectBase<DerivedV> &PD2_combed,
@@ -92,8 +92,8 @@ namespace igl
   };
 };
 };
-#ifndef IGL_STATIC_LIBRARY
-#include "miq.cpp"
-#endif
+// #ifndef IGL_STATIC_LIBRARY
+// #include "miq.cpp"
+// #endif
 
 #endif

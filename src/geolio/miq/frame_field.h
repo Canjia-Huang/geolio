@@ -36,7 +36,7 @@ namespace igl
 			//   FF2      #F by 3 the second representative vector of the frame field (up to permutation and sign)
 			//
 			// TODO: it now supports only soft constraints, should be extended to support both hard and soft constraints
-			IGL_INLINE void frame_field(
+			void frame_field(
 			  const Eigen::MatrixXd& V,
 			  const Eigen::MatrixXi& F,
 			  const Eigen::VectorXi& b,
@@ -49,8 +49,8 @@ namespace igl
 	}
 }
 
-#ifndef IGL_STATIC_LIBRARY
-#  include "frame_field.cpp"
-#endif
+// #ifndef IGL_STATIC_LIBRARY
+// #  include "frame_field.cpp"
+// #endif
 
 #endif

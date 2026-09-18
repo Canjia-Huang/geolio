@@ -659,7 +659,7 @@ Eigen::MatrixXd FrameInterpolator::getFieldPerFace()
 }
 }
 
-IGL_INLINE void igl::copyleft::comiso::frame_field(
+void igl::copyleft::comiso::frame_field(
                                  const Eigen::MatrixXd& V,
                                  const Eigen::MatrixXi& F,
                                  const Eigen::VectorXi& b,
