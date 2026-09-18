@@ -169,6 +169,7 @@ namespace geolio::test
             const GEO::Attribute<GEO::vec2>& mesh_out_v_uv
             ) const {
             GEO::Attribute<double> mesh_out_v_det_jacobian(mesh_out.vertices.attributes(), "det_jacobian");
+            GEO::Attribute<double> mesh_out_v_absolute_area(mesh_out.vertices.attributes(), "absolute_area");
             GEO::Attribute<double> mesh_out_v_scaled_jacobian(mesh_out.vertices.attributes(), "scaled_jacobian");
             GEO::Attribute<double> mesh_out_v_inverse_mean_ratio(mesh_out.vertices.attributes(), "inverse_mean_ratio");
             GEO::Attribute<double> mesh_out_v_MIPS(mesh_out.vertices.attributes(), "MIPS");
@@ -177,6 +178,8 @@ namespace geolio::test
                 const auto& uv = mesh_out_v_uv[v];
                 mesh_out_v_det_jacobian[v] = control_grid->compute_facet_uv_measure(
                     c, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
+                mesh_out_v_absolute_area[v] = control_grid->compute_facet_uv_measure(
+                    c, uv, QuadControlGrid<DIM>::MeasureType::ABSOLUTE_SQ_AREA);
                 mesh_out_v_scaled_jacobian[v] = control_grid->compute_facet_uv_measure(
                     c, uv, QuadControlGrid<DIM>::MeasureType::SCALED_JACOBIAN);
                 mesh_out_v_inverse_mean_ratio[v] = control_grid->compute_facet_uv_measure(
@@ -416,6 +419,20 @@ namespace geolio::test
                     p[2] += 0.5;
                 }
             }
+        }
+
+        this->save_control_nodes(get_current_test_name()+"_nodes.geogram");
+        this->save_high_order_mesh_facets(get_current_test_name()+"_facets.geogram");
+    }
+
+    TYPED_TEST(SingleQuadControlGridTest, measure_degenerate) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        constexpr GEO::index_t f = 0;
+        {
+            const auto& p0 = this->control_grid->control_node(this->control_grid->facet_nd(f, 2, 1));
+            auto& p1 = this->control_grid->control_node(this->control_grid->facet_nd(f, 2, 2));
+            p1 = p0;
         }
 
         this->save_control_nodes(get_current_test_name()+"_nodes.geogram");
