@@ -286,27 +286,27 @@ namespace geolio
                 for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                     const double lag_basis_duv = dBu[i] * Bv[j];
                     const double lag_basis_udv = Bu[i] * dBv[j];
-                    const auto& lcv = this->facet_lnd(i, j);
+                    const auto& lnd = this->facet_lnd(i, j);
                     const auto& g = lag_basis_duv*perp_dv + lag_basis_udv*perp_du;
-                    gradient[2*lcv] = g.x;
-                    gradient[2*lcv+1] = g.y;
+                    gradient[2*lnd] = g.x;
+                    gradient[2*lnd+1] = g.y;
                 }
             }
         }
         else if constexpr (DIM == 3) { // gradient 0.5 * \Vert cross(du, dv) \Vert^2
-            const GEO::vec3 cross_dudv = GEO::cross(du, dv);
+            const auto ref_normal = compute_facet_reference_normal(f);
+            const auto perp_du = GEO::cross(ref_normal, du);
+            const auto perp_dv = GEO::cross(dv, ref_normal);
+
             for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
                 for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                     const double lag_basis_duv = dBu[i] * Bv[j];
                     const double lag_basis_udv = Bu[i] * dBv[j];
-                    const auto& lcv = this->facet_lnd(i, j);
-                    // g = d(basis)/du * (cross_dudv x dv) + d(basis)/dv * (du x cross_dudv)
-                    const GEO::vec3 term_u = GEO::cross(cross_dudv, dv);
-                    const GEO::vec3 term_v = GEO::cross(du, cross_dudv); // -GEO::cross(cross_dudv, du)
-                    const auto& g = lag_basis_duv*term_u + lag_basis_udv*term_v;
-                    gradient[3*lcv] = g.x;
-                    gradient[3*lcv+1] = g.y;
-                    gradient[3*lcv+2] = g.z;
+                    const auto& lnd = this->facet_lnd(i, j);
+                    const auto g = lag_basis_duv * perp_dv + lag_basis_udv * perp_du;
+                    gradient[3*lnd] = g.x;
+                    gradient[3*lnd+1] = g.y;
+                    gradient[3*lnd+2] = g.z;
                 }
             }
         }
