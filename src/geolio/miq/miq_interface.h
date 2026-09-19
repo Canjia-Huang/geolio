@@ -10,25 +10,61 @@
 
 namespace geolio
 {
+    /**
+     * @brief Parameters controlling mixed-integer quadrangulation.
+     *
+     * The structure also stores the optional input and generated cross fields.
+     */
     struct MIQParameters {
+        /// Optional input cross field, flattened as three components per vector.
         const double* cross = nullptr;
+        /// Number of input cross-field vectors stored per mesh facet.
         GEO::index_t vectors_nb_per_facet = 2; // For the input 4-NoSy field, are N vectors (N*3=3N) provided?
 
+        /// Whether to store the cross field generated or used by MIQ.
         bool output_cross = false;
+        /// Output cross field, flattened as three components per vector.
         std::vector<double> out_cross;
+        /// Number of output cross-field vectors stored per mesh facet.
         const GEO::index_t out_vectors_nb_per_facet = 2;
 
+        /// Global gradient scale controlling the resulting quad resolution.
         double scale = 30.0;
+        /// Weight applied during stiffness optimization.
         double stiffness = 5.0;
+        /// Whether to round all integer variables directly.
         bool direct_round = false;
+        /// Number of stiffness iterations.
         int iter = 5;
+        /// Number of local integer-rounding iterations.
         int local_iter = 5;
+        /// Whether integer rounding is enabled.
         bool DoRound = true;
+        /// Whether singularity-aware rounding is enabled.
         bool SingularityRound = true;
+        /// Additional vertex indices to snap to integer coordinates.
         std::vector<int> round_vertices = std::vector<int>();
+        /// Vertex pairs defining hard features to snap to integer coordinates.
         std::vector<std::vector<int>> hard_features = std::vector<std::vector<int>>();
     };
 
+    /**
+     * @brief Computes a mixed-integer quadrangulation parameterization.
+     *
+     * Computes per-facet UV coordinates for a triangular mesh using MIQ. If no
+     * input cross field is provided, a 4-RoSy field is generated automatically.
+     * The output UV coordinates are written to the facet-corner attribute.
+     *
+     * @tparam DIM Spatial dimension of the input mesh; must be 2 or 3.
+     * @param[in] mesh Triangular input mesh to parameterize.
+     * @param[out] mesh_fc_uv Two-dimensional UV attribute defined on mesh corners.
+     * @param[in,out] params MIQ configuration parameters and optional cross-field
+     *                       input/output buffers.
+     *
+     * @pre `mesh` contains only triangular facets.
+     * @pre `mesh_fc_uv` is bound, has dimension 2, and has one entry per facet corner.
+     * @pre `params.vectors_nb_per_facet` is at least 2.
+     */
     template <GEO::index_t DIM>
     void miq(
         const GEO::Mesh& mesh,
