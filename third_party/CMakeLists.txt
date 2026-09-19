@@ -46,6 +46,46 @@ if(GEOLIO_ENABLE_LBFGS_LITE)
     endif()
 endif()
 
+# Optional CoMISo mixed-integer constrained solver (https://github.com/libigl/CoMISo).
+# Downloaded at configure time via FetchContent when GEOLIO_ENABLE_COMISO is ON.
+if(GEOLIO_ENABLE_COMISO)
+    include(CoMISo)
+    # CoMISo is not header-only: the fetched CMakeLists.txt defines the static
+    # library target `CoMISo`, whose PUBLIC include directories already expose both
+    # the <CoMISo/...> prefix and its bundled GMM headers, so nothing extra has to
+    # be added to the include list below. CoMISo builds with POSITION_INDEPENDENT_CODE,
+    # so it links into the SHARED geolio target.
+    target_link_libraries(${CURRENT_LIB_NAME} INTERFACE CoMISo)
+
+    # Feature macro: defined when CoMISo is enabled (see the GEOLIO_ENABLE_COMISO
+    # option in the top-level CMakeLists.txt). INTERFACE so the macro is also visible
+    # to consumers of geolio::third_party in their own translation units; code may
+    # guard CoMISo-specific includes/implementations with
+    #   #if GEOLIO_ENABLE_COMISO
+    target_compile_definitions(${CURRENT_LIB_NAME} INTERFACE GEOLIO_ENABLE_COMISO=1)
+endif()
+
+# Optional libigl-backed MIQ pipeline (https://github.com/libigl/libigl).
+# libigl is not fetched: it is either an installed package or the header-only source
+# tree in LIBIGL_DIR, resolved by cmake/libigl.cmake from Dependencies.cmake above,
+# which fails loudly when GEOLIO_ENABLE_MIQ is ON and neither is available.
+if(GEOLIO_ENABLE_MIQ)
+    # LIBIGL_TARGET is resolved by include(libigl): an installed package's igl::core or
+    # igl::igl_core, or the geolio_libigl INTERFACE target wrapping a source tree's
+    # include directory. Both carry libigl's headers as an INTERFACE property, which is
+    # all src/geolio/miq needs for its <igl/...> includes. Only the core component is
+    # used: the igl::copyleft::* add-ons would pull in a second CoMISo/CGAL, while the
+    # MIQ code here uses the CoMISo target linked above.
+    target_link_libraries(${CURRENT_LIB_NAME} INTERFACE ${LIBIGL_TARGET})
+
+    # Feature macro: defined when the MIQ pipeline is enabled (see the
+    # GEOLIO_ENABLE_MIQ option in the top-level CMakeLists.txt). INTERFACE so the
+    # macro is also visible to consumers of geolio::third_party in their own
+    # translation units; code may guard MIQ-specific includes/implementations with
+    #   #if GEOLIO_ENABLE_MIQ
+    target_compile_definitions(${CURRENT_LIB_NAME} INTERFACE GEOLIO_ENABLE_MIQ=1)
+endif()
+
 target_include_directories(${CURRENT_LIB_NAME} INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/CLI11/include"

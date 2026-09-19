@@ -10,3 +10,7 @@
 	path = third_party/imoguizmo
 	url = https://github.com/fknfilewalker/imoguizmo.git
 	shallow = true
+[submodule "third_party/googletest"]
+	path = third_party/googletest
+	url = https://github.com/google/googletest.git
+	shallow = true

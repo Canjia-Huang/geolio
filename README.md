@@ -12,16 +12,26 @@
 
 **Geolio** is a C++ library designed for performing various processing tasks in computer graphics (mainly mesh processing).
 
-## Requirements / dependencies
+## Dependencies
 
-- [**Geogram**](https://github.com/BrunoLevy/geogram) — geometry library, required at configure time (set `GEOGRAM_DIR=/path/to/geogram`).
-- [**Eigen3**](https://eigen.tuxfamily.org) — header-only linear algebra library, required at configure time via `find_package(Eigen3)`.
-- [**spdlog**](https://github.com/gabime/spdlog), [**CLI11**](https://github.com/CLIUtils/CLI11) and [**imoguizmo**](https://github.com/fknfilewalker/imoguizmo) — bundled as git submodules; used as header-only include paths. imoguizmo provides the ImGui/ImGuizmo integration used by the GeoBox application and relies on the imgui headers bundled with Geogram.
-- [**LBFGS-Lite**](https://github.com/ZJU-FAST-Lab/LBFGS-Lite) — header-only L-BFGS unconstrained optimizer (optional, enabled by default). It is **not** vendored: when `GEOLIO_ENABLE_LBFGS_LITE=ON` it is downloaded automatically at configure time via CMake FetchContent (pinned to tag `v2.3`).
+**Supplied by you**
 
-> Geolio must be cloned with `--recurse-submodules`, and a project that consumes geolio as a submodule must run `git submodule update --init --recursive`, so that the nested submodules above are present.
+- [**Geogram**](https://github.com/BrunoLevy/geogram) — required. Located through `GEOGRAM_DIR` (environment variable or `-DGEOGRAM_DIR=...`), or an installed Geogram found by CMake.
+- [**Eigen3**](https://eigen.tuxfamily.org) — required, via `find_package(Eigen3)`. A parent project that already provides the `Eigen3::Eigen` target is used as-is.
 
-## Building the library
+**Bundled as git submodules** in `third_party/` — clone with `--recurse-submodules`, and a project embedding geolio must run `git submodule update --init --recursive`:
+
+- [**spdlog**](https://github.com/gabime/spdlog), [**CLI11**](https://github.com/CLIUtils/CLI11) — logging and CLI parsing, header-only.
+- [**imoguizmo**](https://github.com/fknfilewalker/imoguizmo) — the ImGui/ImGuizmo integration used by `geobox`, on top of the imgui headers bundled with Geogram.
+- [**googletest**](https://github.com/google/googletest) — test framework (1.12.1), built only when `GEOLIO_BUILD_TESTS=ON`.
+
+**Fetched at configure time** with CMake FetchContent (so these need network access to GitHub), each one only when the option that uses it is on:
+
+- [**LBFGS-Lite**](https://github.com/ZJU-FAST-Lab/LBFGS-Lite) (tag `v2.3`) — header-only L-BFGS optimizer, with `GEOLIO_ENABLE_LBFGS_LITE=ON`.
+- [**CoMISo**](https://github.com/libigl/CoMISo) — MIQ's mixed-integer solver, built as a static library with `GEOLIO_ENABLE_COMISO=ON`. Geolio consumes it through [its own fork](https://github.com/Canjia-Huang/CoMISo) pinned to a commit, so the changes geolio needs travel as commits instead of as a build-time patch. Not header-only, and it links BLAS: OpenBLAS bundled on Windows, the Accelerate framework on macOS, `find_package(BLAS REQUIRED)` elsewhere (e.g. `sudo apt-get install libblas-dev liblapack-dev`).
+- [**libigl**](https://github.com/libigl/libigl) — header-only, needed only by MIQ. Geolio does **not** fetch it — see [MIQ](#mixed-integer-quadrangulation-miq).
+
+## Building
 
 ```bash
 git clone --recurse-submodules https://github.com/Canjia-Huang/geolio.git
@@ -30,31 +40,19 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ```
 
-CMake options:
+| Option                     | Default                      | Description                                                          |
+|----------------------------|------------------------------|----------------------------------------------------------------------|
+| `GEOLIO_BUILD_TESTS`       | `ON` (`OFF` as a submodule)  | Build `Geolio_tests`                                                 |
+| `GEOLIO_ENABLE_LBFGS_LITE` | `OFF`                        | LBFGS-Lite optimizer, fetched at configure time                      |
+| `GEOLIO_ENABLE_COMISO`     | `OFF`                        | CoMISo solver and BLAS, fetched at configure time                    |
+| `GEOLIO_ENABLE_MIQ`        | `OFF`                        | MIQ pipeline; forces `GEOLIO_ENABLE_COMISO=ON` and requires libigl   |
 
-| Option                     | Default | Description                                                                  |
-|----------------------------|---------|------------------------------------------------------------------------------|
-| `BUILD_TESTS`              | `ON`    | Build the test suite (gtest).                                                |
-| `GEOLIO_ENABLE_LBFGS_LITE` | `ON`    | Enable the LBFGS-Lite header-only optimizer; downloaded via FetchContent at configure time (requires network access to GitHub). |
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGEOLIO_ENABLE_LBFGS_LITE=OFF
-```
-
-## Using Geolio as a git submodule
-
-Geolio is designed to be embedded into other projects as a git submodule and consumed through `add_subdirectory`.
-
-### 1. Add the submodule
+## Using Geolio as a submodule
 
 ```bash
 git submodule add https://github.com/Canjia-Huang/geolio.git third_party/geolio
-git submodule update --init --recursive
+git submodule update --init --recursive   # geolio's own submodules
 ```
-
-`--recursive` also pulls geolio's own nested submodules (spdlog, CLI11, imoguizmo).
-
-### 2. Link it from your `CMakeLists.txt`
 
 ```cmake
 cmake_minimum_required(VERSION 3.30)
@@ -62,32 +60,19 @@ project(MyApp LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Centralize build outputs so the app and geolio's shared libraries/DLLs land in
-# the same tree and are easy to find at runtime.
+# Put geolio's shared library next to your executables so that it resolves at
+# runtime (Windows; Linux and macOS manage this through RPATH).
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# Embed geolio; exposes the target Geolio::geolio
-add_subdirectory(third_party/geolio)
+add_subdirectory(third_party/geolio)   # exposes the target Geolio::geolio
 
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE Geolio::geolio)
 ```
 
-CMake options are inherited from the parent project, so the optional LBFGS-Lite dependency is controlled by setting `GEOLIO_ENABLE_LBFGS_LITE` **before** `add_subdirectory`.
-
-The output directories above put the built `Geolio.dll` next to your executable (in `build/bin/<config>` on Windows), so it is resolved at runtime without extra setup. Without them, on Windows the DLL lands in geolio's nested build subdirectory and must be added to `PATH`; Linux/macOS resolve the shared library automatically through RPATH.
-
-### 3. Make Geogram and Eigen3 visible
-
-The submodule build finds Geogram and Eigen3 through the same mechanisms as the standalone build. Set `GEOGRAM_DIR` (environment variable or `-DGEOGRAM_DIR=...`), and make sure Eigen3 is installed (see [Requirements](#requirements--dependencies)) if it is not already available:
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGEOGRAM_DIR=/path/to/geogram
-```
-
-If the parent project already provides an `Eigen3::Eigen` target (e.g. through its own `find_package(Eigen3)`), geolio detects it and skips its own lookup.
+CMake options are inherited, so set `GEOLIO_BUILD_TESTS` and the `GEOLIO_ENABLE_*` options **before** `add_subdirectory`. Geogram and Eigen3 are located exactly as in the standalone build.
 
 ## License
 

@@ -14,16 +14,29 @@ if(Geogram_FOUND)
     endif()
 
     if(WIN32)
-        # Force /MD (dynamic MultiThreadedDLL) in all configurations to match
-        # geogram.dll which is built with /MD. FindGeogram.cmake defaults to
-        # VORPALINE_BUILD_DYNAMIC=FALSE which forces /MT (static CRT), creating
-        # a _ITERATOR_DEBUG_LEVEL mismatch that corrupts std::string data when
-        # exceptions cross the DLL boundary.
+        # Force the dynamic CRT in every configuration, undoing the /MD -> /MT rewrite
+        # that FindGeogram.cmake performs when it assumes a static geogram
+        # (VORPALINE_BUILD_DYNAMIC=FALSE). A static CRT would mismatch geogram's DLLs and
+        # corrupt std::string data when exceptions cross the DLL boundary.
         foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
             string(REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
             string(REPLACE "/MT" "/MD" CMAKE_C_FLAGS_${config} "${CMAKE_C_FLAGS_${config}}")
         endforeach()
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+        # ... but the *configuration-matched* dynamic CRT, not the Release one in all
+        # configurations. geogram is configured with VORPALINE_BUILD_DYNAMIC (see its
+        # configure.bat), and its Windows toolchain only rewrites /MD -> /MT for the static
+        # build, so its libraries follow the Visual Studio default: /MDd in Debug, /MD
+        # otherwise. This variable is read when a target is created, and this directory
+        # scope is inherited by everything created below it -- including CoMISo, which
+        # FetchContent adds from third_party/. Pinning MultiThreadedDLL here gave CoMISo the
+        # Release CRT even in Debug builds, so linking CoMISo.lib into Geolio.dll failed with
+        #   LNK2038: mismatch detected for '_ITERATOR_DEBUG_LEVEL': value '0' doesn't match value '2'
+        #   LNK2038: mismatch detected for 'RuntimeLibrary': value 'MD_DynamicRelease' doesn't
+        #            match value 'MDd_DynamicDebug'
+        # because src/geolio is a sibling of third_party and therefore keeps the Visual
+        # Studio defaults. Every MSVC object linked into one binary has to agree on the CRT,
+        # so follow the same per-configuration choice the rest of the build makes.
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif()
 
     if(WIN32) # copy geogram's runtime DLLs next to the executables (build/bin/<config>)
