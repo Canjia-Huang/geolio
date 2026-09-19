@@ -356,7 +356,7 @@ namespace geolio
             auto& V = volumes[c];
             V = 0;
             for (const auto& [uvw, w] : points_and_weights)
-                V += w * compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
+                V += w * std::abs(compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN));
         }
     }
 
