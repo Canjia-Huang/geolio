@@ -23,14 +23,14 @@ endif()
 # at configure time via CMake FetchContent, its include directory is exposed through
 # geolio::third_party, and the GEOLIO_ENABLE_LBFGS_LITE macro is defined for code
 # that consumes it.
-option(GEOLIO_ENABLE_LBFGS_LITE "Build with the LBFGS-Lite header-only L-BFGS optimizer" ON)
+option(GEOLIO_ENABLE_LBFGS_LITE "Build with the LBFGS-Lite header-only L-BFGS optimizer" OFF)
 
 # Use the CoMISo mixed-integer constrained solver (https://github.com/libigl/CoMISo)
 # as the backend of the MIQ pipeline. When ON, CoMISo is downloaded at configure
 # time via CMake FetchContent, built as a static library, linked into
 # geolio::third_party, and the GEOLIO_ENABLE_COMISO macro is defined for code
 # that consumes it.
-option(GEOLIO_ENABLE_COMISO "Build with the CoMISo mixed-integer constrained solver" ON)
+option(GEOLIO_ENABLE_COMISO "Build with the CoMISo mixed-integer constrained solver" OFF)
 
 # Build the Mixed-Integer Quadrangulation (MIQ) pipeline in src/geolio/miq. MIQ
 # needs both the CoMISo mixed-integer solver and libigl, so turning this ON forces

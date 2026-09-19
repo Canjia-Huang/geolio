@@ -17,6 +17,7 @@
 - [**Geogram**](https://github.com/BrunoLevy/geogram) — geometry library, required at configure time (set `GEOGRAM_DIR=/path/to/geogram`).
 - [**Eigen3**](https://eigen.tuxfamily.org) — header-only linear algebra library, required at configure time via `find_package(Eigen3)`.
 - [**spdlog**](https://github.com/gabime/spdlog), [**CLI11**](https://github.com/CLIUtils/CLI11) and [**imoguizmo**](https://github.com/fknfilewalker/imoguizmo) — bundled as git submodules; used as header-only include paths. imoguizmo provides the ImGui/ImGuizmo integration used by the GeoBox application and relies on the imgui headers bundled with Geogram.
+- [**googletest**](https://github.com/google/googletest) — test framework, bundled as the `third_party/googletest` git submodule (pinned to googletest 1.12.1) and built only when `BUILD_TESTS=ON`. Nothing is downloaded at configure time to run the test suite.
 - [**LBFGS-Lite**](https://github.com/ZJU-FAST-Lab/LBFGS-Lite) — header-only L-BFGS unconstrained optimizer (optional, enabled by default). It is **not** vendored: when `GEOLIO_ENABLE_LBFGS_LITE=ON` it is downloaded automatically at configure time via CMake FetchContent (pinned to tag `v2.3`).
 - [**CoMISo**](https://github.com/libigl/CoMISo) — mixed-integer constrained solver used by the MIQ pipeline (optional, enabled by default). It is **not** vendored: when `GEOLIO_ENABLE_COMISO=ON` it is downloaded at configure time via CMake FetchContent, built as a static library, and linked into `geolio::third_party`. Geolio consumes it through [its own fork](https://github.com/Canjia-Huang/CoMISo) pinned to a commit, so that the changes geolio needs can be carried as commits (and offered back upstream) instead of as a build-time patch. Unlike the other optional dependencies CoMISo is **not** header-only and needs BLAS: `find_package(BLAS REQUIRED)` on non-Apple UNIX (e.g. `sudo apt-get install libblas-dev liblapack-dev`), the Accelerate framework on macOS, nothing extra on Windows.
 - [**libigl**](https://github.com/libigl/libigl) — header-only geometry library, required **only** by the MIQ pipeline. Geolio does not download it: it must either be installed so that `find_package(libigl)` succeeds, or be pointed at with `LIBIGL_DIR=/path/to/libigl`. See [Enabling MIQ](#enabling-miq).
@@ -36,7 +37,7 @@ CMake options:
 
 | Option                     | Default | Description                                                                  |
 |----------------------------|---------|------------------------------------------------------------------------------|
-| `BUILD_TESTS`              | `ON`    | Build the test suite (gtest).                                                |
+| `BUILD_TESTS`              | `ON`    | Build the test suite (googletest, from the `third_party/googletest` submodule). |
 | `GEOLIO_ENABLE_LBFGS_LITE` | `ON`    | Enable the LBFGS-Lite header-only optimizer; downloaded via FetchContent at configure time (requires network access to GitHub). |
 | `GEOLIO_ENABLE_COMISO`     | `ON`    | Enable the CoMISo mixed-integer constrained solver; downloaded from geolio's CoMISo fork via FetchContent and built as a static library. Requires BLAS — see [Requirements](#requirements--dependencies). |
 | `GEOLIO_ENABLE_MIQ`        | `OFF`   | Build the Mixed-Integer Quadrangulation pipeline (`src/geolio/miq`). Forces `GEOLIO_ENABLE_COMISO=ON` and additionally requires libigl — see [Enabling MIQ](#enabling-miq). |
@@ -83,7 +84,7 @@ git submodule add https://github.com/Canjia-Huang/geolio.git third_party/geolio
 git submodule update --init --recursive
 ```
 
-`--recursive` also pulls geolio's own nested submodules (spdlog, CLI11, imoguizmo).
+`--recursive` also pulls geolio's own nested submodules (spdlog, CLI11, imoguizmo, googletest).
 
 ### 2. Link it from your `CMakeLists.txt`
 

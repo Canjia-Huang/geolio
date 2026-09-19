@@ -4,16 +4,22 @@ endif()
 set(CURRENT_LIB_NAME ${PROJECT_NAME}_tests)
 
 ########################################################################################################################
-# Download and install googletest
+# googletest
 ########################################################################################################################
-include(FetchContent)
-FetchContent_Declare(
-        googletest
-        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
+# Vendored as a git submodule (third_party/googletest, initialized by
+# `git submodule update --init --recursive`) rather than downloaded at configure
+# time. The submodule is pinned to the same revision the previous FetchContent
+# declaration used (googletest 1.12.1, commit 03597a01) and, like the other
+# third-party checkouts, is cloned shallow.
+#
+# For Windows: prevent googletest from overriding the parent project's
+# compiler/linker settings.
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+
+# The binary directory is given explicitly so googletest's build tree stays next
+# to the other dependency build trees instead of appearing under tests/.
+add_subdirectory("${PROJECT_SOURCE_DIR}/third_party/googletest"
+        "${CMAKE_BINARY_DIR}/third_party/googletest-build")
 
 ########################################################################################################################
 # Build tests

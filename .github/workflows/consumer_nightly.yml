@@ -20,7 +20,8 @@ jobs:
       # Checkout geolio into a consumer project at consumer/third_party/geolio — the exact location a
       # parent repo would use after `git submodule add <geolio-url> third_party/geolio`.
       # `submodules: recursive` mirrors `git submodule update --init --recursive`, pulling geolio's
-      # nested spdlog/CLI11 submodules that third_party/CMakeLists.txt references as include dirs.
+      # nested spdlog/CLI11/imoguizmo submodules that third_party/CMakeLists.txt references as
+      # include dirs, plus googletest which BUILD_TESTS pulls in through tests/CMakeLists.txt.
       # ================================================================================================
 
       - name: Checkout geolio as a submodule

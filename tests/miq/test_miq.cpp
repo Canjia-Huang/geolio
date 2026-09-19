@@ -22,9 +22,10 @@ namespace geolio::test
             mesh_out.vertices.create_vertices(3*mesh.facets.nb());
             mesh_out.facets.create_triangles(mesh.facets.nb());
             for (const auto& f : mesh.facets) {
-                mesh_out.vertices.point<2>(3*f)     = mesh_fc_uv[mesh.facets.corner(f, 0)];
-                mesh_out.vertices.point<2>(3*f+1)   = mesh_fc_uv[mesh.facets.corner(f, 1)];
-                mesh_out.vertices.point<2>(3*f+2)   = mesh_fc_uv[mesh.facets.corner(f, 2)];
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    const auto& fc = mesh.facets.corner(f, lv);
+                    mesh_out.vertices.point<2>(3*f) = GEO::vec2(mesh_fc_uv[2*fc], mesh_fc_uv[2*fc+1]);
+                }
                 mesh_out.facets.set_vertex(f, 0, 3*f);
                 mesh_out.facets.set_vertex(f, 1, 3*f+1);
                 mesh_out.facets.set_vertex(f, 2, 3*f+2);
@@ -34,10 +35,11 @@ namespace geolio::test
 
         GEO::Mesh mesh;
         GEO::Attribute<double> mesh_fc_uv;
+        MIQParameters params;
     };
 
     TEST_F(MIQTest, nrosy) {
-        miq<3>(mesh, mesh_fc_uv);
+        miq<3>(mesh, mesh_fc_uv, params);
         save_results();
     }
 
@@ -45,9 +47,8 @@ namespace geolio::test
         GEO::FrameField cross_field;
         cross_field.create_from_surface_mesh(mesh, false);
 
-        MIQParameters params;
         params.cross = cross_field.frames().data();
-        params.vectors_per_facet = 9;
+        params.vectors_nb_per_facet = 3;
 
         miq<3>(mesh, mesh_fc_uv, params);
         save_results();
