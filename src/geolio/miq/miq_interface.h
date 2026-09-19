@@ -7,6 +7,7 @@
 #include "miq.h"
 #include <geogram/mesh/mesh.h>
 #include "nrosy.h"
+#include <cassert>
 
 namespace geolio
 {
