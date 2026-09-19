@@ -28,24 +28,37 @@ FetchContent_Declare(
         # CoMISo publishes no version tags, so pin a commit for a reproducible
         # checkout instead of tracking a moving branch. After pushing to the fork,
         # bump this to the new revision: `git -C <fork checkout> rev-parse HEAD`.
-        GIT_TAG        ac7b11e770448f6a0337a534203e8b8a9aea93e4
+        GIT_TAG        73989173e8208f0f9b1b47d107b4f741dc786f95
         SOURCE_DIR     "${FETCHCONTENT_BASE_DIR}/CoMISo"
 )
 FetchContent_MakeAvailable(comiso)
 message(STATUS "CoMISo fetched at ${comiso_SOURCE_DIR}")
 
-# The revision pinned above also drops the vendored gmm library's single use of the
-# `register` storage class (ext/gmm-4.2/include/gmm/gmm_domain_decomp.h), which C++17
-# deleted from the language. Earlier revisions needed a -Wno-register suppression here
-# and a matching one on the miq sources (see src/geolio/CMakeLists.txt), because Clang
-# diagnoses it as an error by default ("ISO C++17 does not allow 'register' storage
-# class specifier [-Wregister]") and GCC as a warning, so CoMISo could not be compiled
-# at all under this project's CMAKE_CXX_STANDARD 20. Neither suppression ever helped
-# MSVC, which rejects the keyword outright since 14.51 (Visual Studio 18, the compiler
-# on the Windows CI runners) with "C2760: syntax error: 'register' was unexpected
-# here". Removing the keyword in the fork is a no-op semantically -- it was only ever a
-# hint compilers ignored -- and it is what makes this one revision build on GCC, Clang
-# and MSVC alike, so no per-compiler suppression is needed now.
+# The revision pinned above carries the two portability fixes the vendored gmm library
+# (ext/gmm-4.2) needs to compile under C++17 and later. Both are no-ops semantically,
+# but both are hard errors on the toolchain used by the Windows CI runners (MSVC 14.51
+# in Visual Studio 18), which is why they live in the fork rather than in a warning flag
+# here:
+#
+#  1. gmm_domain_decomp.h declared a variable with the `register` storage class, which
+#     C++17 deleted from the language. Clang rejects it by default ("ISO C++17 does not
+#     allow 'register' storage class specifier [-Wregister]"), GCC warns, and MSVC 14.51
+#     fails with "C2760: syntax error: 'register' was unexpected here". Earlier revisions
+#     therefore needed -Wno-register here and a matching suppression on the miq sources
+#     (see src/geolio/CMakeLists.txt); neither suppression ever helped MSVC.
+#  2. gmm_real_part.h used std::divides<T> without including <functional>, the header that
+#     declares it -- upstream gmm in getfem carries that include today, the vendored 4.2
+#     copy predates it. It went unnoticed while <complex> dragged <functional> in, but MSVC
+#     14.51's STL puts plus, minus and multiplies in <xutility> (which <complex> does
+#     include) and keeps divides and modulus in <functional> (which it does not), so of the
+#     four arithmetic functors that one class uses, only std::divides is undeclared there.
+#     That yields "C3878: syntax error: unexpected token '>'" at the '>' of std::divides<T>
+#     in any translation unit that instantiates gmm's complex ref_elt_vector partial
+#     specialization before something else provides <functional> -- which is exactly
+#     ConstrainedSolver.cc, whose GMM_Tools.hh pulls in <gmm/gmm.h> ahead of Eigen (Eigen is
+#     the one header in the chain that does include <functional>). The neighbouring
+#     std::plus/std::minus/std::multiplies uses staying clean is what identifies a missing
+#     include rather than a language change.
 
 if(COMMAND geolio_end_file)
     geolio_end_file()
