@@ -409,7 +409,7 @@ namespace geolio
             auto& S = areas[f];
             S = 0;
             for (const auto& [uv, w] : points_and_weights)
-                S += w * compute_facet_uv_measure(f, uv, QuadControlGrid::MeasureType::DET_JACOBIAN);
+                S += w * std::abs(compute_facet_uv_measure(f, uv, QuadControlGrid::MeasureType::DET_JACOBIAN));
 
         }
     }
