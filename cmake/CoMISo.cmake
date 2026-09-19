@@ -28,17 +28,17 @@ FetchContent_Declare(
         # CoMISo publishes no version tags, so pin a commit for a reproducible
         # checkout instead of tracking a moving branch. After pushing to the fork,
         # bump this to the new revision: `git -C <fork checkout> rev-parse HEAD`.
-        GIT_TAG        73989173e8208f0f9b1b47d107b4f741dc786f95
+        GIT_TAG        175e9c3222d6d2717fb112478787d36d68c19766
         SOURCE_DIR     "${FETCHCONTENT_BASE_DIR}/CoMISo"
 )
 FetchContent_MakeAvailable(comiso)
 message(STATUS "CoMISo fetched at ${comiso_SOURCE_DIR}")
 
-# The revision pinned above carries the two portability fixes the vendored gmm library
-# (ext/gmm-4.2) needs to compile under C++17 and later. Both are no-ops semantically,
-# but both are hard errors on the toolchain used by the Windows CI runners (MSVC 14.51
-# in Visual Studio 18), which is why they live in the fork rather than in a warning flag
-# here:
+# The revision pinned above carries the three portability fixes the vendored gmm library
+# (ext/gmm-4.2) and CoMISo's build need to work on this project's toolchains. All three
+# are no-ops semantically, and all three are hard failures on the Windows CI runners
+# (MSVC 14.51 in Visual Studio 18), which is why they live in the fork rather than in a
+# warning flag here:
 #
 #  1. gmm_domain_decomp.h declared a variable with the `register` storage class, which
 #     C++17 deleted from the language. Clang rejects it by default ("ISO C++17 does not
@@ -59,35 +59,23 @@ message(STATUS "CoMISo fetched at ${comiso_SOURCE_DIR}")
 #     the one header in the chain that does include <functional>). The neighbouring
 #     std::plus/std::minus/std::multiplies uses staying clean is what identifies a missing
 #     include rather than a language change.
-#
-# CoMISo's Windows build also links the OpenBLAS import library vendored next to it
-# (ext/OpenBLAS-v0.2.14-Win64-int64/lib/libopenblas.dll.a.lib), because Solver/GMM_Tools.cc
-# defines GMM_USES_LAPACK before including <gmm/gmm_lapack_interface.h>: that turns gmm's
-# vector products into Fortran BLAS calls on every platform (the built archive references
-# ddot_ and daxpy_). An import library turns those references into a load-time dependency on
-# libopenblas.dll -- and that DLL is a MinGW build, so it in turn needs libgcc_s_seh-1.dll,
-# libgfortran-3.dll and libquadmath-0.dll. Windows resolves imports from the executable's own
-# directory first, and gtest_discover_tests() runs the test binary at build time with no PATH
-# augmentation, so this whole DLL set has to sit next to every executable that loads
-# Geolio.dll. Geogram.cmake copies geogram's DLLs into build/bin/<config> the same way;
-# COMISO_BLAS_DLL_DIR is exported as a cache variable so tests/ can copy them next to the
-# test binary as well.
-if(WIN32 AND TARGET CoMISo)
-    set(COMISO_BLAS_DLL_DIR
-            "${comiso_SOURCE_DIR}/ext/OpenBLAS-v0.2.14-Win64-int64/bin"
-            CACHE INTERNAL "Directory with the BLAS DLLs CoMISo's import library needs at runtime")
-    file(GLOB COMISO_BLAS_DLLS "${COMISO_BLAS_DLL_DIR}/*.dll")
-    if(COMISO_BLAS_DLLS)
-        foreach(config Release Debug RelWithDebInfo MinSizeRel)
-            message(STATUS "Copying CoMISo BLAS dlls -> ${CMAKE_BINARY_DIR}/bin/${config}")
-            file(COPY ${COMISO_BLAS_DLLS} DESTINATION "${CMAKE_BINARY_DIR}/bin/${config}")
-        endforeach()
-    else()
-        message(WARNING
-                "No BLAS dll found in ${COMISO_BLAS_DLL_DIR}: executables importing "
-                "libopenblas.dll will fail to start")
-    endif()
-endif()
+#  3. The fork's Windows build no longer links the OpenBLAS copy vendored under
+#     ext/OpenBLAS-v0.2.14-Win64-int64. That library is an INTERFACE64 (-i8) build whose
+#     Fortran INTEGER is 64-bit (readme.txt: INTERFACE64=1; openblas_config.h:
+#     OPENBLAS_USE64BITINT, typedef BLASLONG blasint), while gmm's BLAS/LAPACK interface
+#     declares and calls every routine with 32-bit ints -- 27 call sites passing the
+#     addresses of local ints. Each call therefore made the BLAS routine read four bytes
+#     past its argument, so lengths and increments became whatever the neighbouring stack
+#     slot held: undefined behaviour that surfaces or not depending on the optimization
+#     level, which is how it passed on Debug and SIGSEGV'd on Release, on the very first
+#     gmm::vect_sp -> ddot_ of the MIQ pipeline. The fork now compiles that interface out
+#     on Windows (COMISO_NO_BLAS, PUBLIC so the miq sources that include GMM_Tools.cc see
+#     the same setting) and gmm uses its own implementations there, while macOS and Linux
+#     keep their BLAS (Accelerate, find_package(BLAS)), both of them 32-bit-integer
+#     builds. Nothing imports libopenblas.dll any more either, so no BLAS runtime DLLs
+#     have to be shipped next to the executables -- re-enabling BLAS on Windows means
+#     pointing at a 32-bit-integer build and copying its DLLs, see Geogram.cmake for how
+#     geogram's own DLL set is staged into build/bin/<config>.
 
 if(COMMAND geolio_end_file)
     geolio_end_file()

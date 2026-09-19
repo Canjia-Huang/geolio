@@ -78,21 +78,6 @@ if(WIN32)
             )
         endif()
     endif()
-    # Same reasoning for CoMISo's BLAS: geolio.dll links CoMISo's OpenBLAS import library,
-    # so loading it also pulls in libopenblas.dll and the three MinGW runtime DLLs that one
-    # needs. COMISO_BLAS_DLL_DIR is set by cmake/CoMISo.cmake and only exists when
-    # GEOLIO_ENABLE_COMISO is ON.
-    if(COMISO_BLAS_DLL_DIR)
-        file(GLOB COMISO_RUNTIME_DLLS "${COMISO_BLAS_DLL_DIR}/*.dll")
-        if(COMISO_RUNTIME_DLLS)
-            add_custom_command(TARGET ${CURRENT_LIB_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    ${COMISO_RUNTIME_DLLS}
-                    "$<TARGET_FILE_DIR:${CURRENT_LIB_NAME}>"
-                COMMENT "Copying CoMISo BLAS runtime DLLs to test directory"
-            )
-        endif()
-    endif()
 endif()
 
 include(GoogleTest)
