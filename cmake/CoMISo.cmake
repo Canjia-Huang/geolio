@@ -28,26 +28,24 @@ FetchContent_Declare(
         # CoMISo publishes no version tags, so pin a commit for a reproducible
         # checkout instead of tracking a moving branch. After pushing to the fork,
         # bump this to the new revision: `git -C <fork checkout> rev-parse HEAD`.
-        GIT_TAG        39968f7d331e129d9985954162476bd24ee7c58b
+        GIT_TAG        ac7b11e770448f6a0337a534203e8b8a9aea93e4
         SOURCE_DIR     "${FETCHCONTENT_BASE_DIR}/CoMISo"
 )
 FetchContent_MakeAvailable(comiso)
 message(STATUS "CoMISo fetched at ${comiso_SOURCE_DIR}")
 
-# The gmm library vendored inside CoMISo (ext/gmm-4.2) still uses the `register`
-# storage class, which C++17 removed. Clang diagnoses that as an error by default
-# (group -Wregister), not as a warning, so CoMISo cannot be compiled at all under the
-# project's CMAKE_CXX_STANDARD 20 (first hit: gmm/gmm_domain_decomp.h). Suppress it
-# for this third-party target only, instead of weakening warnings project-wide;
-# -Wno-register is used rather than -Wno-error=register because the latter only
-# downgrades the diagnostic, leaving a warning behind for every use.
-# Note: gmm's headers are also included by first-party translation units, which need
-# the same flag -- this only covers CoMISo's own sources. See src/geolio/CMakeLists.txt.
-# Clang and GCC both spell the option this way; MSVC has no equivalent and accepts
-# `register` anyway, hence the compiler check.
-if(TARGET CoMISo AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(CoMISo PRIVATE -Wno-register)
-endif()
+# The revision pinned above also drops the vendored gmm library's single use of the
+# `register` storage class (ext/gmm-4.2/include/gmm/gmm_domain_decomp.h), which C++17
+# deleted from the language. Earlier revisions needed a -Wno-register suppression here
+# and a matching one on the miq sources (see src/geolio/CMakeLists.txt), because Clang
+# diagnoses it as an error by default ("ISO C++17 does not allow 'register' storage
+# class specifier [-Wregister]") and GCC as a warning, so CoMISo could not be compiled
+# at all under this project's CMAKE_CXX_STANDARD 20. Neither suppression ever helped
+# MSVC, which rejects the keyword outright since 14.51 (Visual Studio 18, the compiler
+# on the Windows CI runners) with "C2760: syntax error: 'register' was unexpected
+# here". Removing the keyword in the fork is a no-op semantically -- it was only ever a
+# hint compilers ignored -- and it is what makes this one revision build on GCC, Clang
+# and MSVC alike, so no per-compiler suppression is needed now.
 
 if(COMMAND geolio_end_file)
     geolio_end_file()
