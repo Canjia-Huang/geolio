@@ -10,7 +10,7 @@
 [![Windows Consumer](https://github.com/Canjia-Huang/geolio/actions/workflows/consumer_windows.yml/badge.svg)](https://github.com/Canjia-Huang/geolio/actions/workflows/consumer_windows.yml)
 [![Consumer Nightly](https://github.com/Canjia-Huang/geolio/actions/workflows/consumer_nightly.yml/badge.svg)](https://github.com/Canjia-Huang/geolio/actions/workflows/consumer_nightly.yml)
 
-**Geolio** is a C++20 mesh-processing library: mesh I/O (geogram meshes, OFF, FRA, OVM, HEXEX, high-order hex/quad), high-order meshes, mesh operations and local-operation optimization, motorcycle graphs, and mixed-integer quadrangulation (MIQ). Two apps build on it — `geobox`, an ImGui/geogram_gfx application shell, and `miq`, a command-line MIQ tool.
+**Geolio** is a C++ library designed for performing various processing tasks in computer graphics (mainly mesh processing).
 
 ## Dependencies
 
