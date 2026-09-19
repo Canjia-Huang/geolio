@@ -94,8 +94,10 @@ jobs:
 
       # == Configure and make =========================================================================================
 
+      # The optional features default to OFF (see CMakeLists.txt); CI switches all
+      # three on explicitly so each one is compiled and covered by the test suite.
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGEOLIO_ENABLE_MIQ=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGEOLIO_ENABLE_LBFGS_LITE=ON -DGEOLIO_ENABLE_COMISO=ON -DGEOLIO_ENABLE_MIQ=ON
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
