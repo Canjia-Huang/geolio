@@ -59,6 +59,35 @@ message(STATUS "CoMISo fetched at ${comiso_SOURCE_DIR}")
 #     the one header in the chain that does include <functional>). The neighbouring
 #     std::plus/std::minus/std::multiplies uses staying clean is what identifies a missing
 #     include rather than a language change.
+#
+# CoMISo's Windows build also links the OpenBLAS import library vendored next to it
+# (ext/OpenBLAS-v0.2.14-Win64-int64/lib/libopenblas.dll.a.lib), because Solver/GMM_Tools.cc
+# defines GMM_USES_LAPACK before including <gmm/gmm_lapack_interface.h>: that turns gmm's
+# vector products into Fortran BLAS calls on every platform (the built archive references
+# ddot_ and daxpy_). An import library turns those references into a load-time dependency on
+# libopenblas.dll -- and that DLL is a MinGW build, so it in turn needs libgcc_s_seh-1.dll,
+# libgfortran-3.dll and libquadmath-0.dll. Windows resolves imports from the executable's own
+# directory first, and gtest_discover_tests() runs the test binary at build time with no PATH
+# augmentation, so this whole DLL set has to sit next to every executable that loads
+# Geolio.dll. Geogram.cmake copies geogram's DLLs into build/bin/<config> the same way;
+# COMISO_BLAS_DLL_DIR is exported as a cache variable so tests/ can copy them next to the
+# test binary as well.
+if(WIN32 AND TARGET CoMISo)
+    set(COMISO_BLAS_DLL_DIR
+            "${comiso_SOURCE_DIR}/ext/OpenBLAS-v0.2.14-Win64-int64/bin"
+            CACHE INTERNAL "Directory with the BLAS DLLs CoMISo's import library needs at runtime")
+    file(GLOB COMISO_BLAS_DLLS "${COMISO_BLAS_DLL_DIR}/*.dll")
+    if(COMISO_BLAS_DLLS)
+        foreach(config Release Debug RelWithDebInfo MinSizeRel)
+            message(STATUS "Copying CoMISo BLAS dlls -> ${CMAKE_BINARY_DIR}/bin/${config}")
+            file(COPY ${COMISO_BLAS_DLLS} DESTINATION "${CMAKE_BINARY_DIR}/bin/${config}")
+        endforeach()
+    else()
+        message(WARNING
+                "No BLAS dll found in ${COMISO_BLAS_DLL_DIR}: executables importing "
+                "libopenblas.dll will fail to start")
+    endif()
+endif()
 
 if(COMMAND geolio_end_file)
     geolio_end_file()
