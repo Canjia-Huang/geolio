@@ -46,29 +46,30 @@ int main(int argc, char* argv[]) {
     app.add_option(
         "--in-mesh,--i-mesh",
         in_mesh_filepath,
-        ""
+        "Input mesh file."
         )->check(CLI::ExistingFile)->required();
 
     app.add_option(
         "--in-cross,--i-cross",
         in_cross_filepath,
-        ""
+        "Input cross field file in FRA format."
         )->check(CLI::ExistingFile);
 
     app.add_option(
         "--out-mesh,--o-mesh",
         out_mesh_filepath,
-        "format need to support uv");
+        "Output mesh file; the format may need to support UV coordinates.");
 
     app.add_option(
         "--out-cross,--o-cross",
         out_cross_filepath,
-        "");
+        "Output cross field file in FRA format.");
 
     app.add_option(
         "--scale,-s",
         scale,
-        "");
+        "Global scaling factor for the gradient; controls quad resolution "
+        "(default: " + std::to_string(scale) + ").");
 
     CLI11_PARSE(app, argc, argv);
 
