@@ -12,10 +12,10 @@ project(Geolio
 # == Options ==
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # standalone: tests on by default
-    option(BUILD_TESTS "Build tests" ON)
+    option(GEOLIO_BUILD_TESTS "Build tests" ON)
 else()
     # as submodule: tests off by default, but a parent project may opt in
-    option(BUILD_TESTS "Build tests" OFF)
+    option(GEOLIO_BUILD_TESTS "Build tests" OFF)
 endif()
 
 # Use the header-only LBFGS-Lite optimizer (https://github.com/ZJU-FAST-Lab/LBFGS-Lite)
@@ -90,7 +90,7 @@ add_subdirectory(src/geolio)
 ########################################################################################################################
 # Add subdirectories
 ########################################################################################################################
-if (BUILD_TESTS)
+if (GEOLIO_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
