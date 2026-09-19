@@ -14,7 +14,7 @@ namespace geolio::test
     protected:
         void SetUp() override {
             ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"fandisk.geogram"));
-            mesh_fc_uv.bind(mesh.facet_corners.attributes(), "uv");
+            mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
         }
 
         void save_results() {
@@ -33,7 +33,7 @@ namespace geolio::test
         }
 
         GEO::Mesh mesh;
-        GEO::Attribute<GEO::vec2> mesh_fc_uv;
+        GEO::Attribute<double> mesh_fc_uv;
     };
 
     TEST_F(MIQTest, nrosy) {
@@ -47,7 +47,7 @@ namespace geolio::test
 
         MIQParameters params;
         params.cross = cross_field.frames().data();
-        params.cross_dim = 9;
+        params.vectors_per_facet = 9;
 
         miq<3>(mesh, mesh_fc_uv, params);
         save_results();

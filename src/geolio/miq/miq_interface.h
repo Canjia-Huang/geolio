@@ -12,7 +12,11 @@ namespace geolio
 {
     struct MIQParameters {
         const double* cross = nullptr;
-        GEO::index_t cross_dim = 6; // For the input 4-NoSy field, are N vectors (N*3=3N) provided?
+        GEO::index_t vectors_nb_per_facet = 2; // For the input 4-NoSy field, are N vectors (N*3=3N) provided?
+
+        bool output_cross = false;
+        std::vector<double> out_cross;
+        const GEO::index_t out_vectors_nb_per_facet = 2;
 
         double scale = 30.0;
         double stiffness = 5.0;
@@ -28,14 +32,14 @@ namespace geolio
     template <GEO::index_t DIM>
     void miq(
         const GEO::Mesh& mesh,
-        GEO::Attribute<GEO::vec2>& mesh_fc_uv,
-        const MIQParameters& params = MIQParameters()
+        GEO::Attribute<double>& mesh_fc_uv,
+        MIQParameters& params
         ) requires (DIM == 2 || DIM == 3) {
         assert(mesh.facets.are_simplices());
         assert(mesh_fc_uv.is_bound());
+        assert(mesh_fc_uv.dimension() == 2);
         assert(mesh_fc_uv.size() == mesh.facet_corners.nb());
-        assert(params.cross_dim%3 == 0);
-        assert(params.cross_dim >= 6);
+        assert(params.vectors_nb_per_facet >= 2);
 
         /* Load mesh */
         Eigen::MatrixXd V(mesh.vertices.nb(), 3);
@@ -83,12 +87,24 @@ namespace geolio
         }
         else {
             for (const auto& f : mesh.facets) {
-                PD1(f, 0) = params.cross[params.cross_dim*f];
-                PD1(f, 1) = params.cross[params.cross_dim*f+1];
-                PD1(f, 2) = params.cross[params.cross_dim*f+2];
-                PD2(f, 0) = params.cross[params.cross_dim*f+3];
-                PD2(f, 1) = params.cross[params.cross_dim*f+4];
-                PD2(f, 2) = params.cross[params.cross_dim*f+5];
+                PD1(f, 0) = params.cross[3*params.vectors_nb_per_facet*f];
+                PD1(f, 1) = params.cross[3*params.vectors_nb_per_facet*f+1];
+                PD1(f, 2) = params.cross[3*params.vectors_nb_per_facet*f+2];
+                PD2(f, 0) = params.cross[3*params.vectors_nb_per_facet*f+3];
+                PD2(f, 1) = params.cross[3*params.vectors_nb_per_facet*f+4];
+                PD2(f, 2) = params.cross[3*params.vectors_nb_per_facet*f+5];
+            }
+        }
+        if (params.output_cross) {
+            params.out_cross.clear();
+            params.out_cross.reserve(3*params.out_vectors_nb_per_facet * mesh.facets.nb());
+            for (const auto& f : mesh.facets) {
+                params.out_cross.push_back(PD1(f, 0));
+                params.out_cross.push_back(PD1(f, 1));
+                params.out_cross.push_back(PD1(f, 2));
+                params.out_cross.push_back(PD2(f, 0));
+                params.out_cross.push_back(PD2(f, 1));
+                params.out_cross.push_back(PD2(f, 2));
             }
         }
 
@@ -111,8 +127,11 @@ namespace geolio
 
         /* Output */
         for (const auto& f : mesh.facets) {
-            for (GEO::index_t lv = 0; lv < 3; ++lv)
-                mesh_fc_uv[mesh.facets.corner(f, lv)] = GEO::vec2(UV(FUV(f, lv), 0), UV(FUV(f, lv), 1));
+            for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                const auto& fc = mesh.facets.corner(f, lv);
+                mesh_fc_uv[2*fc] = UV(FUV(f, lv), 0);
+                mesh_fc_uv[2*fc+1] = UV(FUV(f, lv), 1);
+            }
         }
     }
 }

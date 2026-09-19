@@ -1,4 +1,4 @@
-set(CURRENT_APP_NAME geobox)
+set(CURRENT_APP_NAME miq)
 
 add_executable(${CURRENT_APP_NAME}
         main.cpp
