@@ -59,10 +59,8 @@ namespace geolio
 {
     template<typename CONTROL_GRID>
     MinimumJacobianDeterminant<CONTROL_GRID>::MinimumJacobianDeterminant(
-        const CONTROL_GRID& control_grid,
-        const bool use_absolute_area
-        ) : use_absolute_area_(use_absolute_area),
-            control_grid_(control_grid),
+        const CONTROL_GRID& control_grid
+        ) : control_grid_(control_grid),
             ORDER_(control_grid.order())
     {
         if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {

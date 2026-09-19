@@ -31,9 +31,17 @@ namespace geolio
          * Create a MinJacobianDet analyzer for the given control grid.
          * @param[in] control_grid Reference to the control grid that defines the polynomial (or spline)
          * coefficients of the mapping. The analyzer holds a reference and does not take ownership.
-         * @param[in] use_absolute_area use detJ or absolute_area
          */
-        explicit MinimumJacobianDeterminant(const CONTROL_GRID& control_grid, bool use_absolute_area = false);
+        explicit MinimumJacobianDeterminant(const CONTROL_GRID& control_grid);
+
+        /**
+         * Use the squared absolute area instead of the signed Jacobian determinant for 3D facets.
+         *
+         * When enabled, subsequent facet evaluations use `|du x dv|^2`. This measure is non-negative,
+         * so the analyzer reports zero-area or degenerate facets rather than orientation reversals.
+         * This interface is available only when `CONTROL_GRID` is `QuadControlGrid<3>`.
+         */
+        void use_absolute_area() requires (std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) { use_absolute_area_ = true; };
 
         /**
          * Represents an axis-aligned sub-block in the parametric (u,v,w) domain together with interval
@@ -252,7 +260,7 @@ namespace geolio
          */
         void convert_to_bernstein_coeffs(const Eigen::MatrixXd& J, Eigen::MatrixXd& C) const;
 
-        const bool use_absolute_area_;
+        bool use_absolute_area_;
         const double absolute_area_tolerance_ = 1e-8;
 
         const CONTROL_GRID& control_grid_;
