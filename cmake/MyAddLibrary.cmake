@@ -21,10 +21,6 @@ function(my_add_library module_name)
     message(STATUS "Creating ${TARGET_KIND} target: ${PROJECT_NAME}::${module_shortname} (${module_name})")
     add_library(${PROJECT_NAME}::${module_shortname} ALIAS ${module_name})
 
-    if (DISPLAY_WARNING)
-        target_compile_options(${module_name} PRIVATE -Wall -Wextra -Wpedantic -Wno-sign-compare -Werror -Wno-gnu -Wno-unknown-pragmas)
-    endif ()
-
     # Other compilation flags
     if (MSVC)
         # Enable parallel compilation for Visual Studio
