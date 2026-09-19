@@ -10,19 +10,6 @@
 namespace geolio
 {
     /**
-     * @brief Saves a high-order hexahedral control grid to a Gmsh mesh file.
-     *
-     * @param[in] control_grid The hexahedral control grid to export.
-     * @param[in] filepath The destination file path.
-     * @param[in] version_number The Gmsh mesh version string, such as "2.2" or "4.1".
-     * @return True if the mesh is written successfully; otherwise, false.
-     */
-    bool high_order_hex_mesh_save(
-        const HexControlGrid& control_grid,
-        const std::string& filepath,
-        const std::string& version_number = "2.2");
-
-    /**
      * @brief Loads a high-order hexahedral mesh from a Gmsh file and reconstructs the control grid.
      *
      * @param[in] filepath The input Gmsh file path.
@@ -34,6 +21,19 @@ namespace geolio
         const std::string& filepath,
         GEO::Mesh& mesh,
         std::unique_ptr<HexControlGrid>& control_grid_ptr);
+
+    /**
+     * @brief Saves a high-order hexahedral control grid to a Gmsh mesh file.
+     *
+     * @param[in] control_grid The hexahedral control grid to export.
+     * @param[in] filepath The destination file path.
+     * @param[in] version_number The Gmsh mesh version string, such as "2.2" or "4.1".
+     * @return True if the mesh is written successfully; otherwise, false.
+     */
+    bool high_order_hex_mesh_save(
+        const HexControlGrid& control_grid,
+        const std::string& filepath,
+        const std::string& version_number = "2.2");
 }
 
 #endif //GEOLIO_HIGH_ORDER_HEX_MESH_IO_H
