@@ -47,31 +47,6 @@ cmake --build build --config Release --parallel
 | `GEOLIO_ENABLE_COMISO`     | `OFF`                        | CoMISo solver and BLAS, fetched at configure time                    |
 | `GEOLIO_ENABLE_MIQ`        | `OFF`                        | MIQ pipeline; forces `GEOLIO_ENABLE_COMISO=ON` and requires libigl   |
 
-The main CI workflows (Linux, macOS, Windows, nightly) build with all three optional features `ON`; the consumer workflows build geolio embedded with the defaults. Run the test suite with:
-
-```bash
-ctest --test-dir build --output-on-failure -C Release
-```
-
-### Mixed-integer quadrangulation (MIQ)
-
-`GEOLIO_ENABLE_MIQ=ON` compiles `src/geolio/miq` into the library and builds the `miq` app. It also forces `GEOLIO_ENABLE_COMISO=ON` — in the cache, even if you passed `-DGEOLIO_ENABLE_COMISO=OFF` — and makes libigl a hard requirement, supplied either way:
-
-```bash
-# A libigl source tree: header-only, so no install is needed (also read from the
-# LIBIGL_DIR environment variable).
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGEOLIO_ENABLE_MIQ=ON -DLIBIGL_DIR=/path/to/libigl
-
-# Or an installed libigl package: find_package(libigl) only sees the installed config
-# file, which does not exist for a source checkout alone.
-cmake -S /path/to/libigl -B /path/to/libigl-build -DCMAKE_BUILD_TYPE=Release
-cmake --install /path/to/libigl-build --prefix /path/to/libigl-prefix
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGEOLIO_ENABLE_MIQ=ON \
-      -Dlibigl_DIR=/path/to/libigl-prefix/lib/cmake/igl
-```
-
-`LIBIGL_DIR` accepts the libigl source root or its `include` directory. For the installed package, `libigl_DIR` must point at the directory holding `libigl-config.cmake`: libigl installs it under `<prefix>/lib/cmake/igl` while the package is named `libigl`, so `-DCMAKE_PREFIX_PATH=<prefix>` on its own does not find it. Tested with libigl `v2.5.0`.
-
 ## Using Geolio as a submodule
 
 ```bash
