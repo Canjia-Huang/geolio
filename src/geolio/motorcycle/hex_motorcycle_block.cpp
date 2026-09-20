@@ -258,11 +258,11 @@ namespace geolio
         assert(!block_cells_.empty());
 
         int min_x = std::numeric_limits<int>::max();
-        int max_x = std::numeric_limits<int>::min();
+        int max_x = -std::numeric_limits<int>::max();
         int min_y = std::numeric_limits<int>::max();
-        int max_y = std::numeric_limits<int>::min();
+        int max_y = -std::numeric_limits<int>::max();
         int min_z = std::numeric_limits<int>::max();
-        int max_z = std::numeric_limits<int>::min();
+        int max_z = -std::numeric_limits<int>::max();
         for (const auto& BC : block_cells_) {
             min_x = std::min(min_x, BC.coord.x);
             max_x = std::max(max_x, BC.coord.x);

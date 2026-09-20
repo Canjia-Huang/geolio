@@ -156,9 +156,9 @@ namespace geolio
         assert(!block_facets_.empty());
 
         int min_x = std::numeric_limits<int>::max();
-        int max_x = std::numeric_limits<int>::min();
+        int max_x = -std::numeric_limits<int>::max();
         int min_y = std::numeric_limits<int>::max();
-        int max_y = std::numeric_limits<int>::min();
+        int max_y = -std::numeric_limits<int>::max();
         for (const auto& BF : block_facets_) {
             min_x = std::min(min_x, BF.coord.x);
             max_x = std::max(max_x, BF.coord.x);

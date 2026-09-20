@@ -649,7 +649,7 @@ namespace geolio
                 << ENTITIES_3D_NUMBER << "\n";
 
             std::vector<double> xyz_min{std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
-            std::vector<double> xyz_max{std::numeric_limits<double>::min(), std::numeric_limits<double>::min(), std::numeric_limits<double>::min()};
+            std::vector<double> xyz_max{-std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(), -std::numeric_limits<double>::max()};
             for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
                 const auto& p = control_grid.control_node(nd);
                 for (GEO::index_t d = 0; d < DIM; ++d) {
