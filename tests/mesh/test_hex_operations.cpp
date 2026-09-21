@@ -162,7 +162,7 @@ namespace geolio::test
 
     class LoopHexesOperationTest : public ::testing::Test {
     protected:
-        void SetUp() {
+        void SetUp() override {
             ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"triple_mobius_hexes.geogram"));
         }
 
