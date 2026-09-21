@@ -209,6 +209,44 @@ namespace geolio
             return GEO::NO_INDEX;
         return find_hex_facet_from_local_vertices(lv0, lv1, lv2);
     }
+
+        /**
+         * @brief Trace a hexahedral-stacked sheet (loop) starting from a given cell and edge.
+         *
+         * This function traces through the stacked hex-cell structure to identify all cells
+         * that form a continuous topological loop (or sheet) starting from the specified
+         * starting cell and local edge. The traced loop is recorded as a sequence of
+         * (cell_index, cut_type) pairs that encode both the cell identity and the specific
+         * pair of cutting edges within that cell.
+         *
+         * The tracing follows the adjacency structure of the hexahedral mesh, moving from
+         * one cell to its neighbors while maintaining the continuity of the topological loop.
+         *
+         * @param[in] mesh The hexahedral mesh to query
+         * @param[in] start_c Index of the starting hexahedral cell (0..hex_mesh_.cells.nb()-1).
+         * @param[in] start_le Local edge index within the starting cell defining the initial
+         *            direction of the loop. Valid range: 0-11.
+         * @param[out] sheet_hexes Output vector containing pairs (cell_index, cell_cut_type)
+         *             for all cells along the traced loop.
+         *             The vector is cleared before population.
+         *             Each cell_cut_type is a 6-bit unsigned integer encoding the pairs of
+         *             cutting edges within the cell:
+         *             - Bit 0: Cut from cell vertex v0 to v1.
+         *             - Bit 1: Cut from cell vertex v1 to v0.
+         *             - Bit 2: Cut from cell vertex v0 to v2.
+         *             - Bit 3: Cut from cell vertex v2 to v0.
+         *             - Bit 4: Cut from cell vertex v0 to v4.
+         *             - Bit 5: Cut from cell vertex v4 to v0.
+         *
+         * @note The tracing continues until the loop closes (returns to the starting cell
+         *       and edge configuration), or until the boundary is reached. The function
+         *       does not validate whether the traced loop is topologically valid.
+         */
+        void find_sheet_hexes(
+            const GEO::Mesh& mesh,
+            GEO::index_t start_c,
+            GEO::index_t start_le,
+            std::vector<std::pair<GEO::index_t, GEO::Numeric::uint8>>& sheet_hexes);
 }
 
 #endif //GEOLIO_HEXAHEDRON_OPERATIONS_H
