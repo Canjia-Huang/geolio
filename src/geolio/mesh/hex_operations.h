@@ -210,7 +210,7 @@ namespace geolio
         return find_hex_facet_from_local_vertices(lv0, lv1, lv2);
     }
 
-            /**
+        /**
          * @brief Trace a hexahedral-stacked sheet (loop) starting from a given cell and edge.
          *
          * This function traces through the stacked hex-cell structure to identify all cells
