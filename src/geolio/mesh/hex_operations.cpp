@@ -14,7 +14,6 @@ namespace geolio
         const GEO::index_t start_le,
         std::vector<std::pair<GEO::index_t, GEO::Numeric::uint8>>& sheet_hexes
         ) {
-        // LOG::TRACE("{}({}, {})", __FUNCTION__, start_c, start_le);
         assert(start_c < mesh.cells.nb());
         assert(start_le < 12);
 
