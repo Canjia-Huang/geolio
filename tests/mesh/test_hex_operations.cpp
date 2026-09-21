@@ -7,6 +7,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geolio/mesh/hex_operations.h>
 #include <bit>
+#include <ranges>
 #include <geogram/mesh/mesh_repair.h>
 
 #include "../utils.h"
@@ -162,7 +163,7 @@ namespace geolio::test
     class LoopHexesOperationTest : public ::testing::Test {
     protected:
         void SetUp() {
-            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"mobius_hexes.geogram"));
+            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"triple_mobius_hexes.geogram"));
         }
 
         void save_sheet(const std::vector<std::pair<GEO::index_t, GEO::Numeric::uint8>>& sheet_hexes) {
@@ -235,9 +236,18 @@ namespace geolio::test
         const double r = 0.3;
     };
 
-    TEST_F(LoopHexesOperationTest, find_sheet_hexes) {
+    TEST_F(LoopHexesOperationTest, find_sheet_hexes_loop) {
         std::vector<std::pair<GEO::index_t, GEO::Numeric::uint8>> sheet_hexes;
         find_sheet_hexes(mesh, 0, 0, sheet_hexes);
+
+        EXPECT_EQ(sheet_hexes.size(), mesh.cells.nb());
+        for (const auto& [c, type] : sheet_hexes) {
+            if (c == 0)
+                EXPECT_EQ(type, 0b111111);
+            else
+                EXPECT_TRUE(type == 0b001111 || type == 0b110011 || type == 0b111100);
+        }
+
         save_sheet(sheet_hexes);
     }
 }
