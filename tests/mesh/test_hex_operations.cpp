@@ -7,6 +7,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geolio/mesh/hex_operations.h>
 #include <bit>
+#include <geogram/mesh/mesh_repair.h>
 
 #include "../utils.h"
 
