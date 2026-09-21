@@ -81,7 +81,30 @@ if(WIN32)
 endif()
 
 include(GoogleTest)
-gtest_discover_tests(${CURRENT_LIB_NAME})
+
+# Test enumeration runs the test executable with --gtest_list_tests, which only
+# needs the DLLs to load (gtest returns before the test environments run), but on
+# Windows that first launch of a freshly linked Geolio_tests.exe is not cheap: it
+# loads Geolio.dll plus the geogram Debug DLL set copied above while the file cache
+# is still cold and Defender is scanning those binaries for the first time. CMake's
+# default discovery timeout is 5 seconds, and when that launch loses the race
+# discovery kills the process and fails the *build* with
+#
+#   Error running test executable.
+#     Result: Process terminated due to timeout
+#
+# even though the test list itself is perfectly fine (observed on the nightly
+# Windows Debug job, while the same commit passed the regular Windows Debug job).
+# Two guards against that false negative:
+#
+#   DISCOVERY_TIMEOUT 120 - a cold first launch is allowed to take its time.
+#   DISCOVERY_MODE PRE_TEST - enumeration happens at ctest time instead of during
+#     the post-build step, so a slow launch can no longer fail the build; the list
+#     is cached next to the executable and only re-generated when it changes.
+gtest_discover_tests(${CURRENT_LIB_NAME}
+        DISCOVERY_TIMEOUT 120
+        DISCOVERY_MODE PRE_TEST
+)
 
 if(COMMAND geolio_end_file)
     geolio_end_file()
