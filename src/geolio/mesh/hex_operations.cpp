@@ -30,10 +30,8 @@ namespace geolio
 
             sheet_hex_type_map.try_emplace(c, 0); // type will be set later (set 0 here)
 
-            if (mesh_ce_cut[12*c+le]) { // this edge has been cut
-                if (inverse == !HEX_LE_LOOP_LE_ORIENT[le][0]) // the cut orientations is the same
-                    continue;
-            }
+            if (mesh_ce_cut[12*c+le] & (inverse ? (1<<1) : (1<<0))) // this edge has been cut
+                continue;
 
             for (GEO::index_t i = 0; i < 4; ++i) { // loop edges/facets nb == 4
                 const auto& lle = HEX_LE_LOOP_LE[le][i];
@@ -58,13 +56,13 @@ namespace geolio
 
                     if (mesh.cells.edge_vertex(c, lle, 0) == mesh.cells.edge_vertex(nc, nle, 0)) {
                         assert(mesh.cells.edge_vertex(c, lle, 1) == mesh.cells.edge_vertex(nc, nle, 1));
-                        if (mesh_ce_cut[12*nc+nle] != (lle_inverse ? (1<<1) : (1<<0))) // this edge is not being cut by this orientation
+                        if (!(mesh_ce_cut[12*nc+nle] & (lle_inverse ? (1<<1) : (1<<0)))) // this edge is not being cut by this orientation
                             stack.emplace_back(nc, nle, lle_inverse);
                     }
                     else {
                         assert(mesh.cells.edge_vertex(c, lle, 0) == mesh.cells.edge_vertex(nc, nle, 1));
                         assert(mesh.cells.edge_vertex(c, lle, 1) == mesh.cells.edge_vertex(nc, nle, 0));
-                        if (mesh_ce_cut[12*nc+nle] != (!lle_inverse ? (1<<1) : (1<<0))) // this edge is not being cut by this orientation
+                        if (!(mesh_ce_cut[12*nc+nle] & (!lle_inverse ? (1<<1) : (1<<0)))) // this edge is not being cut by this orientation
                             stack.emplace_back(nc, nle, !lle_inverse);
                     }
                 }

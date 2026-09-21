@@ -227,9 +227,9 @@ namespace geolio
          * @param[in] start_le Local edge index within the starting cell defining the initial
          *            direction of the loop. Valid range: 0-11.
          * @param[out] sheet_hexes Output vector containing pairs (cell_index, cell_cut_type)
-         *             for all cells along the traced loop, in order of traversal.
+         *             for all cells along the traced loop.
          *             The vector is cleared before population.
-         *             Each cell_cut_type is a 6-bit unsigned integer encoding the pair of
+         *             Each cell_cut_type is a 6-bit unsigned integer encoding the pairs of
          *             cutting edges within the cell:
          *             - Bit 0: Cut from cell vertex v0 to v1.
          *             - Bit 1: Cut from cell vertex v1 to v0.
