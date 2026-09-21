@@ -2,10 +2,12 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/21.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
+#include <bit>
 #include <ranges>
+#include <unordered_set>
 #include <geogram/mesh/mesh_repair.h>
-#include <gtest/gtest.h>
 #include <geolio/mesh/quad_operations.h>
+#include <gtest/gtest.h>
 #include "../utils.h"
 
 namespace geolio::test
