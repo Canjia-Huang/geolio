@@ -21,7 +21,8 @@ namespace geolio
         ) {
         instance_ = this;
 
-        GEO::CmdLine::declare_arg("debug", false, "print HLBFGS stop messages");
+        if (!GEO::CmdLine::arg_is_declared("debug"))
+            GEO::CmdLine::declare_arg("debug", GEOGRAM_DEBUG, "print HLBFGS stop messages");
     }
 
     void LbfgsOptimizerGeogram::optimize(
