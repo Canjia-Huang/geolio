@@ -32,7 +32,7 @@ namespace geolio::test
     template<typename optimizer>
     class RosenbrockOptimizer : public optimizer {
     public:
-        void funcgrad(const unsigned int n, const double *x, double& f, double* g) override {
+        void funcgrad(const unsigned int n, double *x, double& f, double* g) override {
             f = RosenbrockFunction::func(n, x);
             RosenbrockFunction::gradient(n, x, g);
         }

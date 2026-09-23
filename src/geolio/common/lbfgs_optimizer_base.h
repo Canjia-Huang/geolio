@@ -43,7 +43,7 @@ namespace geolio
          * @param[out] f Objective function value at `x`.
          * @param[out] g Gradient vector at `x`.
          */
-        virtual void funcgrad(unsigned int n, const double* x, double& f, double* g) = 0;
+        virtual void funcgrad(unsigned int n, double* x, double& f, double* g) = 0;
 
         /**
          * Minimize the objective function starting from the initial variables in `x`.
