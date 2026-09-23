@@ -24,12 +24,11 @@ namespace geolio
          * The Geogram HLBFGS backend updates the input vector in place and returns the
          * objective value at the final iterate.
          */
-        double optimize(unsigned int n, double* x) override;
+        void optimize(unsigned int n, double* x) override;
 
+        bool GEOGRAM_DEBUG = true;
         GEO::index_t VERBOSE = 1; // Print progress every N iterations, 0 -> off
         double       EPSG = 0.0; // Gradient norm tolerance.
-        double       EPSF = 0.0; // Objective value tolerance.
-        double       EPSX = 0.0; // Step-size / variable-change tolerance.
         GEO::index_t INNER_ITERATIONS_NB = 7; // Number of inner iterations per outer step.
         GEO::index_t MAX_ITERATION = 1000; // Maximum number of solver iterations.
 

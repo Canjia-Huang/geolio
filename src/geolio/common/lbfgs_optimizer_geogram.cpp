@@ -5,6 +5,7 @@
 #include "lbfgs_optimizer_geogram.h"
 #include <geogram/numerics/optimizer.h>
 #include <cassert>
+#include <geogram/basic/command_line.h>
 #include <geolio/common/log.h>
 
 namespace
@@ -19,30 +20,30 @@ namespace geolio
     LbfgsOptimizerGeogram::LbfgsOptimizerGeogram(
         ) {
         instance_ = this;
+
+        GEO::CmdLine::declare_arg("debug", false, "print HLBFGS stop messages");
     }
 
-    double LbfgsOptimizerGeogram::optimize(
+    void LbfgsOptimizerGeogram::optimize(
         const unsigned int n,
         double* x
         ) {
+        if (GEOGRAM_DEBUG)
+            GEO::CmdLine::set_arg("debug", "true");
+        else
+            GEO::CmdLine::set_arg("debug", "false");
+
         iter = 0;
 
         const GEO::Optimizer_var optimizer = GEO::Optimizer::create("HLBFGS");
         assert(!optimizer.is_null());
         optimizer->set_epsg(EPSG);
-        optimizer->set_epsf(EPSF);
-        optimizer->set_epsx(EPSX);
         optimizer->set_newiteration_callback(geogram_HLBFGS_newiteration_CB);
         optimizer->set_funcgrad_callback(geogram_HLBFGS_funcgrad_CB);
         optimizer->set_N(n);
         optimizer->set_M(INNER_ITERATIONS_NB);
         optimizer->set_max_iter(MAX_ITERATION);
         optimizer->optimize(x);
-
-        double f;
-        std::vector<double> g(n);
-        funcgrad(n, x, f, g.data());
-        return f;
     }
 
     void LbfgsOptimizerGeogram::geogram_HLBFGS_newiteration_CB(

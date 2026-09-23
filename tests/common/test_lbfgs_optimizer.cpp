@@ -31,7 +31,7 @@ namespace geolio::test
 {
     template<typename optimizer>
     class RosenbrockOptimizer : public optimizer {
-    protected:
+    public:
         void funcgrad(const unsigned int n, const double *x, double& f, double* g) override {
             f = RosenbrockFunction::func(n, x);
             RosenbrockFunction::gradient(n, x, g);
@@ -46,7 +46,11 @@ namespace geolio::test
         const std::vector<double> x_gt{1.0, 1.0};
 
         RosenbrockOptimizer<LbfgsOptimizerGeogram> opt;
-        const double f = opt.optimize(n, x.data());
+        opt.optimize(n, x.data());
+
+        double f;
+        std::vector<double> g(n);
+        opt.funcgrad(n, x.data(), f, g.data());
 
         for (GEO::index_t i = 0; i < n; ++i)
             EXPECT_NEAR(x[i], x_gt[i], 1e-12);
@@ -62,7 +66,11 @@ namespace geolio::test
         const std::vector<double> x_gt{1.0, 1.0};
 
         RosenbrockOptimizer<LbfgsOptimizerLBFGSLite> opt;
-        const double f = opt.optimize(n, x.data());
+        opt.optimize(n, x.data());
+
+        double f;
+        std::vector<double> g(n);
+        opt.funcgrad(n, x.data(), f, g.data());
 
         for (GEO::index_t i = 0; i < n; ++i)
             EXPECT_NEAR(x[i], x_gt[i], 1e-12);

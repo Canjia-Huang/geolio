@@ -18,7 +18,7 @@ namespace geolio
         instance_ = this;
     }
 
-    double LbfgsOptimizerLBFGSLite::optimize(
+    void LbfgsOptimizerLBFGSLite::optimize(
         unsigned int n,
         double* x
         ) {
@@ -56,7 +56,6 @@ namespace geolio
 
         for (unsigned int i = 0; i < n; ++i)
             x[i] = X(i);
-        return final_cost;
     }
 
     double LbfgsOptimizerLBFGSLite::LBFGS_Lite_cost_function(

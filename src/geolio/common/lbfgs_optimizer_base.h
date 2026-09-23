@@ -33,21 +33,6 @@ namespace geolio
         virtual ~LbfgsOptimizerBase() = default;
 
         /**
-         * Minimize the objective function starting from the initial variables in `x`.
-         *
-         * The solver overwrites the input array in place with the optimized iterate and
-         * returns the objective value at the final solution. The exact backend-specific
-         * algorithm is implemented by derived classes.
-         *
-         * @param[in] n Number of optimization variables.
-         * @param[in,out] x Variable array containing the initial guess on entry and the
-         * optimized solution on exit.
-         * @return Objective value at the final optimized point.
-         */
-        virtual double optimize(unsigned int n, double* x) = 0;
-
-    protected:
-        /**
          * Evaluate the objective function and its gradient at the current iterate.
          *
          * Derived classes must implement this function to provide the optimization
@@ -60,6 +45,21 @@ namespace geolio
          */
         virtual void funcgrad(unsigned int n, const double* x, double& f, double* g) = 0;
 
+        /**
+         * Minimize the objective function starting from the initial variables in `x`.
+         *
+         * The solver overwrites the input array in place with the optimized iterate and
+         * returns the objective value at the final solution. The exact backend-specific
+         * algorithm is implemented by derived classes.
+         *
+         * @param[in] n Number of optimization variables.
+         * @param[in,out] x Variable array containing the initial guess on entry and the
+         * optimized solution on exit.
+         * @return Objective value at the final optimized point.
+         */
+        virtual void optimize(unsigned int n, double* x) = 0;
+
+    protected:
         /**
          * Initialize the objective value and gradient buffer = 0.
          *

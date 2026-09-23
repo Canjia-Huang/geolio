@@ -27,7 +27,7 @@ namespace geolio
          * The LBFGS-Lite backend updates the input vector in place and returns the
          * objective value at the final iterate.
          */
-        double optimize(unsigned int n, double* x) override;
+        void optimize(unsigned int n, double* x) override;
 
         bool         VERBOSE = true;
         double       EPSG = 0.0; // Gradient norm tolerance.
