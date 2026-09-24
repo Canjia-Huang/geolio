@@ -18,6 +18,8 @@
 #include "geolio/common/parse_filepath.h"
 #include "object/mesh_object.h"
 #include <geolio/geobox/application/register_applications.h>
+#include <geogram_gfx/full_screen_effects/ambient_occlusion.h>
+#include <geogram_gfx/full_screen_effects/unsharp_masking.h>
 
 namespace geolio::geobox
 {
@@ -404,6 +406,16 @@ namespace geolio::geobox
             ImGui::Separator();
         }
         ImGui::ColorEdit3WithPalette("Backgnd", background_color_.data());
+        ImGui::Separator();
+
+        if(ImGui::Combo("sfx", reinterpret_cast<int *>(&effect_), "none\0SSAO\0cartoon\0\0")) {
+            switch(effect_) {
+                case 0: full_screen_effect_.reset(); break;
+                case 1: full_screen_effect_ = new GEO::AmbientOcclusionImpl(); break;
+                case 2: full_screen_effect_ = new GEO::UnsharpMaskingImpl(); break;
+                default: assert(0);
+            }
+        }
     }
 
     void GeoBoxApplication::draw_objects_properties(
