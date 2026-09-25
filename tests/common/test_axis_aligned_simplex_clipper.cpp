@@ -118,6 +118,10 @@ namespace geolio::test
                 const auto& p2 = coords[4*c+2];
                 const auto& p3 = coords[4*c+3];
                 EXPECT_GE(GEO::Geom::tetra_signed_volume(p0, p1, p2, p3), -1e-10);
+                /* The same check with an exact predicate: it has to hold for every generated
+                   cell, degenerate cells included, and it is the check that the debug
+                   assertions of the clipper perform. */
+                EXPECT_NE(GEO::PCK::orient_3d(p0, p1, p2, p3), GEO::NEGATIVE);
             }
         }
 
@@ -146,6 +150,12 @@ namespace geolio::test
             EXPECT_EQ(coords.size()/4, partitions.size());
 
             for (GEO::index_t c = 0, c_end = coords.size()/4; c < c_end; ++c) {
+                /* A cell lying entirely in a cut plane has a zero measure, hence no side of its
+                   own: `partitions()` reports the partition of the cell it comes from, which the
+                   centroid rule below does not define (see the class documentation). */
+                if (GEO::PCK::orient_3d(coords[4*c], coords[4*c+1], coords[4*c+2], coords[4*c+3]) == GEO::ZERO)
+                    continue;
+
                 const auto center = 0.25 * (coords[4*c]+coords[4*c+1]+coords[4*c+2]+coords[4*c+3]);
 
                 for (GEO::index_t i = 0, i_end = cut_planes.size(); i < i_end; ++i) {
@@ -155,6 +165,61 @@ namespace geolio::test
                     else
                         EXPECT_FALSE(partitions[c] & (1<<i));
                 }
+            }
+        }
+
+        /**
+         * Checks that the cut plane bookkeeping agrees with the geometry: a facet reported as
+         * lying in a cut plane must have all its vertices *exactly* on that plane.
+         * @note For tetrahedra, `facet_cut_plane()[4*c+i]` describes the facet *opposite* the
+         *  ith vertex, which is geogram's `MeshCells::facet()` convention.
+         * @note Exactness matters here: this is what makes the cells sharing such a facet
+         *  store bit identical vertices, hence a conforming partition without cracks.
+         */
+        void check_cut_plane_conformance() const {
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            const auto& facet_cut_plane = clipper->facet_cut_plane();
+            EXPECT_EQ(coords.size()%4, 0);
+            EXPECT_EQ(facet_cut_plane.size(), coords.size());
+
+            for (GEO::index_t c = 0, c_end = coords.size()/4; c < c_end; ++c) {
+                for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                    const auto plane = facet_cut_plane[4*c+lv];
+                    if (plane == GEO::NO_INDEX)
+                        continue;
+
+                    ASSERT_LT(plane, cut_planes.size());
+                    const auto& [d, t] = cut_planes[plane];
+                    for (GEO::index_t lv2 = 0; lv2 < 4; ++lv2) {
+                        if (lv2 == lv)
+                            continue;
+                        EXPECT_EQ(coords[4*c+lv2][d], t);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Checks that the degenerate cells are *exactly* degenerate, i.e. that they have
+         * repeated vertices: this is what allows a caller to identify them exactly instead of
+         * comparing a computed volume against a threshold.
+         */
+        void check_degenerate_cells_are_exact() const {
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            EXPECT_EQ(coords.size()%4, 0);
+
+            for (GEO::index_t c = 0, c_end = coords.size()/4; c < c_end; ++c) {
+                if (GEO::PCK::orient_3d(coords[4*c], coords[4*c+1], coords[4*c+2], coords[4*c+3]) != GEO::ZERO)
+                    continue;
+
+                bool has_repeated_vertex = false;
+                for (GEO::index_t lv = 0; lv < 4; ++lv)
+                    for (GEO::index_t lv2 = lv+1; lv2 < 4; ++lv2)
+                        if (GEO::distance(coords[4*c+lv], coords[4*c+lv2]) == 0)
+                            has_repeated_vertex = true;
+                EXPECT_TRUE(has_repeated_vertex);
             }
         }
 
@@ -412,7 +477,15 @@ namespace geolio::test
                     const auto& p0 = coords[3*f];
                     const auto& p1 = coords[3*f+1];
                     const auto& p2 = coords[3*f+2];
-                    EXPECT_GE(geolio::cross(p1-p0, p2-p0), 1e-10);
+                    /* A cut plane going through a vertex or an edge produces degenerate
+                       triangles: they are kept on purpose, and they are *exactly* degenerate. */
+                    if (is_exactly_degenerate(p0, p1, p2))
+                        EXPECT_EQ(geolio::cross(p1-p0, p2-p0), 0);
+                    else
+                        EXPECT_GE(geolio::cross(p1-p0, p2-p0), 1e-10);
+                    /* The same check with an exact predicate: it has to hold for every
+                       generated triangle, degenerate triangles included. */
+                    EXPECT_NE(GEO::PCK::orient_2d(p0, p1, p2), GEO::NEGATIVE);
                 }
             }
         }
@@ -442,6 +515,11 @@ namespace geolio::test
             EXPECT_EQ(coords.size()/3, partitions.size());
 
             for (GEO::index_t f = 0, f_end = coords.size()/3; f < f_end; ++f) {
+                /* @see check_partitions() of AxisAlignedTetClipperTest: a triangle lying
+                   entirely in a cut plane has a zero area, hence no side of its own. */
+                if (is_exactly_degenerate(coords[3*f], coords[3*f+1], coords[3*f+2]))
+                    continue;
+
                 const auto center = (coords[3*f]+coords[3*f+1]+coords[3*f+2]) / 3;
 
                 for (GEO::index_t i = 0, i_end = cut_planes.size(); i < i_end; ++i) {
@@ -451,6 +529,83 @@ namespace geolio::test
                     else
                         EXPECT_FALSE(partitions[f] & (1<<i));
                 }
+            }
+        }
+
+        /**
+         * Checks that the cut plane bookkeeping agrees with the geometry: the edge reported as
+         * lying in a cut plane must have both its vertices *exactly* on that plane.
+         * @note For triangles, `facet_cut_plane()[3*f+i]` describes the edge *opposite* the ith
+         *  vertex, like the tetrahedron clipper and like geogram's `MeshCells::facet()`.
+         * @note Exactness matters here: this is what makes the cells sharing such an edge store
+         *  bit identical vertices, hence a conforming partition without cracks.
+         */
+        void check_cut_plane_conformance() const {
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            const auto& facet_cut_plane = clipper->facet_cut_plane();
+            EXPECT_EQ(coords.size()%3, 0);
+            EXPECT_EQ(facet_cut_plane.size(), coords.size());
+
+            for (GEO::index_t f = 0, f_end = coords.size()/3; f < f_end; ++f) {
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    const auto plane = facet_cut_plane[3*f+lv];
+                    if (plane == GEO::NO_INDEX)
+                        continue;
+
+                    ASSERT_LT(plane, cut_planes.size());
+                    const auto& [d, t] = cut_planes[plane];
+                    for (GEO::index_t lv2 = 0; lv2 < 3; ++lv2) {
+                        if (lv2 == lv)
+                            continue;
+                        EXPECT_EQ(coords[3*f+lv2][d], t);
+                    }
+                }
+            }
+        }
+
+        /** @return true if the triangle `(p0, p1, p2)` has an exactly zero area. */
+        static bool is_exactly_degenerate(
+            const GEO::vecng<DIM, double>& p0,
+            const GEO::vecng<DIM, double>& p1,
+            const GEO::vecng<DIM, double>& p2
+            ) {
+            if constexpr (DIM == 2)
+                return GEO::PCK::orient_2d(p0, p1, p2) == GEO::ZERO;
+            else {
+                /* A triangle of the 3d space has a zero area if and only if all of its three
+                   coordinate projections are flat. */
+                for (GEO::index_t ax = 0; ax < 3; ++ax) {
+                    const auto i = (ax+1)%3, j = (ax+2)%3;
+                    if (GEO::PCK::orient_2d(
+                            GEO::vec2(p0[i], p0[j]), GEO::vec2(p1[i], p1[j]), GEO::vec2(p2[i], p2[j])
+                            ) != GEO::ZERO)
+                        return false;
+                }
+                return true;
+            }
+        }
+
+        /**
+         * Checks that the degenerate triangles are *exactly* degenerate, i.e. that they have
+         * repeated vertices: this is what allows a caller to identify them exactly instead of
+         * comparing a computed area against a threshold.
+         */
+        void check_degenerate_cells_are_exact() const {
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            EXPECT_EQ(coords.size()%3, 0);
+
+            for (GEO::index_t f = 0, f_end = coords.size()/3; f < f_end; ++f) {
+                if (!is_exactly_degenerate(coords[3*f], coords[3*f+1], coords[3*f+2]))
+                    continue;
+
+                bool has_repeated_vertex = false;
+                for (GEO::index_t lv = 0; lv < 3; ++lv)
+                    for (GEO::index_t lv2 = lv+1; lv2 < 3; ++lv2)
+                        if (GEO::distance(coords[3*f+lv], coords[3*f+lv2]) == 0)
+                            has_repeated_vertex = true;
+                EXPECT_TRUE(has_repeated_vertex);
             }
         }
 
@@ -673,6 +828,220 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->output(i);
+        }
+    }
+
+    /**
+     * A cut plane that contains a whole face of the tetrahedron. Its vertices are then
+     * classified as being on the negative side (closed negative half space), so the whole
+     * tetrahedron belongs to the positive side and every generated cell is degenerate. Those
+     * degenerate cells are kept on purpose: they are *exactly* degenerate (repeated vertices),
+     * which lets a caller identify them without a threshold.
+     */
+    TEST_F(AxisAlignedTetClipperTest, cut_plane_through_a_face) {
+        for (GEO::index_t i = 0; i < TET_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TET_VERTICES_ORDER[i];
+            init(TET_VERTICES[lvs[0]], TET_VERTICES[lvs[1]], TET_VERTICES[lvs[2]], TET_VERTICES[lvs[3]]);
+
+            /* TET_VERTICES[0], TET_VERTICES[1] and TET_VERTICES[2] all have z == 0. */
+            cut_planes.emplace_back(2, 0.0);
+            clip();
+
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
+            check_cut_plane_conformance();
+            check_degenerate_cells_are_exact();
+        }
+    }
+
+    /**
+     * Clipping a second time by a plane that was already used must not move anything: the
+     * vertices generated by the first cut lie *exactly* on that plane (they are snapped onto
+     * it), so no cell straddles it anymore, and the cells that the second cut generates are
+     * exactly degenerate (zero volume) instead of being slivers carrying a wrong partition.
+     */
+    TEST_F(AxisAlignedTetClipperTest, duplicate_cut_plane_is_a_no_op) {
+        for (GEO::index_t i = 0; i < TET_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TET_VERTICES_ORDER[i];
+            init(TET_VERTICES[lvs[0]], TET_VERTICES[lvs[1]], TET_VERTICES[lvs[2]], TET_VERTICES[lvs[3]]);
+
+            cut_planes.emplace_back(1, 0.5);
+            clipper->clip(1, 0.5);
+            check_signed_volume();
+            check_cut_plane_conformance();
+
+            const auto cells_nb = clipper->coords().size()/4;
+            double volume_before = 0;
+            for (GEO::index_t c = 0; c < cells_nb; ++c)
+                volume_before += GEO::Geom::tetra_signed_volume(
+                    clipper->coords()[4*c], clipper->coords()[4*c+1],
+                    clipper->coords()[4*c+2], clipper->coords()[4*c+3]);
+
+            cut_planes.emplace_back(1, 0.5);
+            clipper->clip(1, 0.5);
+
+            const auto& coords = clipper->coords();
+            EXPECT_GT(coords.size()/4, cells_nb);
+            double volume_after = 0;
+            for (GEO::index_t c = 0, c_end = coords.size()/4; c < c_end; ++c) {
+                const auto volume = GEO::Geom::tetra_signed_volume(coords[4*c], coords[4*c+1], coords[4*c+2], coords[4*c+3]);
+                if (c >= cells_nb) {
+                    /* every cell generated by the second cut carries no volume at all */
+                    EXPECT_EQ(GEO::PCK::orient_3d(coords[4*c], coords[4*c+1], coords[4*c+2], coords[4*c+3]), GEO::ZERO);
+                    EXPECT_EQ(volume, 0);
+                }
+                volume_after += volume;
+            }
+            /* and the second cut does not change the volume of the partition */
+            EXPECT_NEAR(volume_before, volume_after, 1e-12);
+
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
+            check_cut_plane_conformance();
+            check_degenerate_cells_are_exact();
+        }
+    }
+
+    /**
+     * Regression test for the 2/2 configuration split when the cut plane goes exactly through
+     * one or two vertices of the negative side (which then lie on the plane): the interpolated
+     * points of the section collapse onto those vertices, and the generic decomposition of the
+     * 2/2 branch produced grossly inverted tetrahedra (a whole tetrahedron volume with the
+     * wrong sign) instead of degenerate ones, negating the volume of the positive partition.
+     *
+     * `TET_VERTICES[0]` and `TET_VERTICES[1]` both have y == -1, so the plane y == -1 contains
+     * the whole edge that they form; `TET_VERTICES[0]` has x == -1, and the plane x == -1 goes
+     * through that single vertex.
+     */
+    TEST_F(AxisAlignedTetClipperTest, cut_plane_through_simplex_vertices_in_a_2_2_split) {
+        for (const auto& [d, t] : std::vector<std::pair<GEO::index_t, double>>{{1, -1.0}, {0, -1.0}}) {
+            for (GEO::index_t i = 0; i < TET_VERTICES_ORDER.size(); ++i) {
+                const auto& lvs = TET_VERTICES_ORDER[i];
+                init(TET_VERTICES[lvs[0]], TET_VERTICES[lvs[1]], TET_VERTICES[lvs[2]], TET_VERTICES[lvs[3]]);
+
+                cut_planes.emplace_back(d, t);
+                clip();
+
+                check_signed_volume();
+                check_barycentric_coords();
+                check_partitions();
+                check_cut_plane_conformance();
+                check_degenerate_cells_are_exact();
+            }
+        }
+    }
+
+    /**
+     * Regression test for the selection of the decomposition inside the 2/2 branch: it is a
+     * combinatorial property of the vertex selection (the parity of `(lv0, lv1, lv2, lv3)`),
+     * and *not* the sign of the volume of the first generated cell, which decorrelates with it
+     * as soon as the section is thin. With a cut plane one ulp away from a vertex, testing the
+     * geometry emitted the mirrored decomposition: every cell inverted and the volume of each
+     * partition negated (here for `(1,1,0)`, `(2,3,0)` and `(5,7,1)` which all have z == 0).
+     */
+    TEST_F(AxisAlignedTetClipperTest, cut_plane_one_ulp_away_from_a_vertex) {
+        const GEO::vec3 p0(0, 0, 0), p1(1, 1, 0), p2(2, 3, 0), p3(5, 7, 1);
+        for (const auto& [d, t] : std::vector<std::pair<GEO::index_t, double>>{
+                {0, std::nextafter(1.0, 1e300)}, {1, std::nextafter(1.0, 1e300)}, {2, std::nextafter(1.0, 1e300)}}) {
+            for (GEO::index_t i = 0; i < TET_VERTICES_ORDER.size(); ++i) {
+                const auto& lvs = TET_VERTICES_ORDER[i];
+                const std::array<GEO::vec3, 4> p = {p0, p1, p2, p3};
+                init(p[lvs[0]], p[lvs[1]], p[lvs[2]], p[lvs[3]]);
+
+                cut_planes.emplace_back(d, t);
+                clip();
+
+                check_signed_volume();
+                check_barycentric_coords();
+                check_partitions();
+                check_cut_plane_conformance();
+            }
+        }
+    }
+
+    /**
+     * @see AxisAlignedTetClipperTest::cut_plane_through_a_face() and
+     *  AxisAlignedTetClipperTest::duplicate_cut_plane_is_a_no_op(), for triangles: the planes
+     *  used here go exactly through a vertex, and through the edge `(v1, v2)` of
+     *  `TRI_VERTICES_2D` and `TRI_VERTICES_3D`.
+     */
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_plane_through_vertices) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (const auto& [d, t] : std::vector<std::pair<GEO::index_t, double>>{{0, 0.0}, {1, -1.0}}) {
+            if (d >= DIM)
+                continue;
+
+            for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+                const auto& lvs = TRI_VERTICES_ORDER[i];
+                if constexpr (DIM == 2)
+                    this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+                else
+                    this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+                this->cut_planes.emplace_back(d, t);
+                this->clip();
+
+                this->check_area_computation();
+                this->check_signed_area();
+                this->check_barycentric_coords();
+                this->check_partitions();
+                this->check_cut_plane_conformance();
+                this->check_degenerate_cells_are_exact();
+            }
+        }
+    }
+
+    TYPED_TEST(AxisAlignedTriClipperDimTest, duplicate_cut_plane_is_a_no_op) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(TRI_VERTICES_2D[lvs[0]], TRI_VERTICES_2D[lvs[1]], TRI_VERTICES_2D[lvs[2]]);
+            else
+                this->init(TRI_VERTICES_3D[lvs[0]], TRI_VERTICES_3D[lvs[1]], TRI_VERTICES_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(1, -0.5);
+            this->clipper->clip(1, -0.5);
+            this->check_signed_area();
+            this->check_cut_plane_conformance();
+
+            const auto cells_nb = this->clipper->coords().size()/3;
+            double area_before = 0;
+            for (GEO::index_t f = 0; f < cells_nb; ++f)
+                area_before += GEO::Geom::triangle_area(
+                    this->clipper->coords()[3*f].data(), this->clipper->coords()[3*f+1].data(),
+                    this->clipper->coords()[3*f+2].data(), DIM);
+
+            this->cut_planes.emplace_back(1, -0.5);
+            this->clipper->clip(1, -0.5);
+
+            const auto& coords = this->clipper->coords();
+            EXPECT_GT(coords.size()/3, cells_nb);
+            double area_after = 0;
+            for (GEO::index_t f = 0, f_end = coords.size()/3; f < f_end; ++f) {
+                const auto area = GEO::Geom::triangle_area(coords[3*f].data(), coords[3*f+1].data(), coords[3*f+2].data(), DIM);
+                if (f >= cells_nb) {
+                    /* every triangle generated by the second cut has a zero area */
+                    EXPECT_TRUE(this->is_exactly_degenerate(coords[3*f], coords[3*f+1], coords[3*f+2]));
+                    EXPECT_EQ(area, 0);
+                }
+                area_after += area;
+            }
+            /* and the second cut does not change the area of the partition */
+            EXPECT_NEAR(area_before, area_after, 1e-12);
+
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_cut_plane_conformance();
+            this->check_degenerate_cells_are_exact();
+            /* @note `check_partitions()` is not called here: the triangles generated by the
+               second cut lie *exactly* in a plane and inherit the partition of their parent,
+               which the centroid rule of `check_partitions()` does not define. */
             this->output(i);
         }
     }

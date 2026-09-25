@@ -39,7 +39,7 @@ namespace geolio
             positive_nb == 0
             ) { // all negative - J0
             S_neg = S; S_pos = 0;
-            }
+        }
         else if (positive_nb == 3) { // all positive - J1
             S_neg = 0, S_pos = S;
         }
@@ -171,6 +171,41 @@ namespace geolio
         }
     }
 
+    /**
+     * Clips a partition of a simplex by axis aligned planes, and reports for every
+     * generated simplex which side of each cut plane it belongs to.
+     *
+     * @note Exactness. Because the cut planes are axis aligned, deciding on which side of a
+     *  plane a vertex is only compares two doubles, which is exact: a vertex is never
+     *  classified on the wrong side, however close to the plane it is. What is *not* exact
+     *  is the construction of the intersection points, which are interpolated in double
+     *  precision. Therefore:
+     *  - every generated vertex is snapped exactly onto the cut plane it was generated for,
+     *    i.e. `coords[i][dim] == t` holds exactly (the displacement with respect to the
+     *    interpolation is at most one ulp). Two neighbouring cells sharing such a vertex
+     *    store bit identical coordinates, so the decomposition is conforming (no crack
+     *    between cells) and clipping again by the same plane does not move anything;
+     *  - the decisions that are taken on generated vertices use geogram's exact predicates
+     *    (`GEO::PCK::orient_3d()`), which return the exact sign of the *stored* coordinates.
+     *    A floating point sign has no error bound and is wrong for the nearly degenerate
+     *    configurations that a cut produces when the plane grazes a cell;
+     *  - a vertex lying exactly on a cut plane belongs to the *negative* (closed) half
+     *    space: a cell is reported on the positive side only when it is strictly on it;
+     *  - degenerate (zero measure) cells are *kept*, since a cut plane going through a
+     *    vertex produces them. Their degeneracy is exact (coincident vertices, exactly zero
+     *    orientation) rather than almost degenerate, so callers can identify and drop them
+     *    reliably instead of having to pick a threshold.
+     *
+     * @note Partitions of degenerate cells. A cell that lies entirely in a cut plane has a zero
+     *  measure and no side of its own, so `partitions()` reports it with the partition of the
+     *  cell it comes from: the closed negative half space rule above decides the side of the
+     *  cells that carry a measure, and a zero measure cell must be dropped by callers that
+     *  cannot use one (a measure accumulated over a partition ignores it anyway).
+     *
+     * @note Requires `GEO::initialize()` to have been called, since the exact predicates
+     *  rely on geogram's expansion arithmetic, and assumes IEEE-754 double arithmetic
+     *  (no `-ffast-math`, no flush-to-zero mode).
+     */
     template<GEO::index_t DIM, GEO::index_t N>
     class AxisAlignedSimplexClipper {
     public:
@@ -212,12 +247,16 @@ namespace geolio
     protected:
         GEO::index_t cut_planes_nb_ = 0;
         std::vector<GEO::index_t> partitions_; /* size == simplex_nb,
-            partitions_[c] & (1<<i) == true -> in the positive side of the ith cut plane */
+            partitions_[c] & (1<<i) == true -> in the positive side of the ith cut plane.
+            Only *strictly* positive: a cell lying exactly in the ith cut plane is reported
+            on the negative side (see the exactness note of AxisAlignedSimplexClipper). */
 
         std::vector<GEO::vecng<DIM, double>> coords_; // size == N * simplex_nb
         std::vector<GEO::vecng<N, double>> bary_coords_; // size == N * simplex_nb
         std::vector<GEO::index_t> facet_cut_plane_; /* size == N * simplex_nb,
-            [N*c+i] -> cut plane (of simplex c's border opposite to ith vertex), or GEO::NO_INDEX */
+            [N*c+i] -> cut plane of the border facet (the edge opposite the ith vertex for a
+            triangle) of simplex c, or GEO::NO_INDEX. This is geogram's `MeshCells::facet()`
+            convention, and it holds for both clippers. */
     };
 
     template <GEO::index_t DIM>
