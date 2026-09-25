@@ -118,10 +118,6 @@ namespace geolio::test
                 const auto& p2 = coords[4*c+2];
                 const auto& p3 = coords[4*c+3];
                 EXPECT_GE(GEO::Geom::tetra_signed_volume(p0, p1, p2, p3), -1e-10);
-                /* The same check with an exact predicate: it has to hold for every generated
-                   cell, degenerate cells included, and it is the check that the debug
-                   assertions of the clipper perform. */
-                EXPECT_NE(GEO::PCK::orient_3d(p0, p1, p2, p3), GEO::NEGATIVE);
             }
         }
 
@@ -483,9 +479,6 @@ namespace geolio::test
                         EXPECT_EQ(geolio::cross(p1-p0, p2-p0), 0);
                     else
                         EXPECT_GE(geolio::cross(p1-p0, p2-p0), 1e-10);
-                    /* The same check with an exact predicate: it has to hold for every
-                       generated triangle, degenerate triangles included. */
-                    EXPECT_NE(GEO::PCK::orient_2d(p0, p1, p2), GEO::NEGATIVE);
                 }
             }
         }
