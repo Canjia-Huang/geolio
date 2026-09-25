@@ -535,8 +535,9 @@ namespace geolio::test
         /**
          * Checks that the cut plane bookkeeping agrees with the geometry: the edge reported as
          * lying in a cut plane must have both its vertices *exactly* on that plane.
-         * @note For triangles, `facet_cut_plane()[3*f+i]` describes the edge *opposite* the ith
-         *  vertex, like the tetrahedron clipper and like geogram's `MeshCells::facet()`.
+         * @note For triangles, `facet_cut_plane()[3*f+i]` describes the edge `(i, (i+1)%3)`; for
+         *  tetrahedra, entry i describes the facet opposite the ith vertex. The association is
+         *  clipper specific, see the base class documentation.
          * @note Exactness matters here: this is what makes the cells sharing such an edge store
          *  bit identical vertices, hence a conforming partition without cracks.
          */
@@ -555,11 +556,8 @@ namespace geolio::test
 
                     ASSERT_LT(plane, cut_planes.size());
                     const auto& [d, t] = cut_planes[plane];
-                    for (GEO::index_t lv2 = 0; lv2 < 3; ++lv2) {
-                        if (lv2 == lv)
-                            continue;
-                        EXPECT_EQ(coords[3*f+lv2][d], t);
-                    }
+                    EXPECT_EQ(coords[3*f+lv][d], t);
+                    EXPECT_EQ(coords[3*f+(lv+1)%3][d], t);
                 }
             }
         }
@@ -654,8 +652,13 @@ namespace geolio::test
             {
                 GEO::Attribute<GEO::index_t> mesh_out_fc_cut_plane(mesh_out.facet_corners.attributes(), "cut_plane");
                 for (const auto& f : mesh_out.facets) {
-                    for (GEO::index_t lv = 0; lv < 3; ++lv)
-                        mesh_out_fc_cut_plane[mesh_out.facets.corner(f, lv)] = facet_cut_plane[3*f+lv];
+                    for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                        /* `facet_cut_plane()[3*f+lv]` describes the edge `(lv, (lv+1)%3)`, while a
+                           geogram facet corner is associated with the edge *opposite* its vertex:
+                           the edge `(lv, (lv+1)%3)` is opposite the vertex `(lv+2)%3`. */
+                        const GEO::index_t corner = (lv+2)%3;
+                        mesh_out_fc_cut_plane[mesh_out.facets.corner(f, corner)] = facet_cut_plane[3*f+lv];
+                    }
                 }
             }
 

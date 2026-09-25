@@ -254,9 +254,11 @@ namespace geolio
         std::vector<GEO::vecng<DIM, double>> coords_; // size == N * simplex_nb
         std::vector<GEO::vecng<N, double>> bary_coords_; // size == N * simplex_nb
         std::vector<GEO::index_t> facet_cut_plane_; /* size == N * simplex_nb,
-            [N*c+i] -> cut plane of the border facet (the edge opposite the ith vertex for a
-            triangle) of simplex c, or GEO::NO_INDEX. This is geogram's `MeshCells::facet()`
-            convention, and it holds for both clippers. */
+            [N*c+i] -> cut plane of the border facet associated with the ith vertex of simplex c,
+            or GEO::NO_INDEX. The association is clipper specific, on purpose:
+             - for a tetrahedron (N == 4), entry i describes the facet *opposite* the ith vertex,
+               which is geogram's `MeshCells::facet()` convention;
+             - for a triangle (N == 3), entry i describes the edge `(i, (i+1)%3)`. */
     };
 
     template <GEO::index_t DIM>

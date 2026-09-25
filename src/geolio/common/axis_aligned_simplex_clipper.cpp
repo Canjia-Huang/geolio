@@ -292,27 +292,27 @@ namespace geolio
                     this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
                     this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
                     this->coords_.push_back(p01);   this->bary_coords_.push_back(bp01);
-                    /* `facet_cut_plane_[3*f+i]` describes the border facet *opposite* the ith
-                       vertex, as for the tetrahedron clipper and as in geogram's
-                       `MeshCells::facet()`: the cut plane lies opposite the vertex it does not
-                       touch, and the two other entries inherit the border facets the generated
-                       corners lie on. */
-                    this->facet_cut_plane_.push_back(this->cut_planes_nb_);
-                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv2]);
+                    /* For a triangle, `facet_cut_plane_[3*f+i]` describes the edge
+                       `(i, (i+1)%3)` (and not the facet opposite the ith vertex, as for a
+                       tetrahedron, see the class documentation): the cut plane lies on the edge
+                       bounded by the generated corners, and the two other entries inherit the
+                       border edges the generated corners lie on. */
                     this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    this->facet_cut_plane_.push_back(this->cut_planes_nb_);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv0]);
 
                     this->partitions_.push_back(origin_partition);
                     this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
                     this->coords_.push_back(p2);    this->bary_coords_.push_back(bp2);
                     this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
                     this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv1]);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv2]);
                     this->facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv0]);
 
                     this->partitions_[f] |= (1<<this->cut_planes_nb_);
                     this->coords_[3*f+lv1] = p01;   this->bary_coords_[3*f+lv1] = bp01;
                     this->coords_[3*f+lv2] = p02;   this->bary_coords_[3*f+lv2] = bp02;
-                    this->facet_cut_plane_[3*f+lv0] = this->cut_planes_nb_;
+                    this->facet_cut_plane_[3*f+lv1] = this->cut_planes_nb_;
 
                     break;
                 }
@@ -360,27 +360,27 @@ namespace geolio
                     this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
                     this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
                     this->coords_.push_back(p01);   this->bary_coords_.push_back(bp01);
-                    /* `facet_cut_plane_[3*f+i]` describes the border facet *opposite* the ith
-                       vertex, as for the tetrahedron clipper and as in geogram's
-                       `MeshCells::facet()`: the cut plane lies opposite the vertex it does not
-                       touch, and the two other entries inherit the border facets the generated
-                       corners lie on. */
-                    this->facet_cut_plane_.push_back(this->cut_planes_nb_);
-                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv2]);
+                    /* For a triangle, `facet_cut_plane_[3*f+i]` describes the edge
+                       `(i, (i+1)%3)` (and not the facet opposite the ith vertex, as for a
+                       tetrahedron, see the class documentation): the cut plane lies on the edge
+                       bounded by the generated corners, and the two other entries inherit the
+                       border edges the generated corners lie on. */
                     this->facet_cut_plane_.push_back(GEO::NO_INDEX);
+                    this->facet_cut_plane_.push_back(this->cut_planes_nb_);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv0]);
 
                     this->partitions_.push_back(origin_partition | (1<<this->cut_planes_nb_));
                     this->coords_.push_back(p1);    this->bary_coords_.push_back(bp1);
                     this->coords_.push_back(p2);    this->bary_coords_.push_back(bp2);
                     this->coords_.push_back(p02);   this->bary_coords_.push_back(bp02);
                     this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv1]);
+                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv2]);
                     this->facet_cut_plane_.push_back(GEO::NO_INDEX);
-                    this->facet_cut_plane_.push_back(this->facet_cut_plane_[3*f+lv0]);
 
                     // this->partitions_[f] = origin_partition;
                     this->coords_[3*f+lv1] = p01;   this->bary_coords_[3*f+lv1] = bp01;
                     this->coords_[3*f+lv2] = p02;   this->bary_coords_[3*f+lv2] = bp02;
-                    this->facet_cut_plane_[3*f+lv0] = this->cut_planes_nb_;
+                    this->facet_cut_plane_[3*f+lv1] = this->cut_planes_nb_;
 
                     break;
                 }
