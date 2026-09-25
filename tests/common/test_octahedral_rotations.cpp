@@ -4,6 +4,7 @@
 //
 #include <gtest/gtest.h>
 #include <geolio/common/octahedral_rotations.h>
+#include "../utils.h"
 
 namespace
 {
@@ -104,15 +105,6 @@ namespace geolio::test
         std::vector<GEO::Matrix<DIM, double>> rotations_;
     };
 
-    template<GEO::index_t DIM>
-    struct DimWrapper {
-        static constexpr GEO::index_t value = DIM;
-    };
-
-    using Dim2 = std::integral_constant<GEO::index_t, 2>;
-    using Dim3 = std::integral_constant<GEO::index_t, 3>;
-    using DimTypes = ::testing::Types<Dim2, Dim3>;
-
     template <typename DimType>
     class OctahedralRotationsDimTest : public OctahedralRotationsTest<DimType::value> {};
 
@@ -128,8 +120,8 @@ namespace geolio::test
 
     TYPED_TEST(OctahedralRotationsDimTest, compute_transition_function) {
         constexpr GEO::index_t DIM = TypeParam::value;
-
         constexpr GEO::index_t N = 100;
+
         for (GEO::index_t i = 0; i < N; ++i) {
             const auto gt_ri = static_cast<GEO::index_t>(std::round((this->rotations_.size()-1) * GEO::Numeric::random_float32()));
             const auto& R = this->rotations_[gt_ri];
@@ -151,7 +143,10 @@ namespace geolio::test
 
             GEO::index_t ri;
             GEO::vecng<DIM, double> t;
-            compute_transition_function<DIM>(p0, p1, p2, q0, q1, q2, ri, t);
+            if constexpr (DIM == 2)
+                compute_transition_function(p0, p1, q0, q1, ri, t);
+            else
+                compute_transition_function(p0, p1, p2, q0, q1, q2, ri, t);
             EXPECT_EQ(ri, gt_ri);
             EXPECT_NEAR(t.x, gt_t.x, 1e-10);
             EXPECT_NEAR(t.y, gt_t.y, 1e-10);
