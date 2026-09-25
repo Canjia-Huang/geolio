@@ -980,15 +980,63 @@ namespace geolio::geobox
         attribute_min_ = 0.0;
         attribute_max_ = 0.0;
         if (attribute.is_bound()) {
-            attribute_min_ = GEO::Numeric::max_float32();
-            attribute_max_ = GEO::Numeric::min_float32();
+            // GEO::NO_INDEX is not a value of the attribute scale: it is the
+            // marker of "no such element" (see ColormapRange). Ranging over it
+            // would stretch the colorbar to 4.29e9, i.e. the min/max fields
+            // would read [0, 4.29e9] for an attribute holding 0..3 plus the
+            // sentinel, and every real value would share the first texel of the
+            // colormap until the range is edited by hand. The fields therefore
+            // report the range of the values that do belong to the scale, which
+            // is the range that makes the colorbar usable as soon as the
+            // attribute is selected; the sentinel stays outside of it, exactly
+            // as a value outside the min/max fields (see
+            // update_colormap_range() and the reserved band it explains).
+            // Only an uint32 attribute can hold that sentinel: for any other
+            // storage type, 4294967295 is an ordinary value of the scale.
+            const bool has_sentinel =
+                attribute.element_type() ==
+                GEO::ScalarAttributeAdapterBase::ET_UINT32;
+            float real_min = GEO::Numeric::max_float32();
+            float real_max = GEO::Numeric::min_float32();
+            bool holds_sentinel = false;
             for (GEO::index_t i = 0; i < subelements.nb(); ++i) {
-                attribute_min_ =
-                    std::min(attribute_min_, static_cast<float>(attribute[i]));
-                attribute_max_ =
-                    std::max(attribute_max_, static_cast<float>(attribute[i]));
+                const double value = attribute[i];
+                if (has_sentinel && value == double(GEO::NO_INDEX)) {
+                    holds_sentinel = true;
+                    continue;
+                }
+                real_min = std::min(real_min, static_cast<float>(value));
+                real_max = std::max(real_max, static_cast<float>(value));
+            }
+            // No value belongs to the scale (an empty attribute, or one made of
+            // nothing but the sentinel): there is no range to report, and the
+            // display is a single color whatever it is.
+            if (real_min <= real_max) {
+                attribute_min_ = real_min;
+                // One unit of the scale is left free above the highest value
+                // when the attribute does hold the sentinel, so that the
+                // sentinel is not displayed with the color of that value: a
+                // value outside the min/max fields is sampled with the last
+                // texel of the colormap (see update_colormap_range()), so a
+                // range that ends on the highest value would show every
+                // GEO::NO_INDEX element with the color of the highest value.
+                // An attribute holding 0..3 plus the sentinel therefore gets
+                // the range [0, 4], which is what the colorbar has to offer to
+                // show the four values and the sentinel apart -- and the range
+                // a user sets by hand for such an attribute.
+                attribute_max_ = real_max + (holds_sentinel ? 1.0f : 0.0f);
             }
         }
+
+        // The range autorange() produces is remembered, so that the range a
+        // user set in the min/max fields can be told apart from it (see
+        // attribute_range_is_automatic() and set_attribute()).
+        autorange_min_ = attribute_min_;
+        autorange_max_ = attribute_max_;
+
+        // The colormap range matches the min/max fields: it has to be
+        // recomputed for the one autorange() just changed.
+        colormap_range_ = ColormapRange();
     }
 
     bool MeshObject::random_colormap_active(
@@ -1114,7 +1162,24 @@ namespace geolio::geobox
 
         attribute_subelements_ = GEO::Mesh::name_to_subelements_type(subelements_name);
 
-        // if (attribute_min_ == 0.0f && attribute_max_ == 0.0f)
-        autorange();
+        // Every attribute has a scale of its own, so selecting one recomputes
+        // the range -- but only while the min/max fields still hold the range
+        // autorange() produced for the previous one. A range the user set
+        // describes the values they want to look at and must not be thrown away
+        // by selecting an attribute: it would be silently replaced by the
+        // automatic range and the elements would be colored with something else
+        // than the range the fields read (an attribute holding 0..3 plus
+        // GEO::NO_INDEX is displayed with a single color again as soon as the
+        // fields are back to the raw 0..4.29e9). The "autorange" button
+        // restores the automatic range whenever the user wants it back.
+        if (attribute_range_is_automatic()) {
+            autorange();
+        }
+        else {
+            // The user's range is kept, but it now describes another
+            // attribute: the colormap range derived from it (see
+            // update_colormap_range()) has to be recomputed.
+            colormap_range_ = ColormapRange();
+        }
     }
 }
