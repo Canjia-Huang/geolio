@@ -4,13 +4,27 @@
 //
 #ifndef GEOLIO_UTILS_H
 #define GEOLIO_UTILS_H
-
+#include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <random>
 #include <string>
+#include <thread>
 
 namespace geolio
 {
+    static std::atomic<std::uint64_t> seed_counter{0};
+
+    static thread_local std::mt19937 generator = [] {
+        std::seed_seq seq{
+            static_cast<std::uint64_t>(std::random_device{}()),
+            static_cast<std::uint64_t>(std::hash<std::thread::id>{}(std::this_thread::get_id())),
+            seed_counter.fetch_add(1, std::memory_order_relaxed)
+        };
+        return std::mt19937(seq);
+    }();
+
     /**
      * @brief Generates a random alphanumeric string of a given length.
      * @details Uses a function-local static std::mt19937 generator seeded from
@@ -24,9 +38,6 @@ namespace geolio
         const std::size_t length
         ) {
         static const std::string CHARACTERS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-        static std::random_device rd;
-        static std::mt19937 generator(rd());
 
         std::uniform_int_distribution<std::size_t> distribution(0, CHARACTERS.size() - 1);
 
