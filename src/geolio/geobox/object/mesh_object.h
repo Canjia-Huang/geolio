@@ -231,20 +231,13 @@ namespace geolio::geobox
 
         /**
          * @brief Autoscales the attribute range for display.
-         * @details Same as GeoGram's SimpleMeshApplication::autorange(), with
-         *          one difference: the GEO::NO_INDEX sentinel of an index
-         *          attribute is not ranged over, since it means "no such
-         *          element" rather than a value of the attribute scale. The
-         *          min/max fields, i.e. the colorbar, therefore report the range
-         *          of the values the attribute really holds, with one unit of
-         *          the scale left free above them when the sentinel is present:
-         *          [0, 4] rather than [0, 4.29e9] for an attribute holding 0..3
-         *          plus GEO::NO_INDEX. That range is the one the colorbar needs
-         *          to show those values and the sentinel apart, so it stays
-         *          usable without being edited by hand. See ColormapRange for
-         *          how the sentinel is colored; a range that ends on the highest
-         *          value would display the sentinel with the color of that
-         *          value.
+         * @details Same as GeoGram's SimpleMeshApplication::autorange(): the
+         *          range is the raw [min, max] of the attribute, GEO::NO_INDEX
+         *          included, which is what the min/max fields show. Handling
+         *          that sentinel is up to the colormap: the random colormap
+         *          remaps the range so that extreme values do not squeeze the
+         *          others into a single color (see ColormapRange), the other
+         *          ones are sampled with the range as it is, as in GeoGram.
          * @ref <geogram_gfx/gui/simple_mesh_application.cpp> autorange()
          */
         void autorange();
@@ -336,29 +329,14 @@ namespace geolio::geobox
 
         /**
          * @brief Selects the active attribute used for scalar coloring.
-         * @details The range is autoranged for the new attribute as long as the
-         *          min/max fields still hold the range autorange() computed for
-         *          the previous one; a range the user set is kept, so that
-         *          selecting an attribute never silently changes what the
-         *          colorbar shows (see attribute_range_is_automatic()).
+         * @details Same as GeoGram's SimpleMeshApplication::set_attribute(): the
+         *          range autoranges only while the min/max fields are still
+         *          untouched (both zero), so a range the user set survives
+         *          selecting another attribute.
          * @param[in] attribute Name of the mesh attribute to visualize.
          * @ref <geogram_gfx/gui/simple_mesh_application.cpp> set_attribute()
          */
         void set_attribute(const std::string& attribute);
-
-        /**
-         * @brief Tests whether the min/max fields hold an automatic range.
-         * @details The range of the fields is automatic while it is the one
-         *          autorange() computed for the selected attribute, i.e. while
-         *          the user did not edit it. Only an automatic range is
-         *          recomputed when another attribute is selected, see
-         *          set_attribute().
-         * @return true if the fields still hold the range autorange() computed.
-         */
-        bool attribute_range_is_automatic() const {
-            return attribute_min_ == autorange_min_ &&
-                   attribute_max_ == autorange_max_;
-        }
 
         GEO::Mesh mesh_;
         GEO::MeshGfx mesh_gfx_;
@@ -423,14 +401,6 @@ namespace geolio::geobox
         /** Bounds of the displayed attribute range, editable in the GUI. */
         float attribute_min_ = 0;
         float attribute_max_ = 0;
-        /**
-         * Range autorange() computed for the selected attribute, i.e. the
-         * automatic range the min/max fields start with. Comparing the fields
-         * with it tells a range the user set apart from an automatic one, see
-         * attribute_range_is_automatic().
-         */
-        float autorange_min_ = 0;
-        float autorange_max_ = 0;
 
         /**
          * Accessor to the displayed scalar attribute; bound by
