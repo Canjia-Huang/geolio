@@ -30,7 +30,7 @@ namespace geolio
             INTERNAL_CONTROL_POINTS_NB_PER_FACET_((order-1)*(order-1)),
             INTERNAL_CONTROL_POINTS_NB_PER_CELL_((order-1)*(order-1)*(order-1))
         {
-            assert(mesh.vertices.dimension() == DIM);
+            assert(mesh_.vertices.dimension() == DIM);
             assert(order_ > 0);
 
             initialize_node_positions_1D();
