@@ -9,6 +9,7 @@
 #include "hexex_io.h"
 #include "off_io.h"
 #include "ovm_io.h"
+#include "pts_io.h"
 
 namespace geolio
 {
@@ -18,6 +19,7 @@ namespace geolio
         geo_register_MeshIOHandler_creator(HEXEX_IOHandler, "hexex");
         geo_register_MeshIOHandler_creator(OFF_IOHandler, "off");
         geo_register_MeshIOHandler_creator(OVM_IOHandler, "ovm");
+        geo_register_MeshIOHandler_creator(PTS_IOHandler, "pts");
     }
 }
 
