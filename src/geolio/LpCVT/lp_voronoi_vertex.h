@@ -359,12 +359,12 @@ namespace geolio
          * @param[in] point_index Index of the Delaunay vertex being moved.
          * @param[in] g The accumulator receiving the contribution.
          */
-        void accumulate(
+        static void accumulate(
             const GEO::mat3& J,
             const GEO::vec3& dFdC,
             const GEO::index_t point_index,
             const LpGradientAccumulator& g
-            ) const {
+            ) {
             GEO::vec3 dFdCJ;
             lp_matTvecmul(J, dFdC, dFdCJ);
             g.add(point_index, dFdCJ);
@@ -469,7 +469,7 @@ namespace geolio
 
     private:
         /** @brief Number of bisectors among the three defining planes (0 to 3). */
-        unsigned int nb_bisectors_ = 0;
+        GEO::index_t nb_bisectors_ = 0;
         /** @brief Positions of the defining Delaunay vertices, cell center first. */
         GEO::vec3 P_[4];
         /** @brief Columns of the inverse of the plane-normal matrix. */

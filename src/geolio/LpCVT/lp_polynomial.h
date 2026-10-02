@@ -36,11 +36,11 @@ namespace geolio
      *       single ``IntegrationSimplex`` instance between all of its worker
      *       threads, so eval() must be reentrant.
      */
-    template <unsigned int P>
+    template <GEO::index_t P>
     class LpPolynomial {
     public:
         /** @brief The degree of the polynomial, i.e. the norm exponent @p P. */
-        static constexpr unsigned int degree = P;
+        static constexpr GEO::index_t degree = P;
 
         /**
          * @brief Number of exponent triples ``(alpha, beta, gamma)`` with
@@ -49,14 +49,14 @@ namespace geolio
          *          coefficient that the original implementation omits from the
          *          energy; see lp_surface_energy_normalization().
          */
-        static constexpr unsigned int nb_coeffs = ((P + 1) * (P + 2)) / 2;
+        static constexpr GEO::index_t nb_coeffs = ((P + 1) * (P + 2)) / 2;
 
         /**
          * @brief Number of exponent triples that contribute to the derivative,
          *        i.e. those whose differentiated exponent is non-zero.
          * @details Equals ``nb_coeffs - (P + 1)``.
          */
-        static constexpr unsigned int nb_dcoeffs = nb_coeffs - (P + 1);
+        static constexpr GEO::index_t nb_dcoeffs = nb_coeffs - (P + 1);
 
         /**
          * @brief Constructs the polynomial and precomputes its exponent tables.
@@ -67,10 +67,10 @@ namespace geolio
             // Pre-compute indices for evaluating F_{L_p}^T
             // (see Appendix A)
             {
-                unsigned int cur = 0;
-                for (unsigned int alpha = 0; alpha <= P; alpha++) {
-                    for (unsigned int beta = 0; beta <= P - alpha; beta++) {
-                        const unsigned int gamma = P - alpha - beta;
+                GEO::index_t cur = 0;
+                for (GEO::index_t alpha = 0; alpha <= P; alpha++) {
+                    for (GEO::index_t beta = 0; beta <= P - alpha; beta++) {
+                        const GEO::index_t gamma = P - alpha - beta;
                         E_pow_[cur][0] = alpha;
                         E_pow_[cur][1] = beta;
                         E_pow_[cur][2] = gamma;
@@ -81,10 +81,10 @@ namespace geolio
             // Pre-compute indices for evaluating \nabla F_{L_p}^T
             // (see Appendix B.1)
             {
-                unsigned int cur_dU1 = 0, cur_dU2 = 0, cur_dU3 = 0;
-                for (unsigned int alpha = 0; alpha <= P; alpha++) {
-                    for (unsigned int beta = 0; beta <= P - alpha; beta++) {
-                        const unsigned int gamma = P - alpha - beta;
+                GEO::index_t cur_dU1 = 0, cur_dU2 = 0, cur_dU3 = 0;
+                for (GEO::index_t alpha = 0; alpha <= P; alpha++) {
+                    for (GEO::index_t beta = 0; beta <= P - alpha; beta++) {
+                        const GEO::index_t gamma = P - alpha - beta;
                         if (alpha != 0) {
                             dE_pow_[0][cur_dU1][0] = alpha;
                             dE_pow_[0][cur_dU1][1] = beta;
@@ -159,7 +159,7 @@ namespace geolio
                 lp_matvecmul(M, p3 - p0, U_pow[2][1]);
             }
 
-            for (unsigned int i = 2; i <= P; ++i) {
+            for (GEO::index_t i = 2; i <= P; ++i) {
                 lp_vecmul(U_pow[0][1], U_pow[0][i - 1], U_pow[0][i]);
                 lp_vecmul(U_pow[1][1], U_pow[1][i - 1], U_pow[1][i]);
                 lp_vecmul(U_pow[2][1], U_pow[2][i - 1], U_pow[2][i]);
@@ -167,34 +167,34 @@ namespace geolio
 
             // Computation of function value.
             double E = 0.0;
-            for (unsigned int i = 0; i < nb_coeffs; ++i) {
+            for (GEO::index_t i = 0; i < nb_coeffs; ++i) {
                 GEO::vec3 W;
-                const unsigned int alpha = E_pow_[i][0];
-                const unsigned int beta = E_pow_[i][1];
-                const unsigned int gamma = E_pow_[i][2];
+                const GEO::index_t alpha = E_pow_[i][0];
+                const GEO::index_t beta = E_pow_[i][1];
+                const GEO::index_t gamma = E_pow_[i][2];
                 lp_vecmul(U_pow[0][alpha], U_pow[1][beta], U_pow[2][gamma], W);
                 E += lp_vecbar(W);
             }
 
             // Computation of gradient
             GEO::vec3 dEdU1(0, 0, 0), dEdU2(0, 0, 0), dEdU3(0, 0, 0);
-            for (unsigned int i = 0; i < nb_dcoeffs; ++i) {
+            for (GEO::index_t i = 0; i < nb_dcoeffs; ++i) {
                 {
-                    const unsigned int alpha = dE_pow_[0][i][0];
-                    const unsigned int beta = dE_pow_[0][i][1];
-                    const unsigned int gamma = dE_pow_[0][i][2];
+                    const GEO::index_t alpha = dE_pow_[0][i][0];
+                    const GEO::index_t beta = dE_pow_[0][i][1];
+                    const GEO::index_t gamma = dE_pow_[0][i][2];
                     lp_vecmadd(alpha, U_pow[0][alpha - 1], U_pow[1][beta], U_pow[2][gamma], dEdU1);
                 }
                 {
-                    const unsigned int alpha = dE_pow_[1][i][0];
-                    const unsigned int beta = dE_pow_[1][i][1];
-                    const unsigned int gamma = dE_pow_[1][i][2];
+                    const GEO::index_t alpha = dE_pow_[1][i][0];
+                    const GEO::index_t beta = dE_pow_[1][i][1];
+                    const GEO::index_t gamma = dE_pow_[1][i][2];
                     lp_vecmadd(beta, U_pow[0][alpha], U_pow[1][beta - 1], U_pow[2][gamma], dEdU2);
                 }
                 {
-                    const unsigned int alpha = dE_pow_[2][i][0];
-                    const unsigned int beta = dE_pow_[2][i][1];
-                    const unsigned int gamma = dE_pow_[2][i][2];
+                    const GEO::index_t alpha = dE_pow_[2][i][0];
+                    const GEO::index_t beta = dE_pow_[2][i][1];
+                    const GEO::index_t gamma = dE_pow_[2][i][2];
                     lp_vecmadd(gamma, U_pow[0][alpha], U_pow[1][beta], U_pow[2][gamma - 1], dEdU3);
                 }
             }
@@ -229,9 +229,9 @@ namespace geolio
 
     private:
         /** @brief Exponent triples of the monomials summed into ``E``. */
-        unsigned int E_pow_[nb_coeffs][3];
+        GEO::index_t E_pow_[nb_coeffs][3]{};
         /** @brief Per-variable exponent triples contributing to ``dE/dU_k``. */
-        unsigned int dE_pow_[3][nb_dcoeffs][3];
+        GEO::index_t dE_pow_[3][nb_dcoeffs][3]{};
     };
 }
 

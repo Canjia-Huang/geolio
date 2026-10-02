@@ -48,7 +48,7 @@ namespace geolio
      * @tparam MEASURE Either @ref LpTriArea (surface meshing) or @ref LpTetVolume
      *         (volume meshing).
      */
-    template <unsigned int P, class MEASURE>
+    template <GEO::index_t P, class MEASURE>
     class LpIntegrationSimplex : public GEO::IntegrationSimplex {
     public:
         /**
@@ -86,9 +86,7 @@ namespace geolio
             const GEO::index_t nb_matrices,
             const GEO::index_t nb_comp_per_matrix,
             const double* matrices
-            ) : GEO::IntegrationSimplex(
-                    mesh, volumetric, nb_matrices, nb_comp_per_matrix, matrices
-                    )
+            ) : GEO::IntegrationSimplex(mesh, volumetric, nb_matrices, nb_comp_per_matrix, matrices)
         {}
 
         /**
@@ -119,13 +117,13 @@ namespace geolio
          * @return The contribution of this simplex to the objective.
          */
         double eval(
-            GEO::index_t center_vertex_index,
+            const GEO::index_t center_vertex_index,
             const GEOGen::Vertex& v0,
             const GEOGen::Vertex& v1,
             const GEOGen::Vertex& v2,
-            GEO::index_t t,
-            GEO::index_t t_adj = GEO::NO_INDEX,
-            GEO::index_t v_adj = GEO::NO_INDEX
+            const GEO::index_t t,
+            const GEO::index_t t_adj = GEO::NO_INDEX,
+            const GEO::index_t v_adj = GEO::NO_INDEX
             ) override {
             GEO::geo_argused(t_adj);
             GEO::geo_argused(v_adj);
@@ -164,9 +162,7 @@ namespace geolio
          * @param[in] p Pointer to at least three doubles.
          * @return The corresponding vector.
          */
-        static GEO::vec3 to_vec3(const double* p) {
-            return GEO::vec3(p[0], p[1], p[2]);
-        }
+        static GEO::vec3 to_vec3(const double* p) { return {p[0], p[1], p[2]}; }
 
         /**
          * @brief Returns the matrix attached to a background element.
@@ -181,14 +177,13 @@ namespace geolio
          */
         GEO::mat3 element_matrix(const GEO::index_t t) const {
             GEO::mat3 M;
-            if (nb_frames_ == 0 || t >= nb_frames_) {
+            if (nb_frames_ == 0 || t >= nb_frames_)
                 return M;
-            }
+
             const double* m = frame(t);
             for (GEO::index_t i = 0; i < 3; ++i) {
-                for (GEO::index_t j = 0; j < 3; ++j) {
+                for (GEO::index_t j = 0; j < 3; ++j)
                     M(i, j) = m[3 * i + j];
-                }
             }
             return M;
         }
@@ -234,19 +229,18 @@ namespace geolio
                 return true;
             }
 
-            if (facet_id >= mesh_.facets.nb()) {
-                // "Virtual" boundary facet: encodes an edge on the border of an
-                // open surface mesh, and has no supporting plane of its own.
+            // "Virtual" boundary facet: encodes an edge on the border of an
+            // open surface mesh, and has no supporting plane of its own.
+            if (facet_id >= mesh_.facets.nb())
                 return false;
-            }
 
-            if (mesh_.facets.nb_vertices(facet_id) < 3) {
+            if (mesh_.facets.nb_vertices(facet_id) < 3)
                 return false;
-            }
 
             a = to_vec3(mesh_.vertices.point_ptr(mesh_.facets.vertex(facet_id, 0)));
             b = to_vec3(mesh_.vertices.point_ptr(mesh_.facets.vertex(facet_id, 1)));
             c = to_vec3(mesh_.vertices.point_ptr(mesh_.facets.vertex(facet_id, 2)));
+
             return true;
         }
 
@@ -268,14 +262,14 @@ namespace geolio
          */
         bool symbolic_facet_normal(const GEO::index_t facet_id, GEO::vec3& N) const {
             GEO::vec3 a, b, c;
-            if (!symbolic_facet_triangle(facet_id, a, b, c)) {
+            if (!symbolic_facet_triangle(facet_id, a, b, c))
                 return false;
-            }
-            if (volumetric_) {
+
+            if (volumetric_)
                 N = GEO::cross(b - a, c - a);
-            } else {
+            else
                 N = GEO::Geom::mesh_facet_normal(mesh_, facet_id);
-            }
+
             return true;
         }
 
@@ -317,8 +311,8 @@ namespace geolio
             GEO::index_t& e0,
             GEO::index_t& e1
             ) const {
-            GEO::index_t f0 = sym.boundary_facet(0);
-            GEO::index_t f1 = sym.boundary_facet(1);
+            const GEO::index_t f0 = sym.boundary_facet(0);
+            const GEO::index_t f1 = sym.boundary_facet(1);
 
             if (volumetric_) {
                 // Both entries are tetrahedron half-facet ids; the two facets of a
@@ -327,23 +321,21 @@ namespace geolio
                 GEO::index_t nb_shared = 0;
                 for (GEO::index_t i = 0; i < 3; ++i) {
                     const GEO::index_t vi = mesh_.cells.tet_vertex(
-                        f0 / 4, GEO::MeshCells::local_tet_facet_vertex_index(f0 % 4, i)
-                        );
+                        f0 / 4, GEO::MeshCells::local_tet_facet_vertex_index(f0 % 4, i));
                     for (GEO::index_t j = 0; j < 3; ++j) {
                         if (vi == mesh_.cells.tet_vertex(
                                 f1 / 4,
                                 GEO::MeshCells::local_tet_facet_vertex_index(f1 % 4, j)
                                 )) {
-                            if (nb_shared < 2) {
+                            if (nb_shared < 2)
                                 shared[nb_shared] = vi;
-                            }
                             ++nb_shared;
                         }
                     }
                 }
-                if (nb_shared != 2) {
+                if (nb_shared != 2)
                     return false;
-                }
+
                 e0 = shared[0];
                 e1 = shared[1];
                 return true;
@@ -360,9 +352,9 @@ namespace geolio
                 // the edge inside the real facet boundary_facet(1).
                 const GEO::index_t fr = f1;
                 const GEO::index_t nv = mesh_.facets.nb_vertices(fr);
-                if (nv == 0) {
+                if (nv == 0)
                     return false;
-                }
+
                 const GEO::index_t corner = (f0 - mesh_.facets.nb()) % nv;
                 e0 = mesh_.facets.vertex(fr, corner);
                 e1 = mesh_.facets.vertex(fr, (corner + 1) % nv);
@@ -375,16 +367,16 @@ namespace geolio
                 const GEO::index_t vi = mesh_.facets.vertex(f0, i);
                 for (GEO::index_t j = 0; j < mesh_.facets.nb_vertices(f1); ++j) {
                     if (vi == mesh_.facets.vertex(f1, j)) {
-                        if (nb_shared < 2) {
+                        if (nb_shared < 2)
                             shared[nb_shared] = vi;
-                        }
+
                         ++nb_shared;
                     }
                 }
             }
-            if (nb_shared != 2) {
+            if (nb_shared != 2)
                 return false;
-            }
+
             e0 = shared[0];
             e1 = shared[1];
             return true;
@@ -420,9 +412,8 @@ namespace geolio
             const GEO::index_t nb_f = sym.nb_boundary_facets();
 
             // A genuine RVD vertex is the intersection of exactly three planes.
-            if (nb_b + nb_f != 3) {
+            if (nb_b + nb_f != 3)
                 return;
-            }
 
             const GEO::vec3 C = to_vec3(vertex.point());
 
@@ -450,14 +441,13 @@ namespace geolio
                 // never merged across facets, so it always carries that facet's real
                 // index in its symbolic representation. In volume mode the entry is a
                 // tetrahedron half-facet id instead, in its own index space.
-                if (!volumetric_) {
+                if (!volumetric_)
                     geo_debug_assert(sym.boundary_facet(0) < mesh_.facets.nb());
-                }
 
                 GEO::vec3 N;
-                if (!symbolic_facet_normal(sym.boundary_facet(0), N)) {
+                if (!symbolic_facet_normal(sym.boundary_facet(0), N))
                     return;
-                }
+
                 GEO::vec3 p[2];
                 for (GEO::index_t k = 0; k < 2; ++k) {
                     point_index[k + 1] = sym.bisector(k);
@@ -471,9 +461,9 @@ namespace geolio
                 point_index[1] = sym.bisector(0);
 
                 GEO::index_t e0, e1;
-                if (!boundary_edge_extremities(sym, e0, e1)) {
+                if (!boundary_edge_extremities(sym, e0, e1))
                     return;
-                }
+
                 const GEO::vec3 w1 = to_vec3(mesh_.vertices.point_ptr(e0));
                 const GEO::vec3 w2 = to_vec3(mesh_.vertices.point_ptr(e1));
 
@@ -493,25 +483,22 @@ namespace geolio
                 // uses a synthetic index larger than every real one and would sort
                 // first. In volume mode the entries are tetrahedron half-facet ids,
                 // in their own index space.
-                if (!volumetric_) {
+                if (!volumetric_)
                     geo_debug_assert(sym.boundary_facet(1) < mesh_.facets.nb());
-                }
 
                 GEO::vec3 N0;
                 if (volumetric_) {
-                    if (!symbolic_facet_normal(sym.boundary_facet(1), N0)) {
+                    if (!symbolic_facet_normal(sym.boundary_facet(1), N0))
                         return;
-                    }
-                } else if (sym.boundary_facet(1) < mesh_.facets.nb()) {
-                    N0 = GEO::Geom::mesh_facet_normal(mesh_, sym.boundary_facet(1));
-                } else {
-                    return;
                 }
+                else if (sym.boundary_facet(1) < mesh_.facets.nb())
+                    N0 = GEO::Geom::mesh_facet_normal(mesh_, sym.boundary_facet(1));
+                else
+                    return;
+
                 const GEO::vec3 N1 = GEO::cross(w2 - w1, N0);
 
-                V.set_one_bisector_two_planes(
-                    p0, to_vec3(point(point_index[1])), N0, N1, C
-                    );
+                V.set_one_bisector_two_planes(p0, to_vec3(point(point_index[1])), N0, N1, C);
             }
             break;
 
@@ -552,11 +539,10 @@ namespace geolio
      */
     GEO::IntegrationSimplex_var create_lp_integration_simplex(
         const GEO::Mesh& mesh,
-        unsigned int p,
+        GEO::index_t p,
         bool volumetric,
         GEO::index_t nb_matrices = 0,
-        const double* matrices = nullptr
-        );
+        const double* matrices = nullptr);
 }
 
 #endif //GEOLIO_LP_INTEGRATION_SIMPLEX_H

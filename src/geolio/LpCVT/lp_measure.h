@@ -98,7 +98,8 @@ namespace geolio
                 dTdU1 = GEO::vec3(0.0, 0.0, 0.0);
                 dTdU2 = GEO::vec3(0.0, 0.0, 0.0);
                 dTdU3 = GEO::vec3(0.0, 0.0, 0.0);
-            } else {
+            }
+            else {
                 N = (1.0 / T) * N;
                 dTdU1 = GEO::cross(N, U3 - U2);
                 dTdU2 = GEO::cross(N, U1 - U3);
@@ -122,7 +123,7 @@ namespace geolio
      * @param[in] p The integer norm exponent (even, 2 <= p <= 16).
      * @return The constant ``(p + 1) * (p + 2)``.
      */
-    inline constexpr double lp_surface_energy_normalization(const unsigned int p) {
+    constexpr double lp_surface_energy_normalization(const GEO::index_t p) {
         return static_cast<double>(p + 1) * static_cast<double>(p + 2);
     }
 
@@ -138,7 +139,7 @@ namespace geolio
      * @param[in] p The integer norm exponent (even, 2 <= p <= 16).
      * @return The constant ``(p + 1) * (p + 2) * (p + 3)``.
      */
-    inline constexpr double lp_volume_energy_normalization(const unsigned int p) {
+    constexpr double lp_volume_energy_normalization(const GEO::index_t p) {
         return static_cast<double>(p + 1) * static_cast<double>(p + 2) * static_cast<double>(p + 3);
     }
 }

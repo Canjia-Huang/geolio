@@ -148,9 +148,9 @@ namespace geolio
         // Defensive: the base class drops the integrand at the end of every Newton
         // run, and evaluate without it would silently fall back to the L2 CVT
         // objective instead of failing.
-        if (simplex_func_.is_null()) {
+        if (simplex_func_.is_null())
             rebuild_integrand();
-        }
+
         GEO::CentroidalVoronoiTesselation::funcgrad(n, x, f, g);
     }
 

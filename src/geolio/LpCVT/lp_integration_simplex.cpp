@@ -11,7 +11,7 @@ namespace geolio
 {
     GEO::IntegrationSimplex_var create_lp_integration_simplex(
         const GEO::Mesh& mesh,
-        const unsigned int p,
+        const GEO::index_t p,
         const bool volumetric,
         const GEO::index_t nb_matrices,
         const double* matrices
