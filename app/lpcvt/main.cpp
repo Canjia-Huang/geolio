@@ -98,6 +98,7 @@ int main(int argc, char** argv) {
     std::string in_mesh_filepath;
     std::string in_pts_filepath;
     std::string out_pts_filepath;
+    std::string out_rvd_filepath;
     std::string out_rdt_filepath;
 
     /*== App ======================================================================================================= */
@@ -161,6 +162,12 @@ int main(int argc, char** argv) {
         );
 
     app.add_option(
+        "--o-rvd,--out-rvd",
+        out_rvd_filepath,
+        "Output the restricted Voronoi diagram of the optimized point set to this file."
+        );
+
+    app.add_option(
         "--o-rdt,--out-rdt",
         out_rdt_filepath,
         "Output the restricted Delaunay triangulation of the optimized point set to this file."
@@ -172,13 +179,17 @@ int main(int argc, char** argv) {
     GEO::CmdLine::set_arg("algo:predicates", predicates);
 
     const auto model_name = get_filename(in_mesh_filepath);
-    if (!out_rdt_filepath.empty()) {
-        if (std::filesystem::is_directory(out_rdt_filepath))
-            out_rdt_filepath = out_rdt_filepath + model_name + ".res_rdt.obj";
-    }
     if (!out_pts_filepath.empty()) {
         if (std::filesystem::is_directory(out_pts_filepath))
             out_pts_filepath = out_pts_filepath + get_filename(in_mesh_filepath) + ".res_sample.pts";
+    }
+    if (!out_rvd_filepath.empty()) {
+        if (std::filesystem::is_directory(out_rvd_filepath))
+            out_rvd_filepath = out_rvd_filepath + model_name + ".res_rvd.geogram";
+    }
+    if (!out_rdt_filepath.empty()) {
+        if (std::filesystem::is_directory(out_rdt_filepath))
+            out_rdt_filepath = out_rdt_filepath + model_name + ".res_rdt.obj";
     }
 
     LOG::DEBUG("in_mesh_filepath: {}", in_mesh_filepath);
@@ -189,6 +200,7 @@ int main(int argc, char** argv) {
     LOG::DEBUG("samples: {}", nb_samples);
     LOG::DEBUG("predicates: {}", predicates);
     LOG::DEBUG("out_pts_filepath: {}", out_pts_filepath);
+    LOG::DEBUG("out_rvd_filepath: {}", out_rvd_filepath);
     LOG::DEBUG("out_rdt_filepath: {}", out_rdt_filepath);
 
     /*== Let's go! ================================================================================================= */
@@ -277,6 +289,24 @@ int main(int argc, char** argv) {
                       nb_evals, f_first / normalization, f_last / normalization);
 
             /* Output */
+            if (!out_pts_filepath.empty()) {
+                if (!pts.save(out_pts_filepath)) {
+                    LOG::ERROR("Could not save the points file: {}", out_pts_filepath);
+                    return EXIT_FAILURE;
+                }
+
+                LOG::INFO("Saved final sites: {}", out_pts_filepath);
+            }
+            if (!out_rvd_filepath.empty()) {
+                GEO::Mesh rvd;
+                cvt.RVD()->compute_RVD(rvd, 0);
+
+                if (!GEO::mesh_save(rvd, out_rvd_filepath)) {
+                    LOG::ERROR("Could not save the RVD to {}", out_rvd_filepath);
+                    return EXIT_FAILURE;
+                }
+                LOG::INFO("Saved RVD: {}", out_rvd_filepath);
+            }
             if (!out_rdt_filepath.empty()) {
                 GEO::Mesh rdt;
 
@@ -292,16 +322,6 @@ int main(int argc, char** argv) {
                 }
                 LOG::INFO("Saved RDT: {}", out_rdt_filepath);
             }
-        }
-
-        /* Output */
-        if (!out_pts_filepath.empty()) {
-            if (!pts.save(out_pts_filepath)) {
-                LOG::ERROR("Could not save the points file: {}", out_pts_filepath);
-                return EXIT_FAILURE;
-            }
-
-            LOG::INFO("Saved final sites: {}", out_pts_filepath);
         }
     }
     catch (const std::exception& e) {
