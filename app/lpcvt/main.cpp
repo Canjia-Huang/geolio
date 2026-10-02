@@ -2,24 +2,18 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/10/3.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-/**
- * @file main.cpp
- * @brief Command line front end for the LpCVT reimplementation.
- * @details Mirrors the interface of the reference implementation
- *          (``LpCVT [OPTIONS] meshPath [ptsPath]``) so that the two can be driven
- *          with the same arguments and exchange point files in both directions.
- */
+#include <CLI/CLI.hpp>
 #include <geolio/LpCVT/lp_cvt.h>
 #include <geolio/LpCVT/lp_measure.h>
+#include <geolio/common/config.h>
 #include <geolio/common/log.h>
-
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/command_line_args.h>
 #include <geogram/basic/common.h>
-#include <geogram/basic/file_system.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_repair.h>
-
+#include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -28,6 +22,9 @@ using namespace geolio;
 
 namespace
 {
+    /** @brief Name of the application, used as the CLI title and in log messages. */
+    const std::string APP_NAME = "LpCVT";
+
     /**
      * @brief Loads a point set in the ".pts" format of the reference LpCVT.
      * @details One point per line, written as ``v x y z``. This is exactly the
@@ -111,7 +108,7 @@ namespace
     protected:
         /**
          * @brief Evaluates the objective and records it.
-         * @copydetails geolio::LpCVT::funcgrad
+         * @copydetails geolio::LpCentroidalVoronoiTesselation::funcgrad
          */
         void funcgrad(
             const GEO::index_t n,
@@ -138,130 +135,222 @@ namespace
 }
 
 int main(int argc, char** argv) {
+    /*== Initialize ================================================================================================ */
+
+    /* Init spdlog */
+    spdlog::set_level(spdlog::level::trace);
+
+    /* Init Geogram */
     GEO::initialize(GEO::GEOGRAM_INSTALL_ALL);
     GEO::CmdLine::import_arg_group("standard");
     GEO::CmdLine::import_arg_group("algo");
 
-    GEO::CmdLine::declare_arg("p", 2, "Lp norm exponent, an even integer in [2, 16]");
-    GEO::CmdLine::declare_arg("volumetric", false, "Mesh the volume instead of the surface");
-    GEO::CmdLine::declare_arg("iter", 100, "Maximum number of Newton iterations");
-    GEO::CmdLine::declare_arg("samples", 10000, "Number of points of the initial sampling");
-    GEO::CmdLine::declare_arg(
-        "save_pts", std::string(""),
-        "Save the optimized points to this file (default: <meshfile>.res_sample.pts)"
+    int exponent = 2;
+    bool volumetric = false;
+    int nb_iterations = 100;
+    int nb_samples = 10000;
+    std::string predicates = "fast";
+    std::string in_mesh_filepath;
+    std::string in_pts_filepath;
+    std::string out_pts_filepath;
+    std::string out_rdt_filepath;
+
+    /*== App ======================================================================================================= */
+    CLI::App app{APP_NAME};
+    argv = app.ensure_utf8(argv);
+
+    app.description(APP_NAME + " [" + get_configuration_description() + "]");
+    app.footer(CMDLINE_FOOTER);
+
+    app.add_option(
+        "--i-mesh,--in-mesh",
+        in_mesh_filepath,
+        "Reference mesh; it has to be a triangulated surface, or a tetrahedralized "
+        "volume when --volumetric is used."
+        )->check(CLI::ExistingFile)->required();
+
+    app.add_option(
+        "--i-pts,--in-pts",
+        in_pts_filepath,
+        "Optional input point file, in the reference implementation's \".pts\" format: "
+        "skips the initial sampling and starts from these points."
+        )->check(CLI::ExistingFile);
+
+    app.add_option(
+        "-p,--exponent",
+        exponent,
+        "Lp norm exponent: a larger even exponent sharpens the tessellation."
+        )->check(CLI::IsMember({2, 4, 6, 8, 10, 12, 14, 16}));
+
+    app.add_flag(
+        "-v,--volumetric",
+        volumetric,
+        "Mesh the volume bounded by the surface instead of the surface itself; "
+        "the mesh then has to be filled with tetrahedra."
         );
-    GEO::CmdLine::declare_arg(
-        "save_rdt", std::string(""),
-        "Save the restricted Delaunay triangulation to this file"
+
+    app.add_option(
+        "-m,--iterations",
+        nb_iterations,
+        "Maximum number of Newton iterations."
+        )->check(CLI::Range(0, 1000000));
+
+    app.add_option(
+        "-s,--samples",
+        nb_samples,
+        "Number of points to sample the mesh with when no input point file is given."
+        )->check(CLI::Range(1, 100000000));
+
+    app.add_option(
+        "--predicates",
+        predicates,
+        "Geogram's geometric predicate mode for the restricted Voronoi diagram; "
+        "\"exact\" is slower but avoids misclassifications on degenerate configurations."
+        )->check(CLI::IsMember({"fast", "exact"}));
+
+    app.add_option(
+        "--o-pts,--out-pts",
+        out_pts_filepath,
+        "Output the optimized points to this file, in the reference implementation's "
+        "\".pts\" format (default: <mesh>.res_sample.pts)."
         );
 
-    // The positional arguments have to be declared here: CmdLine::parse() rejects
-    // any unparsed argument unless the specification allows for it.
-    std::vector<std::string> filenames;
-    if (!GEO::CmdLine::parse(argc, argv, filenames, "<meshfile> <ptsfile>*")) {
-        return 1;
-    }
-    if (filenames.empty()) {
-        LOG::ERROR("Usage: lpcvt [options] meshfile [ptsfile]");
-        return 1;
-    }
+    app.add_option(
+        "--o-rdt,--out-rdt",
+        out_rdt_filepath,
+        "Output the restricted Delaunay triangulation of the optimized point set to this file."
+        );
 
-    const unsigned int p = GEO::CmdLine::get_arg_uint("p");
-    const bool volumetric = GEO::CmdLine::get_arg_bool("volumetric");
-    const unsigned int nb_iter = GEO::CmdLine::get_arg_uint("iter");
-    const unsigned int nb_samples = GEO::CmdLine::get_arg_uint("samples");
+    CLI11_PARSE(app, argc, argv);
 
-    if (p < 2 || p > 16 || (p / 2) * 2 != p) {
-        LOG::ERROR("p must be an even integer in [2, 16]");
-        return 1;
-    }
+    /*== Parse ===================================================================================================== */
+    GEO::CmdLine::set_arg("algo:predicates", predicates);
 
-    // The background mesh has to be triangulated and its adjacency computed before
-    // the restricted Voronoi diagram is built, and mesh_repair() renumbers the
-    // elements, so it has to happen before the LpCVT is constructed.
-    GEO::Mesh mesh;
-    if (!GEO::mesh_load(filenames[0], mesh)) {
-        return 1;
-    }
-    GEO::mesh_repair(mesh, GEO::MESH_REPAIR_DEFAULT);
-    mesh.facets.connect();
-    if (mesh.cells.nb() != 0) {
-        mesh.cells.connect();
-    }
-    mesh.show_stats("LpCVT input");
+    const GEO::index_t p = GEO::index_t(exponent);
 
-    if (volumetric && mesh.cells.nb() == 0) {
-        LOG::ERROR("Volumetric mode requires a tetrahedralized mesh; this build does not "
-                   "tetrahedralize surfaces on the fly");
-        return 1;
-    }
+    LOG::DEBUG("in_mesh_filepath: {}", in_mesh_filepath);
+    LOG::DEBUG("in_pts_filepath: {}", in_pts_filepath);
+    LOG::DEBUG("exponent: {}", exponent);
+    LOG::DEBUG("volumetric: {}", volumetric);
+    LOG::DEBUG("iterations: {}", nb_iterations);
+    LOG::DEBUG("samples: {}", nb_samples);
+    LOG::DEBUG("predicates: {}", predicates);
+    LOG::DEBUG("out_pts_filepath: {}", out_pts_filepath);
+    LOG::DEBUG("out_rdt_filepath: {}", out_rdt_filepath);
 
-    std::vector<double> points;
-    std::vector<double> final_points;
-    int status = 0;
+    /*== Let's go! ================================================================================================= */
+    LOG::TRACE("Start {}!", APP_NAME);
 
-    {
-        ReportingLpCVT cvt(&mesh, p, volumetric);
-
-        if (filenames.size() > 1) {
-            if (!load_points(filenames[1], points)) {
-                return 1;
-            }
-            cvt.set_points(GEO::index_t(points.size() / 3), points.data());
-        } else if (!cvt.compute_initial_sampling(nb_samples, true)) {
-            LOG::ERROR("Initial sampling failed");
-            return 1;
+    try {
+        /* Load mesh */
+        GEO::Mesh mesh;
+        if (!GEO::mesh_load(in_mesh_filepath, mesh)) {
+            LOG::ERROR("Could not load mesh file: {}", in_mesh_filepath);
+            return EXIT_FAILURE;
         }
 
-        cvt.Newton_iterations(nb_iter, 7);
+        if (volumetric) {
+            if (mesh.cells.nb() == 0) {
+                LOG::ERROR("The input mesh has no volume elements!");
+                return EXIT_FAILURE;
+            }
 
-        final_points.resize(cvt.nb_points() * 3);
-        for (GEO::index_t i = 0; i < cvt.nb_points(); ++i) {
-            const double* pi = cvt.embedding(i);
-            for (int c = 0; c < 3; ++c) {
-                final_points[3 * i + c] = pi[c];
+            if (!mesh.cells.are_simplices()) {
+                LOG::ERROR("The input mesh needs to be a simplicial mesh!");
+                return EXIT_FAILURE;
+            }
+        }
+        else {
+            if (mesh.facets.nb() == 0) {
+                LOG::ERROR("The input mesh has no surface elements!");
+                return EXIT_FAILURE;
+            }
+
+            if (!mesh.facets.are_simplices()) {
+                LOG::INFO("The input mesh needs to be a simplicial mesh, so triangulation is performed.");
+
+                // The background mesh has to be triangulated and its adjacency computed before
+                // the restricted Voronoi diagram is built, and mesh_repair() renumbers the
+                // elements, so it has to happen before the LpCVT is constructed.
+                GEO::mesh_repair(mesh, GEO::MESH_REPAIR_TRIANGULATE);
             }
         }
 
-        // Report the objective, divided by the constant that the reference
-        // implementation omits, so that the printed value is the physical energy.
-        double f_first = 0.0, f_last = 0.0;
-        unsigned int nb_evals = 0;
-        cvt.report(f_first, f_last, nb_evals);
-        const double normalization = volumetric
-                                        ? geolio::lp_volume_energy_normalization(p)
-                                        : geolio::lp_surface_energy_normalization(p);
+        mesh.show_stats("LpCVT input");
 
-        LOG::INFO("Newton iterations: {} objective evaluations, energy {} -> {}",
-                  nb_evals, f_first / normalization, f_last / normalization);
+        /* Optimize */
+        std::vector<double> final_points;
+        {
+            ReportingLpCVT cvt(&mesh, p, volumetric);
 
-        // Note: the points are read out here, while the LpCVT is still alive, because
-        // R3_embedding() is only valid for the current instance.
-        const std::string rdt_file = GEO::CmdLine::get_arg("save_rdt");
-        if (!rdt_file.empty()) {
-            GEO::Mesh rdt;
-            // Use the seeds themselves as vertices, i.e. the restricted Delaunay
-            // triangulation of the optimized point set, rather than the centroids of
-            // the restricted Voronoi cells.
-            cvt.set_use_RVC_centroids(false);
-            if (volumetric) {
-                cvt.compute_volume(&rdt);
-            } else {
-                cvt.compute_surface(&rdt, true);
+            if (!in_pts_filepath.empty()) {
+                std::vector<double> points;
+                if (!load_points(in_pts_filepath, points))
+                    return EXIT_FAILURE;
+
+                cvt.set_points(static_cast<GEO::index_t>(points.size()/3), points.data());
             }
-            if (!GEO::mesh_save(rdt, rdt_file)) {
-                status = 1;
+            else if (!cvt.compute_initial_sampling(static_cast<GEO::index_t>(nb_samples), true)) {
+                LOG::ERROR("Initial sampling failed.");
+                return EXIT_FAILURE;
+            }
+
+            cvt.Newton_iterations(static_cast<GEO::index_t>(nb_iterations), 7);
+
+            final_points.resize(cvt.nb_points() * 3);
+            for (GEO::index_t i = 0; i < cvt.nb_points(); ++i) {
+                const double* pp = cvt.embedding(i);
+                for (GEO::index_t c = 0; c < 3; ++c)
+                    final_points[3 * i + c] = pp[c];
+            }
+
+            // Report the objective, divided by the constant that the reference
+            // implementation omits, so that the printed value is the physical energy.
+            double f_first = 0.0, f_last = 0.0;
+            unsigned int nb_evals = 0;
+            cvt.report(f_first, f_last, nb_evals);
+            const double normalization = volumetric
+                                             ? lp_volume_energy_normalization(p)
+                                             : lp_surface_energy_normalization(p);
+
+            LOG::INFO("Newton iterations: {} objective evaluations, energy {} -> {}",
+                      nb_evals, f_first / normalization, f_last / normalization);
+
+            if (!out_rdt_filepath.empty()) {
+                GEO::Mesh rdt;
+                // Use the seeds themselves as vertices, i.e. the restricted Delaunay
+                // triangulation of the optimized point set, rather than the centroids of
+                // the restricted Voronoi cells.
+                cvt.set_use_RVC_centroids(false);
+                if (volumetric)
+                    cvt.compute_volume(&rdt);
+                else
+                    cvt.compute_surface(&rdt, true);
+
+                if (!GEO::mesh_save(rdt, out_rdt_filepath)) {
+                    LOG::ERROR("Could not save the RDT to {}", out_rdt_filepath);
+                    return EXIT_FAILURE;
+                }
+                LOG::INFO("Saved RDT: {}", out_rdt_filepath);
             }
         }
+
+        /* Output */
+        if (out_pts_filepath.empty())
+            out_pts_filepath = in_mesh_filepath + ".res_sample.pts";
+
+        if (!save_points(out_pts_filepath, final_points)) {
+            return EXIT_FAILURE;
+        }
+    }
+    catch (const std::exception& e) {
+        // The LpCVT constructor validates its own preconditions (unsupported norm
+        // exponent, mesh missing triangles or tetrahedra) by throwing, so report those
+        // as an ordinary command line error rather than letting them escape.
+        LOG::ERROR("{}", e.what());
+        return EXIT_FAILURE;
     }
 
-    std::string pts_file = GEO::CmdLine::get_arg("save_pts");
-    if (pts_file.empty()) {
-        pts_file = filenames[0] + ".res_sample.pts";
-    }
-    if (!save_points(pts_file, final_points)) {
-        status = 1;
-    }
-
-    return status;
+    LOG::TRACE("{} done!", APP_NAME);
+    return EXIT_SUCCESS;
 }
