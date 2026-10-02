@@ -14,12 +14,14 @@
 #include <geolio/LpCVT/lp_integration_simplex.h>
 #include <geolio/LpCVT/lp_measure.h>
 #include <geolio/LpCVT/lp_polynomial.h>
+#include <geolio/common/Gauss_Legendre_quadrature.h>
 
 #include <cmath>
 #include <functional>
 #include <map>
 #include <random>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace geolio::test
@@ -222,67 +224,11 @@ namespace geolio::test
     // The tests below need an independent, high-accuracy value for
     //     integral over a simplex of ||x - p0||_p^p
     // which is exactly the physical energy that the ported objective reproduces up
-    // to the constant factor documented in lp_measure.h. Collapsed
-    // (Duffy-transformed) Gauss-Legendre rules are used, because they are exact for
-    // the polynomial integrands involved at any degree.
+    // to the constant factor documented in lp_measure.h. The rules are built by
+    // collapsing a one-dimensional Gauss-Legendre rule obtained from
+    // geolio::get_Gauss_Legendre_quadrature(), which makes them exact for the
+    // polynomial integrands involved at any degree.
     // =====================================================================
-
-    /**
-     * @brief Computes Gauss-Legendre nodes and weights on [0, 1].
-     * @details Nodes are the roots of the Legendre polynomial of degree @p order,
-     *          found by Newton iteration, with the standard weight formula.
-     * @param[in] order Number of nodes.
-     * @param[out] nodes The nodes, in [0, 1].
-     * @param[out] weights The matching weights.
-     */
-    static void gauss_legendre(
-        const int order,
-        std::vector<double>& nodes,
-        std::vector<double>& weights
-        ) {
-        constexpr double pi = 3.14159265358979323846;
-        nodes.resize(order);
-        weights.resize(order);
-
-        // Evaluates the Legendre polynomial of degree `n` and of degree `n - 1`
-        // at `x` by the standard three-term recurrence.
-        const auto legendre = [](const int n, const double x, double& pn, double& pn_1) {
-            double p0 = 1.0;
-            double p1 = x;
-            for (int k = 2; k <= n; ++k) {
-                const double p2 = ((2.0 * k - 1.0) * x * p1 - (k - 1.0) * p0) / double(k);
-                p0 = p1;
-                p1 = p2;
-            }
-            pn = (n == 1) ? x : p1;
-            pn_1 = (n == 1) ? 1.0 : p0;
-        };
-
-        for (int i = 0; i < order; ++i) {
-            // Initial guess: the Chebyshev-like distribution of the roots.
-            double x = std::cos(pi * (static_cast<double>(i) + 0.75) / (static_cast<double>(order) + 0.5));
-            for (int iter = 0; iter < 100; ++iter) {
-                double pn = 1.0, pn_1 = 1.0;
-                legendre(order, x, pn, pn_1);
-                // P'_n(x) = n (x P_n(x) - P_{n-1}(x)) / (x^2 - 1)
-                const double dp = static_cast<double>(order) * (x * pn - pn_1) / (x * x - 1.0);
-                const double dx = pn / dp;
-                x -= dx;
-                if (std::fabs(dx) < 1e-15) {
-                    break;
-                }
-            }
-
-            double pn = 1.0, pn_1 = 1.0;
-            legendre(order, x, pn, pn_1);
-            const double dp = static_cast<double>(order) * (x * pn - pn_1) / (x * x - 1.0);
-
-            // Mapped to [0, 1]: node = (x + 1) / 2 and weight = w_{-1,1} / 2,
-            // with the classical w = 2 / ((1 - x^2) P'_n(x)^2).
-            nodes[i] = 0.5 * (x + 1.0);
-            weights[i] = 1.0 / ((1.0 - x * x) * dp * dp);
-        }
-    }
 
     /**
      * @brief Orders needed by the collapsed rules for a degree @p p integrand.
@@ -291,6 +237,13 @@ namespace geolio::test
      *          Gauss-Legendre rule is exact up to degree ``2n - 1``.
      * @param[in] p Degree of the integrand.
      * @return A number of nodes sufficient for exactness.
+     * @note The rules are deliberately built by collapsing a one-dimensional
+     *       Gauss-Legendre rule instead of using the canned triangle and tetrahedron
+     *       rules of Hammer_tri_quadrature.h and Hammer_tet_quadrature.h: the tet
+     *       rules available there stop at degree of precision 7, which is below the
+     *       degree 10 reached by the collapse at ``p = 8``. The collapsed rule has no
+     *       such ceiling, because get_Gauss_Legendre_quadrature() computes nodes at
+     *       any order.
      */
     static int quadrature_order(const unsigned int p) {
         return static_cast<int>((p + 3) / 2) + 2;
@@ -299,7 +252,10 @@ namespace geolio::test
     /**
      * @brief Integrates a function over a triangle.
      * @details Uses the collapse ``x = a + s (b - a) + t (c - a)`` with
-     *          ``s = u``, ``t = v (1 - u)`` and Jacobian ``(1 - u)``.
+     *          ``s = u``, ``t = v (1 - u)`` and Jacobian ``(1 - u)``, combined with
+     *          a one-dimensional Gauss-Legendre rule from
+     *          geolio::get_Gauss_Legendre_quadrature() applied along each collapsed
+     *          variable.
      * @param[in] a First triangle vertex.
      * @param[in] b Second triangle vertex.
      * @param[in] c Third triangle vertex.
@@ -314,19 +270,19 @@ namespace geolio::test
         const std::function<double(const GEO::vec3&)>& integrand,
         const int order
         ) {
-        std::vector<double> nodes, weights;
-        gauss_legendre(order, nodes, weights);
+        std::vector<std::pair<double, double>> rule;
+        get_Gauss_Legendre_quadrature(GEO::index_t(order), rule);
 
         const double area_scale = GEO::length(GEO::cross(b - a, c - a));
         double total = 0.0;
         for (int i = 0; i < order; ++i) {
             for (int j = 0; j < order; ++j) {
-                const double u = nodes[i];
-                const double v = nodes[j];
+                const double u = rule[i].first;
+                const double v = rule[j].first;
                 const double s = u;
                 const double t = v * (1.0 - u);
                 const GEO::vec3 x = a + s * (b - a) + t * (c - a);
-                total += weights[i] * weights[j] * (1.0 - u) * integrand(x);
+                total += rule[i].second * rule[j].second * (1.0 - u) * integrand(x);
             }
         }
         return total * area_scale;
@@ -353,8 +309,8 @@ namespace geolio::test
         const std::function<double(const GEO::vec3&)>& integrand,
         const int order
         ) {
-        std::vector<double> nodes, weights;
-        gauss_legendre(order, nodes, weights);
+        std::vector<std::pair<double, double>> rule;
+        get_Gauss_Legendre_quadrature(GEO::index_t(order), rule);
 
         const GEO::vec3 U1 = p1 - p0;
         const GEO::vec3 U2 = p2 - p0;
@@ -365,14 +321,14 @@ namespace geolio::test
         for (int i = 0; i < order; ++i) {
             for (int j = 0; j < order; ++j) {
                 for (int k = 0; k < order; ++k) {
-                    const double a = nodes[i];
-                    const double b = nodes[j];
-                    const double c = nodes[k];
+                    const double a = rule[i].first;
+                    const double b = rule[j].first;
+                    const double c = rule[k].first;
                     const double s = a;
                     const double t = b * (1.0 - a);
                     const double u = c * (1.0 - a) * (1.0 - b);
                     const GEO::vec3 x = p0 + s * U1 + t * U2 + u * U3;
-                    total += weights[i] * weights[j] * weights[k] *
+                    total += rule[i].second * rule[j].second * rule[k].second *
                         (1.0 - a) * (1.0 - a) * (1.0 - b) * integrand(x);
                 }
             }
