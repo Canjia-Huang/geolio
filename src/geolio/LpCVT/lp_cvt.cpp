@@ -14,21 +14,6 @@
 
 namespace geolio
 {
-    namespace
-    {
-        /**
-         * @brief Tests whether a norm exponent is supported.
-         * @details The reference implementation supports the even exponents from 2
-         *          to 16; its dispatch switch has no case for anything else, which
-         *          silently yields a null objective.
-         * @param[in] p The norm exponent to test.
-         * @return true if @p p is even and in ``[2, 16]``.
-         */
-        bool is_supported_norm_exponent(const GEO::index_t p) {
-            return p >= 2 && p <= 16 && (p / 2) * 2 == p;
-        }
-    }
-
     LpCentroidalVoronoiTesselation::LpCentroidalVoronoiTesselation(
         GEO::Mesh* mesh,
         const GEO::index_t p,

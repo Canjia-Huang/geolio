@@ -5,6 +5,7 @@
 #include "lp_integration_simplex.h"
 
 #include <geolio/common/log.h>
+#include "lp_cvt.h"
 
 namespace geolio
 {
@@ -15,15 +16,7 @@ namespace geolio
         const GEO::index_t nb_matrices,
         const double* matrices
         ) {
-        // The reference implementation asserts p >= 2 && p <= 16 and p even, but
-        // its command line driver accepted any even exponent and silently produced
-        // a null objective (f == 0 and g == 0) for p == 0, because the dispatch
-        // switch then matched no case. The exponent is validated here instead.
-        if (p < 2 || p > 16 || (p / 2) * 2 != p) {
-            LOG::ERROR("Unsupported Lp norm exponent p = {} (expected an even integer in "
-                       "[2, 16])", p);
-            return GEO::IntegrationSimplex_var();
-        }
+        assert(LpCentroidalVoronoiTesselation::is_supported_norm_exponent(p));
 
         // A matrix is a full 3x3, stored row-major, so 9 doubles per element.
         const GEO::index_t nb_comp_per_matrix = (nb_matrices != 0) ? 9 : 0;
@@ -34,79 +27,64 @@ namespace geolio
         if (volumetric) {
             switch (p) {
             case 2:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<2, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<2, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             case 4:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<4, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<4, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             case 6:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<6, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<6, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             case 8:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<8, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<8, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             case 10:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<10, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<10, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             case 12:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<12, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<12, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             case 14:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<14, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<14, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             case 16:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<16, LpTetVolume>(
-                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<16, LpTetVolume>(
+                        mesh, true, nb_matrices, nb_comp_per_matrix, matrices)};
             default:
                 break;
             }
-        } else {
+        }
+        else {
             switch (p) {
             case 2:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<2, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<2, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             case 4:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<4, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<4, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             case 6:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<6, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<6, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             case 8:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<8, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<8, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             case 10:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<10, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<10, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             case 12:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<12, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<12, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             case 14:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<14, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<14, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             case 16:
-                return GEO::IntegrationSimplex_var(
-                    new LpIntegrationSimplex<16, LpTriArea>(
-                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices));
+                return {new LpIntegrationSimplex<16, LpTriArea>(
+                        mesh, false, nb_matrices, nb_comp_per_matrix, matrices)};
             default:
                 break;
             }
         }
 
-        return GEO::IntegrationSimplex_var();
+        return {};
     }
 }
