@@ -3,3 +3,4 @@ if(GEOLIO_ENABLE_MIQ)
 endif()
 
 add_subdirectory(geobox)
+add_subdirectory(lpcvt)
