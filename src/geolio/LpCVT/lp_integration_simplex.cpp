@@ -4,7 +4,7 @@
 //
 #include "lp_integration_simplex.h"
 
-#include <geogram/basic/logger.h>
+#include <geolio/common/log.h>
 
 namespace geolio
 {
@@ -20,8 +20,8 @@ namespace geolio
         // a null objective (f == 0 and g == 0) for p == 0, because the dispatch
         // switch then matched no case. The exponent is validated here instead.
         if (p < 2 || p > 16 || (p / 2) * 2 != p) {
-            GEO::Logger::err("LpCVT") << "Unsupported Lp norm exponent p = " << p
-                << " (expected an even integer in [2, 16])" << std::endl;
+            LOG::ERROR("Unsupported Lp norm exponent p = {} (expected an even integer in "
+                       "[2, 16])", p);
             return GEO::IntegrationSimplex_var();
         }
 

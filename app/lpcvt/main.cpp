@@ -11,18 +11,20 @@
  */
 #include <geolio/LpCVT/lp_cvt.h>
 #include <geolio/LpCVT/lp_measure.h>
+#include <geolio/common/log.h>
 
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/command_line_args.h>
 #include <geogram/basic/common.h>
 #include <geogram/basic/file_system.h>
-#include <geogram/basic/logger.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_repair.h>
 
 #include <fstream>
 #include <string>
 #include <vector>
+
+using namespace geolio;
 
 namespace
 {
@@ -38,7 +40,7 @@ namespace
     bool load_points(const std::string& filename, std::vector<double>& points) {
         std::ifstream in(filename);
         if (!in) {
-            GEO::Logger::err("LpCVT") << "Could not open " << filename << std::endl;
+            LOG::ERROR("Could not open {}", filename);
             return false;
         }
 
@@ -58,8 +60,7 @@ namespace
             points.push_back(z);
         }
 
-        GEO::Logger::out("LpCVT") << "Loaded " << points.size() / 3
-            << " points from " << filename << std::endl;
+        LOG::INFO("Loaded {} points from {}", points.size() / 3, filename);
         return !points.empty();
     }
 
@@ -72,15 +73,14 @@ namespace
     bool save_points(const std::string& filename, const std::vector<double>& points) {
         std::ofstream out(filename);
         if (!out) {
-            GEO::Logger::err("LpCVT") << "Could not write " << filename << std::endl;
+            LOG::ERROR("Could not write {}", filename);
             return false;
         }
         out.precision(17);
         for (std::size_t i = 0; i + 2 < points.size(); i += 3) {
             out << "v " << points[i] << ' ' << points[i + 1] << ' ' << points[i + 2] << '\n';
         }
-        GEO::Logger::out("LpCVT") << "Wrote " << points.size() / 3
-            << " points to " << filename << std::endl;
+        LOG::INFO("Wrote {} points to {}", points.size() / 3, filename);
         return true;
     }
 
@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (filenames.empty()) {
-        GEO::Logger::err("LpCVT") << "Usage: lpcvt [options] meshfile [ptsfile]" << std::endl;
+        LOG::ERROR("Usage: lpcvt [options] meshfile [ptsfile]");
         return 1;
     }
 
@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
     const unsigned int nb_samples = GEO::CmdLine::get_arg_uint("samples");
 
     if (p < 2 || p > 16 || (p / 2) * 2 != p) {
-        GEO::Logger::err("LpCVT") << "p must be an even integer in [2, 16]" << std::endl;
+        LOG::ERROR("p must be an even integer in [2, 16]");
         return 1;
     }
 
@@ -191,8 +191,8 @@ int main(int argc, char** argv) {
     mesh.show_stats("LpCVT input");
 
     if (volumetric && mesh.cells.nb() == 0) {
-        GEO::Logger::err("LpCVT") << "Volumetric mode requires a tetrahedralized mesh; "
-            "this build does not tetrahedralize surfaces on the fly" << std::endl;
+        LOG::ERROR("Volumetric mode requires a tetrahedralized mesh; this build does not "
+                   "tetrahedralize surfaces on the fly");
         return 1;
     }
 
@@ -209,7 +209,7 @@ int main(int argc, char** argv) {
             }
             cvt.set_points(GEO::index_t(points.size() / 3), points.data());
         } else if (!cvt.compute_initial_sampling(nb_samples, true)) {
-            GEO::Logger::err("LpCVT") << "Initial sampling failed" << std::endl;
+            LOG::ERROR("Initial sampling failed");
             return 1;
         }
 
@@ -232,9 +232,8 @@ int main(int argc, char** argv) {
                                         ? geolio::lp_volume_energy_normalization(p)
                                         : geolio::lp_surface_energy_normalization(p);
 
-        GEO::Logger::out("LpCVT") << "Newton iterations: " << nb_evals
-            << " objective evaluations, energy " << (f_first / normalization)
-            << " -> " << (f_last / normalization) << std::endl;
+        LOG::INFO("Newton iterations: {} objective evaluations, energy {} -> {}",
+                  nb_evals, f_first / normalization, f_last / normalization);
 
         // Note: the points are read out here, while the LpCVT is still alive, because
         // R3_embedding() is only valid for the current instance.

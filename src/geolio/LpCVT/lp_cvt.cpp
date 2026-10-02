@@ -7,7 +7,8 @@
 #include "lp_integration_simplex.h"
 #include "lp_measure.h"
 
-#include <geogram/basic/logger.h>
+#include <geolio/common/log.h>
+
 #include <geogram/bibliography/bibliography.h>
 #include <geogram/numerics/optimizer.h>
 
@@ -40,8 +41,7 @@ namespace geolio
         geo_cite("DBLP:journals/tog/LevyL10");
 
         if (!is_supported_norm_exponent(p_)) {
-            GEO::Logger::err("LpCVT") << "Unsupported Lp norm exponent p = " << p_
-                << " (expected an even integer in [2, 16])" << std::endl;
+            LOG::ERROR("Unsupported Lp norm exponent p = {} (expected an even integer in [2, 16])", p_);
         }
 
         // Meshing a volume needs the background mesh to be filled with tetrahedra,
@@ -50,16 +50,15 @@ namespace geolio
         // for us (only the RDT it produces on output is repaired).
         if (volumetric_) {
             if (mesh->cells.nb() == 0) {
-                GEO::Logger::err("LpCVT") << "Volume meshing requires a tetrahedralized "
-                    "background mesh; fill " << mesh->cells.nb() << " cells first, for "
-                    "instance with GEO::mesh_tetrahedralize()" << std::endl;
+                LOG::ERROR("Volume meshing requires a tetrahedralized background mesh, "
+                           "but mesh.cells is empty; call GEO::mesh_tetrahedralize() "
+                           "before constructing the LpCVT");
             }
         } else {
             if (!mesh->facets.are_simplices()) {
-                GEO::Logger::err("LpCVT") << "Surface meshing requires a triangulated "
-                    "background mesh; call GEO::mesh_repair() with MESH_REPAIR_DEFAULT "
-                    "or mesh.facets.triangulate() before constructing the LpCVT"
-                    << std::endl;
+                LOG::ERROR("Surface meshing requires a triangulated background mesh; call "
+                           "GEO::mesh_repair() with MESH_REPAIR_DEFAULT or "
+                           "mesh.facets.triangulate() before constructing the LpCVT");
             }
         }
 
@@ -71,9 +70,8 @@ namespace geolio
 
     void LpCVT::set_p(const unsigned int p) {
         if (!is_supported_norm_exponent(p)) {
-            GEO::Logger::err("LpCVT") << "Unsupported Lp norm exponent p = " << p
-                << " (expected an even integer in [2, 16]); keeping p = " << p_
-                << std::endl;
+            LOG::ERROR("Unsupported Lp norm exponent p = {} (expected an even integer in "
+                       "[2, 16]); keeping p = {}", p, p_);
             return;
         }
         p_ = p;
@@ -89,8 +87,8 @@ namespace geolio
             return;
         }
         if (frames.size() != static_cast<std::size_t>(nb_frames) * 9) {
-            GEO::Logger::err("LpCVT") << "Expected 9 doubles per anisotropy frame, got "
-                << frames.size() << " for " << nb_frames << " frames" << std::endl;
+            LOG::ERROR("Expected 9 doubles per anisotropy frame, got {} for {} frames",
+                       frames.size(), nb_frames);
             return;
         }
 
@@ -134,9 +132,9 @@ namespace geolio
         {
             const GEO::Optimizer_var probe = GEO::Optimizer::create("HLBFGS");
             if (probe.is_null()) {
-                GEO::Logger::err("LpCVT") << "This Geogram build has no HLBFGS "
-                    "optimizer, so the Lp objective cannot be minimized. Rebuild "
-                    "Geogram with GEOGRAM_WITH_HLBFGS=ON" << std::endl;
+                LOG::ERROR("This Geogram build has no HLBFGS optimizer, so the Lp objective "
+                           "cannot be minimized. Rebuild Geogram with "
+                           "GEOGRAM_WITH_HLBFGS=ON");
                 return;
             }
         }
@@ -149,11 +147,11 @@ namespace geolio
 
     void LpCVT::Lloyd_iterations(const GEO::index_t nb_iter) {
         if (p_ != 2) {
-            GEO::Logger::warn("LpCVT") << "Lloyd_iterations() replaces each point with "
-                "the centroid of its restricted Voronoi cell, which is the stationary "
-                "condition of the L2 energy only; it therefore ignores the Lp objective "
-                "(p = " << p_ << "). Use Newton_iterations() for LpCVT, and keep Lloyd "
-                "iterations only as a cheap L2 pre-relaxation" << std::endl;
+            LOG::WARN("Lloyd_iterations() replaces each point with the centroid of its "
+                      "restricted Voronoi cell, which is the stationary condition of the "
+                      "L2 energy only; it therefore ignores the Lp objective (p = {}). Use "
+                      "Newton_iterations() for LpCVT, and keep Lloyd iterations only as a "
+                      "cheap L2 pre-relaxation", p_);
         }
         GEO::CentroidalVoronoiTesselation::Lloyd_iterations(nb_iter);
     }
@@ -183,8 +181,8 @@ namespace geolio
             );
 
         if (integrand_.is_null()) {
-            GEO::Logger::err("LpCVT") << "Could not build the Lp integrand (p = " << p_
-                << ", volumetric = " << volumetric_ << ")" << std::endl;
+            LOG::ERROR("Could not build the Lp integrand (p = {}, volumetric = {})",
+                       p_, volumetric_);
             return;
         }
 
