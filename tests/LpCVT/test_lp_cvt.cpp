@@ -102,7 +102,7 @@ namespace geolio::test
             for (int f = 0; f < nb_faces; ++f) {
                 for (int t = 0; t < 2; ++t) {
                     for (GEO::index_t lv = 0; lv < 3; ++lv) {
-                        M.facets.set_vertex(GEO::index_t(2 * f + t), lv, tris[f][t][lv]);
+                        M.facets.set_vertex(static_cast<GEO::index_t>(2 * f + t), lv, tris[f][t][lv]);
                     }
                 }
             }
@@ -122,9 +122,8 @@ namespace geolio::test
 
             cube_.cells.create_tets(6);
             for (GEO::index_t t = 0; t < 6; ++t) {
-                for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                for (GEO::index_t lv = 0; lv < 4; ++lv)
                     cube_.cells.set_vertex(t, lv, tets[t][lv]);
-                }
             }
             cube_.cells.connect();
         }
@@ -159,7 +158,7 @@ namespace geolio::test
             TestableLpCVT cvt(&mesh, p, volumetric);
             cvt.set_points(pts.size() / 3, pts.data());
             g.assign(pts.size(), 0.0);
-            cvt.funcgrad(GEO::index_t(pts.size()), const_cast<double*>(pts.data()), f, g.data());
+            cvt.funcgrad(static_cast<GEO::index_t>(pts.size()), const_cast<double*>(pts.data()), f, g.data());
         }
 
         /**
@@ -184,16 +183,14 @@ namespace geolio::test
             for (GEO::index_t i = 0; i < nb_points; ++i) {
                 const int face = face_dist(gen);
                 double p[3];
-                for (int c = 0; c < 3; ++c) {
-                    p[c] = coord(gen);
-                }
+                for (double& c : p)
+                    c = coord(gen);
                 // Project onto the selected face.
-                for (int c = 0; c < 3; ++c) {
-                    if (face_normals[face][c] > 0.0) {
+                for (GEO::index_t c = 0; c < 3; ++c) {
+                    if (face_normals[face][c] > 0.0)
                         p[c] = 1.0;
-                    } else if (face_normals[face][c] < 0.0) {
+                    else if (face_normals[face][c] < 0.0)
                         p[c] = 0.0;
-                    }
                 }
                 pts.push_back(p[0]);
                 pts.push_back(p[1]);
@@ -238,7 +235,7 @@ namespace geolio::test
      * @param[out] nodes The nodes, in [0, 1].
      * @param[out] weights The matching weights.
      */
-    void gauss_legendre(
+    static void gauss_legendre(
         const int order,
         std::vector<double>& nodes,
         std::vector<double>& weights
@@ -263,12 +260,12 @@ namespace geolio::test
 
         for (int i = 0; i < order; ++i) {
             // Initial guess: the Chebyshev-like distribution of the roots.
-            double x = std::cos(pi * (double(i) + 0.75) / (double(order) + 0.5));
+            double x = std::cos(pi * (static_cast<double>(i) + 0.75) / (static_cast<double>(order) + 0.5));
             for (int iter = 0; iter < 100; ++iter) {
                 double pn = 1.0, pn_1 = 1.0;
                 legendre(order, x, pn, pn_1);
                 // P'_n(x) = n (x P_n(x) - P_{n-1}(x)) / (x^2 - 1)
-                const double dp = double(order) * (x * pn - pn_1) / (x * x - 1.0);
+                const double dp = static_cast<double>(order) * (x * pn - pn_1) / (x * x - 1.0);
                 const double dx = pn / dp;
                 x -= dx;
                 if (std::fabs(dx) < 1e-15) {
@@ -278,7 +275,7 @@ namespace geolio::test
 
             double pn = 1.0, pn_1 = 1.0;
             legendre(order, x, pn, pn_1);
-            const double dp = double(order) * (x * pn - pn_1) / (x * x - 1.0);
+            const double dp = static_cast<double>(order) * (x * pn - pn_1) / (x * x - 1.0);
 
             // Mapped to [0, 1]: node = (x + 1) / 2 and weight = w_{-1,1} / 2,
             // with the classical w = 2 / ((1 - x^2) P'_n(x)^2).
@@ -295,8 +292,8 @@ namespace geolio::test
      * @param[in] p Degree of the integrand.
      * @return A number of nodes sufficient for exactness.
      */
-    int quadrature_order(const unsigned int p) {
-        return int((p + 3) / 2) + 2;
+    static int quadrature_order(const unsigned int p) {
+        return static_cast<int>((p + 3) / 2) + 2;
     }
 
     /**
@@ -310,7 +307,7 @@ namespace geolio::test
      * @param[in] order Number of Gauss-Legendre nodes per variable.
      * @return The integral of @p integrand over the triangle, in physical units.
      */
-    double integrate_triangle(
+    static double integrate_triangle(
         const GEO::vec3& a,
         const GEO::vec3& b,
         const GEO::vec3& c,
@@ -348,7 +345,7 @@ namespace geolio::test
      * @param[in] order Number of Gauss-Legendre nodes per variable.
      * @return The integral of @p integrand over the tetrahedron, in physical units.
      */
-    double integrate_tetrahedron(
+    static double integrate_tetrahedron(
         const GEO::vec3& p0,
         const GEO::vec3& p1,
         const GEO::vec3& p2,
@@ -390,7 +387,7 @@ namespace geolio::test
      */
     GEO::vec3 random_vec3(std::mt19937& gen) {
         std::uniform_real_distribution<double> d(-0.5, 0.5);
-        return GEO::vec3(d(gen), d(gen), d(gen));
+        return {d(gen), d(gen), d(gen)};
     }
 
     /**
@@ -448,13 +445,13 @@ namespace geolio::test
         }
 
         double eval(
-            GEO::index_t center_vertex_index,
+            const GEO::index_t center_vertex_index,
             const GEOGen::Vertex& v0,
             const GEOGen::Vertex& v1,
             const GEOGen::Vertex& v2,
-            GEO::index_t t,
-            GEO::index_t t_adj = GEO::NO_INDEX,
-            GEO::index_t v_adj = GEO::NO_INDEX
+            const GEO::index_t t,
+            const GEO::index_t t_adj = GEO::NO_INDEX,
+            const GEO::index_t v_adj = GEO::NO_INDEX
             ) override {
             GEO::geo_argused(center_vertex_index);
             GEO::geo_argused(t);
@@ -471,30 +468,27 @@ namespace geolio::test
          * @brief Classifies one cell vertex and updates the counters.
          * @param[in] v The vertex to classify.
          */
-        void classify(const GEOGen::Vertex& v) {
+        void classify(const GEOGen::Vertex& v) const {
             const GEOGen::SymbolicVertex& sym = v.sym();
             const GEO::index_t nb_b = sym.nb_bisectors();
             const GEO::index_t nb_f = sym.nb_boundary_facets();
 
             GEO::index_t nb_virtual = 0;
             for (GEO::index_t k = 0; k < nb_f; ++k) {
-                if (sym.boundary_facet(k) >= mesh_.facets.nb()) {
+                if (sym.boundary_facet(k) >= mesh_.facets.nb())
                     ++nb_virtual;
-                }
             }
 
             ++counters_.nb_vertices;
             ++counters_.by_configuration[
-                std::make_tuple(int(nb_b), int(nb_f), int(nb_virtual))];
+                std::make_tuple(static_cast<int>(nb_b), static_cast<int>(nb_f), static_cast<int>(nb_virtual))];
             counters_.nb_virtual += nb_virtual;
 
-            if (nb_f != 0 && sym.boundary_facet(nb_f - 1) >= mesh_.facets.nb()) {
+            if (nb_f != 0 && sym.boundary_facet(nb_f - 1) >= mesh_.facets.nb())
                 ++counters_.nb_last_facet_virtual;
-            }
 
-            if (nb_b + nb_f != 3) {
+            if (nb_b + nb_f != 3)
                 ++counters_.nb_not_three_planes;
-            }
 
             // A configuration (C) vertex (two bisectors, one boundary facet) is only
             // resolvable if that single facet is a real facet, since a virtual code
@@ -502,12 +496,10 @@ namespace geolio::test
             // relies on exactly that. A configuration (B) vertex (one bisector, two
             // boundary facets) stays resolvable even when one of the two is virtual,
             // because the edge is recovered from the other (real) facet.
-            if (nb_b == 2 && nb_f == 1 && nb_virtual == 1) {
+            if (nb_b == 2 && nb_f == 1 && nb_virtual == 1)
                 ++counters_.nb_unresolved;
-            }
-            if (nb_b == 1 && nb_f == 2 && nb_virtual == 2) {
+            if (nb_b == 1 && nb_f == 2 && nb_virtual == 2)
                 ++counters_.nb_unresolved;
-            }
         }
 
         ConfigCounters& counters_;
@@ -519,7 +511,7 @@ namespace geolio::test
      * @param[in] pts The point coordinates, three doubles per point.
      * @return The counters collected over every integration simplex.
      */
-    ConfigCounters probe_configurations(GEO::Mesh& mesh, const std::vector<double>& pts) {
+    static ConfigCounters probe_configurations(GEO::Mesh& mesh, const std::vector<double>& pts) {
         ConfigCounters counters;
         GEO::CentroidalVoronoiTesselation cvt(&mesh, 3, "BDEL");
         cvt.set_points(pts.size() / 3, pts.data());
@@ -1291,7 +1283,7 @@ namespace geolio::test
         std::uniform_int_distribution<GEO::index_t> facet_dist(0, mesh.facets.nb() - 1);
         std::uniform_real_distribution<double> bary(0.05, 0.55);
 
-        const GEO::index_t nb_points = 12;
+        constexpr GEO::index_t nb_points = 12;
         std::vector<double> pts(nb_points * 3);
         for (GEO::index_t i = 0; i < nb_points; ++i) {
             const GEO::index_t f = facet_dist(gen);
