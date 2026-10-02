@@ -284,14 +284,25 @@ namespace geolio
          *          boundary facet when the surface mesh is open. This is the same
          *          information the reference implementation gathered through
          *          ``Mesh::find_edge_extremities()``.
+         *
+         *          Open surface meshes are fully supported. When a cell vertex lies
+         *          on an edge on the border of the mesh, that edge is represented by
+         *          a "virtual" boundary facet, i.e. a synthetic index
+         *          ``facets.nb() + corner`` rather than a facet. Such an index is
+         *          numerically larger than every real facet index, so the sorted
+         *          entry list puts the real facets first and
+         *          ``boundary_facet(nb_boundary_facets() - 1)`` always names a real
+         *          facet. Since a vertex has at most two boundary facets, at most one
+         *          of them can be virtual, and the other one is therefore usable as
+         *          the facet whose normal the orthogonal-plane substitution needs.
          * @param[in] sym Symbolic representation of the Voronoi vertex; it must have
          *                exactly two boundary facets.
          * @param[out] e0 First extremity, as a mesh vertex index.
          * @param[out] e1 Second extremity, as a mesh vertex index.
-         * @return true on success, false if the edge could not be determined (two
-         *         virtual facets, i.e. an open surface mesh whose border vertex is
-         *         also a bisector intersection), in which case the caller skips the
-         *         gradient contribution of that vertex.
+         * @return true on success, false if the edge could not be determined, which
+         *         only happens for a degenerate mesh whose two boundary facets do not
+         *         share exactly two vertices; the caller then skips the gradient
+         *         contribution of that vertex.
          */
         bool boundary_edge_extremities(
             const GEOGen::SymbolicVertex& sym,
@@ -425,12 +436,18 @@ namespace geolio
             break;
 
             case 2: {
+                // Configuration (C): two bisectors and one boundary facet. In surface
+                // mode that single facet is always a real facet: every cell vertex is
+                // built from a polygon initialized from one background facet and is
+                // never merged across facets, so it always carries that facet's real
+                // index in its symbolic representation. In volume mode the entry is a
+                // tetrahedron half-facet id instead, in its own index space.
+                if (!volumetric_) {
+                    geo_debug_assert(sym.boundary_facet(0) < mesh_.facets.nb());
+                }
+
                 GEO::vec3 N;
                 if (!symbolic_facet_normal(sym.boundary_facet(0), N)) {
-                    // Open surface mesh: the single boundary facet is the encoding of
-                    // a border edge and has no supporting plane. See
-                    // LpIntegrationSimplex::boundary_edge_extremities() for the same
-                    // limitation.
                     return;
                 }
                 GEO::vec3 p[2];
@@ -455,12 +472,23 @@ namespace geolio
                 // Intersection between a bisector and an edge of the input mesh.
                 // To resist coplanar facets, the second facet is replaced with the
                 // plane orthogonal to the first one that passes through the common
-                // edge. The two facets are then necessarily coplanar-degenerate, so
-                // the 3x3 system resolved by compute_W() would be singular.
+                // edge, because two coplanar facets would make the 3x3 system
+                // resolved by compute_W() singular.
                 // This is not an approximation: the two facet planes and the
-                // orthogonal plane both contain the shared edge, so the three
-                // planes intersect along the very same line and define the same
-                // locus for C as a function of the Delaunay points.
+                // orthogonal plane all contain the shared edge, so they intersect
+                // along the very same line and define the same locus for C as a
+                // function of the Delaunay points.
+                //
+                // In surface mode boundary_facet(1) is the highest boundary facet
+                // index and is therefore always a real facet: a "virtual" boundary
+                // facet, i.e. the encoding of a border edge of an open surface mesh,
+                // uses a synthetic index larger than every real one and would sort
+                // first. In volume mode the entries are tetrahedron half-facet ids,
+                // in their own index space.
+                if (!volumetric_) {
+                    geo_debug_assert(sym.boundary_facet(1) < mesh_.facets.nb());
+                }
+
                 GEO::vec3 N0;
                 if (volumetric_) {
                     if (!symbolic_facet_normal(sym.boundary_facet(1), N0)) {

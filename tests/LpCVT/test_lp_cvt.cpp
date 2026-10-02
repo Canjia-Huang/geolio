@@ -6,6 +6,8 @@
 
 #include <geogram/basic/process.h>
 #include <geogram/mesh/mesh.h>
+#include <geogram/mesh/mesh_io.h>
+#include <geogram/mesh/mesh_repair.h>
 #include <geogram/voronoi/CVT.h>
 
 #include <geolio/LpCVT/lp_cvt.h>
@@ -15,7 +17,9 @@
 
 #include <cmath>
 #include <functional>
+#include <map>
 #include <random>
+#include <tuple>
 #include <vector>
 
 namespace geolio::test
@@ -53,6 +57,7 @@ namespace geolio::test
 
             create_cube();
             create_cube_tets();
+            create_open_cube();
         }
 
         void TearDown() override {
@@ -62,32 +67,46 @@ namespace geolio::test
         /**
          * @brief Builds the unit cube as twelve consistently oriented triangles.
          */
-        void create_cube() {            cube_.vertices.create_vertices(8);
-            cube_.vertices.point(0) = GEO::vec3(0, 0, 0);
-            cube_.vertices.point(1) = GEO::vec3(1, 0, 0);
-            cube_.vertices.point(2) = GEO::vec3(1, 1, 0);
-            cube_.vertices.point(3) = GEO::vec3(0, 1, 0);
-            cube_.vertices.point(4) = GEO::vec3(0, 0, 1);
-            cube_.vertices.point(5) = GEO::vec3(1, 0, 1);
-            cube_.vertices.point(6) = GEO::vec3(1, 1, 1);
-            cube_.vertices.point(7) = GEO::vec3(0, 1, 1);
+        void create_cube() {
+            create_cube_facets(cube_, 6);
+        }
 
-            static const GEO::index_t tris[12][3] = {
-                {0, 2, 1}, {0, 3, 2}, // z = 0
-                {4, 5, 6}, {4, 6, 7}, // z = 1
-                {0, 1, 5}, {0, 5, 4}, // y = 0
-                {3, 7, 6}, {3, 6, 2}, // y = 1
-                {0, 4, 7}, {0, 7, 3}, // x = 0
-                {1, 2, 6}, {1, 6, 5} // x = 1
+        /**
+         * @brief Fills a mesh with the triangulated unit cube, optionally open.
+         * @param[in,out] M The mesh to fill with vertices and triangles.
+         * @param[in] nb_faces Number of cube faces to create, from 1 to 6. Five
+         *                faces leave the cube open along a square border, which is
+         *                how the open-surface-mesh cases are exercised.
+         */
+        static void create_cube_facets(GEO::Mesh& M, const int nb_faces) {
+            M.vertices.create_vertices(8);
+            M.vertices.point(0) = GEO::vec3(0, 0, 0);
+            M.vertices.point(1) = GEO::vec3(1, 0, 0);
+            M.vertices.point(2) = GEO::vec3(1, 1, 0);
+            M.vertices.point(3) = GEO::vec3(0, 1, 0);
+            M.vertices.point(4) = GEO::vec3(0, 0, 1);
+            M.vertices.point(5) = GEO::vec3(1, 0, 1);
+            M.vertices.point(6) = GEO::vec3(1, 1, 1);
+            M.vertices.point(7) = GEO::vec3(0, 1, 1);
+
+            static const GEO::index_t tris[6][2][3] = {
+                {{0, 2, 1}, {0, 3, 2}}, // z = 0
+                {{4, 5, 6}, {4, 6, 7}}, // z = 1
+                {{0, 1, 5}, {0, 5, 4}}, // y = 0
+                {{3, 7, 6}, {3, 6, 2}}, // y = 1
+                {{0, 4, 7}, {0, 7, 3}}, // x = 0
+                {{1, 2, 6}, {1, 6, 5}} // x = 1
             };
 
-            cube_.facets.create_triangles(12);
-            for (GEO::index_t f = 0; f < 12; ++f) {
-                for (GEO::index_t lv = 0; lv < 3; ++lv) {
-                    cube_.facets.set_vertex(f, lv, tris[f][lv]);
+            M.facets.create_triangles(nb_faces * 2);
+            for (int f = 0; f < nb_faces; ++f) {
+                for (int t = 0; t < 2; ++t) {
+                    for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                        M.facets.set_vertex(GEO::index_t(2 * f + t), lv, tris[f][t][lv]);
+                    }
                 }
             }
-            cube_.facets.connect();
+            M.facets.connect();
         }
 
         /**
@@ -108,6 +127,14 @@ namespace geolio::test
                 }
             }
             cube_.cells.connect();
+        }
+
+        /**
+         * @brief Builds the cube with five of its six faces, i.e. an open surface
+         *        mesh whose border is the square left by the missing face.
+         */
+        void create_open_cube() {
+            create_cube_facets(open_cube_, 5);
         }
 
         /**
@@ -181,6 +208,14 @@ namespace geolio::test
          *        meshing modes can be exercised on the same geometry.
          */
         GEO::Mesh cube_;
+
+        /**
+         * @brief The same cube with one face removed, i.e. an open surface mesh.
+         * @details Five faces leave a four-edge square border, which is what makes
+         *          the RVD emit "virtual" boundary facets for the border edges.
+         */
+        GEO::Mesh open_cube_;
+
         GEO::index_t max_threads_backup_ = 1;
     };
 
@@ -356,6 +391,145 @@ namespace geolio::test
     GEO::vec3 random_vec3(std::mt19937& gen) {
         std::uniform_real_distribution<double> d(-0.5, 0.5);
         return GEO::vec3(d(gen), d(gen), d(gen));
+    }
+
+    /**
+     * @brief Counts the symbolic configurations of the RVD cell vertices.
+     * @details A restricted Voronoi cell vertex is the intersection of exactly
+     *          three planes, each of which is either a bisector or a boundary facet
+     *          of the background mesh, so the pair
+     *          ``(nb_bisectors, nb_boundary_facets)`` classifies it into one of the
+     *          four configurations (A) to (D) of LpVoronoiVertex. On an open surface
+     *          mesh some boundary facets are "virtual": they are not facets at all
+     *          but a synthetic code ``facets.nb() + corner`` standing for an edge on
+     *          the border of the mesh. This probe records how often each
+     *          combination occurs and whether the boundary facets involved are real.
+     */
+    struct ConfigCounters {
+        /** @brief Number of cell vertices seen, with multiplicity. */
+        GEO::index_t nb_vertices = 0;
+        /** @brief Number of vertices whose three planes could not be resolved. */
+        GEO::index_t nb_unresolved = 0;
+        /** @brief Number of vertices whose three planes are not three. */
+        GEO::index_t nb_not_three_planes = 0;
+        /** @brief Number of virtual boundary facets seen. */
+        GEO::index_t nb_virtual = 0;
+        /**
+         * @brief Number of vertices whose *last* boundary facet is virtual.
+         * @details This is the exact precondition LpVoronoiVertex relies on: real
+         *          facet indices are smaller than the synthetic codes standing for
+         *          border edges, so entries are sorted with the real ones first, and
+         *          ``boundary_facet(nb_boundary_facets() - 1)`` must therefore always
+         *          name a real facet. It must stay zero on every mesh.
+         */
+        GEO::index_t nb_last_facet_virtual = 0;
+        /** @brief Occurrence count per (bisectors, boundary facets, virtual facets). */
+        std::map<std::tuple<int, int, int>, GEO::index_t> by_configuration;
+    };
+
+    /**
+     * @brief An integration simplex that only inspects the symbolic representation.
+     * @details Returns a constant contribution and accumulates nothing, so the
+     *          objective and gradient it produces are meaningless; only the counters
+     *          matter. It is used to establish, empirically and through public API,
+     *          which configurations the RVD actually generates.
+     */
+    class ConfigurationProbe : public GEO::IntegrationSimplex {
+    public:
+        /**
+         * @brief Constructs the probe.
+         * @param[in] mesh The background mesh, used to tell real facets from the
+         *                 synthetic codes standing for border edges.
+         * @param[in,out] counters The counters to update.
+         */
+        ConfigurationProbe(const GEO::Mesh& mesh, ConfigCounters& counters)
+            : GEO::IntegrationSimplex(mesh, false, 0, 0, nullptr),
+              counters_(counters) {
+        }
+
+        double eval(
+            GEO::index_t center_vertex_index,
+            const GEOGen::Vertex& v0,
+            const GEOGen::Vertex& v1,
+            const GEOGen::Vertex& v2,
+            GEO::index_t t,
+            GEO::index_t t_adj = GEO::NO_INDEX,
+            GEO::index_t v_adj = GEO::NO_INDEX
+            ) override {
+            GEO::geo_argused(center_vertex_index);
+            GEO::geo_argused(t);
+            GEO::geo_argused(t_adj);
+            GEO::geo_argused(v_adj);
+            classify(v0);
+            classify(v1);
+            classify(v2);
+            return 1.0;
+        }
+
+    private:
+        /**
+         * @brief Classifies one cell vertex and updates the counters.
+         * @param[in] v The vertex to classify.
+         */
+        void classify(const GEOGen::Vertex& v) {
+            const GEOGen::SymbolicVertex& sym = v.sym();
+            const GEO::index_t nb_b = sym.nb_bisectors();
+            const GEO::index_t nb_f = sym.nb_boundary_facets();
+
+            GEO::index_t nb_virtual = 0;
+            for (GEO::index_t k = 0; k < nb_f; ++k) {
+                if (sym.boundary_facet(k) >= mesh_.facets.nb()) {
+                    ++nb_virtual;
+                }
+            }
+
+            ++counters_.nb_vertices;
+            ++counters_.by_configuration[
+                std::make_tuple(int(nb_b), int(nb_f), int(nb_virtual))];
+            counters_.nb_virtual += nb_virtual;
+
+            if (nb_f != 0 && sym.boundary_facet(nb_f - 1) >= mesh_.facets.nb()) {
+                ++counters_.nb_last_facet_virtual;
+            }
+
+            if (nb_b + nb_f != 3) {
+                ++counters_.nb_not_three_planes;
+            }
+
+            // A configuration (C) vertex (two bisectors, one boundary facet) is only
+            // resolvable if that single facet is a real facet, since a virtual code
+            // stands for an edge and carries no supporting plane. LpVoronoiVertex
+            // relies on exactly that. A configuration (B) vertex (one bisector, two
+            // boundary facets) stays resolvable even when one of the two is virtual,
+            // because the edge is recovered from the other (real) facet.
+            if (nb_b == 2 && nb_f == 1 && nb_virtual == 1) {
+                ++counters_.nb_unresolved;
+            }
+            if (nb_b == 1 && nb_f == 2 && nb_virtual == 2) {
+                ++counters_.nb_unresolved;
+            }
+        }
+
+        ConfigCounters& counters_;
+    };
+
+    /**
+     * @brief Runs the configuration probe over a mesh and a point set.
+     * @param[in] mesh The background mesh.
+     * @param[in] pts The point coordinates, three doubles per point.
+     * @return The counters collected over every integration simplex.
+     */
+    ConfigCounters probe_configurations(GEO::Mesh& mesh, const std::vector<double>& pts) {
+        ConfigCounters counters;
+        GEO::CentroidalVoronoiTesselation cvt(&mesh, 3, "BDEL");
+        cvt.set_points(pts.size() / 3, pts.data());
+        cvt.delaunay()->set_vertices(pts.size() / 3, pts.data());
+
+        ConfigurationProbe probe(mesh, counters);
+        double f = 0.0;
+        std::vector<double> g(pts.size(), 0.0);
+        cvt.RVD()->compute_integration_simplex_func_grad(f, g.data(), &probe);
+        return counters;
     }
 
     // =====================================================================
@@ -883,6 +1057,219 @@ namespace geolio::test
         for (std::size_t i = 0; i < g_iso.size(); ++i) {
             EXPECT_NEAR(g_frames[i], g_iso[i], 1e-12 * (1.0 + std::fabs(g_iso[i])))
                 << "component " << i;
+        }
+    }
+
+    // =====================================================================
+    // T11: open surface meshes.
+    //
+    // The RVD supports surface meshes with borders: a border edge is encoded as a
+    // "virtual" boundary facet, i.e. a synthetic index facets.nb() + corner that
+    // stands for an edge instead of a facet. These tests establish two things:
+    // which configurations actually occur, and that the gradient stays correct in
+    // their presence.
+    // =====================================================================
+
+    TEST_F(LpCVTTest, closed_mesh_has_no_virtual_boundary_facet) {
+        const std::vector<double> pts = sample_cube_surface(30, 5150);
+        const ConfigCounters counters = probe_configurations(cube_, pts);
+
+        EXPECT_GT(counters.nb_vertices, 0);
+        EXPECT_EQ(counters.nb_virtual, 0)
+            << "a closed mesh has no border edge and therefore no virtual facet";
+        EXPECT_EQ(counters.nb_not_three_planes, 0);
+        EXPECT_EQ(counters.nb_unresolved, 0);
+        EXPECT_EQ(counters.nb_last_facet_virtual, 0);
+    }
+
+    TEST_F(LpCVTTest, open_mesh_uses_virtual_boundary_facets) {
+        const std::vector<double> pts = sample_cube_surface(30, 5151);
+        const ConfigCounters counters = probe_configurations(open_cube_, pts);
+
+        EXPECT_GT(counters.nb_vertices, 0);
+        EXPECT_GT(counters.nb_virtual, 0)
+            << "some Voronoi cells must reach the border of the open mesh";
+        EXPECT_EQ(counters.nb_not_three_planes, 0)
+            << "every cell vertex must be the intersection of exactly three planes";
+        EXPECT_EQ(counters.nb_unresolved, 0)
+            << "no cell vertex may combine an unresolvable set of planes; a "
+               "configuration (C) vertex must always reference a real facet";
+        EXPECT_EQ(counters.nb_last_facet_virtual, 0)
+            << "the highest boundary facet index must always be a real facet, "
+               "because the facet being processed is part of every cell vertex";
+    }
+
+    TEST_F(LpCVTTest, open_mesh_gradient_matches_finite_differences) {
+        for (const unsigned int p : {2u, 4u, 6u}) {
+            const std::vector<double> pts = sample_cube_surface(24, 7170 + p);
+
+            double f = 0.0;
+            std::vector<double> g;
+            evaluate(open_cube_, p, false, pts, f, g);
+
+            EXPECT_TRUE(std::isfinite(f)) << "p = " << p;
+            for (const double gi : g) {
+                ASSERT_TRUE(std::isfinite(gi)) << "p = " << p;
+            }
+
+            std::mt19937 gen(8180 + p);
+            constexpr double eps = 1e-6;
+            std::uniform_int_distribution<std::size_t> index_dist(0, pts.size() - 1);
+
+            for (int trial = 0; trial < 8; ++trial) {
+                std::vector<double> dir(pts.size(), 0.0);
+                for (int k = 0; k < 3; ++k) {
+                    dir[index_dist(gen)] = 1.0;
+                }
+                double norm = 0.0;
+                for (const double d : dir) {
+                    norm += d * d;
+                }
+                norm = std::sqrt(norm);
+                for (double& d : dir) {
+                    d /= norm;
+                }
+
+                std::vector<double> plus(pts.size()), minus(pts.size());
+                for (std::size_t i = 0; i < pts.size(); ++i) {
+                    plus[i] = pts[i] + eps * dir[i];
+                    minus[i] = pts[i] - eps * dir[i];
+                }
+
+                double f_plus = 0.0, f_minus = 0.0;
+                std::vector<double> g_dummy;
+                evaluate(open_cube_, p, false, plus, f_plus, g_dummy);
+                evaluate(open_cube_, p, false, minus, f_minus, g_dummy);
+
+                const double numeric = (f_plus - f_minus) / (2.0 * eps);
+                double exact = 0.0;
+                for (std::size_t i = 0; i < pts.size(); ++i) {
+                    exact += g[i] * dir[i];
+                }
+
+                EXPECT_NEAR(numeric, exact, 1e-4 * std::fabs(exact) + 1e-9)
+                    << "p = " << p << " trial " << trial;
+            }
+        }
+    }
+
+    TEST_F(LpCVTTest, open_mesh_optimization_decreases_the_objective) {
+        const std::vector<double> initial = sample_cube_surface(30, 9290);
+
+        double f_before = 0.0;
+        std::vector<double> g;
+        evaluate(open_cube_, 4, false, initial, f_before, g);
+
+        double f_after = 0.0;
+        std::vector<double> final_pts;
+        {
+            LpCVT cvt(&open_cube_, 4, false);
+            cvt.set_points(initial.size() / 3, initial.data());
+            cvt.Newton_iterations(20, 7);
+
+            final_pts.resize(initial.size());
+            for (GEO::index_t i = 0; i < cvt.nb_points(); ++i) {
+                const double* pi = cvt.embedding(i);
+                for (int c = 0; c < 3; ++c) {
+                    final_pts[3 * i + c] = pi[c];
+                    ASSERT_TRUE(std::isfinite(pi[c]));
+                }
+            }
+        }
+
+        evaluate(open_cube_, 4, false, final_pts, f_after, g);
+        EXPECT_LT(f_after, f_before);
+    }
+
+    // =====================================================================
+    // T12: a real open mesh with a large border.
+    //
+    // The beetle scan has several hundred border edges once repaired, so it
+    // exercises the virtual-boundary-facet path far more than the five-face cube
+    // does. This is the regression guard for that path on real data.
+    // =====================================================================
+
+    TEST_F(LpCVTTest, real_open_mesh_gradient_matches_finite_differences) {
+        GEO::Mesh mesh;
+        if (!GEO::mesh_load(std::string(TEST_DATA_PATH) + "beetle.geogram", mesh)) {
+            GTEST_SKIP() << "beetle.geogram not available";
+        }
+        GEO::mesh_repair(mesh, GEO::MESH_REPAIR_DEFAULT);
+        mesh.facets.connect();
+        ASSERT_TRUE(mesh.facets.are_simplices());
+
+        std::mt19937 gen(31415);
+        std::uniform_int_distribution<GEO::index_t> facet_dist(0, mesh.facets.nb() - 1);
+        std::uniform_real_distribution<double> bary(0.05, 0.55);
+
+        const GEO::index_t nb_points = 12;
+        std::vector<double> pts(nb_points * 3);
+        for (GEO::index_t i = 0; i < nb_points; ++i) {
+            const GEO::index_t f = facet_dist(gen);
+            double a = bary(gen);
+            double b = bary(gen);
+            if (a + b > 0.9) {
+                a = 0.1;
+                b = 0.1;
+            }
+            const GEO::vec3 q = a * mesh.facets.point(f, 0) +
+                b * mesh.facets.point(f, 1) +
+                (1.0 - a - b) * mesh.facets.point(f, 2);
+            for (int c = 0; c < 3; ++c) {
+                pts[3 * i + c] = q[c];
+            }
+        }
+
+        // The border path must actually be exercised by this point set.
+        const ConfigCounters counters = probe_configurations(mesh, pts);
+        EXPECT_GT(counters.nb_virtual, 0);
+        EXPECT_EQ(counters.nb_unresolved, 0);
+        EXPECT_EQ(counters.nb_last_facet_virtual, 0);
+        EXPECT_EQ(counters.nb_not_three_planes, 0);
+
+        double f = 0.0;
+        std::vector<double> g;
+        evaluate(mesh, 4, false, pts, f, g);
+        EXPECT_TRUE(std::isfinite(f));
+        for (const double gi : g) {
+            ASSERT_TRUE(std::isfinite(gi));
+        }
+
+        constexpr double eps = 1e-6;
+        std::uniform_int_distribution<std::size_t> index_dist(0, pts.size() - 1);
+        for (int trial = 0; trial < 3; ++trial) {
+            std::vector<double> dir(pts.size(), 0.0);
+            for (int k = 0; k < 3; ++k) {
+                dir[index_dist(gen)] = 1.0;
+            }
+            double norm = 0.0;
+            for (const double d : dir) {
+                norm += d * d;
+            }
+            norm = std::sqrt(norm);
+            for (double& d : dir) {
+                d /= norm;
+            }
+
+            std::vector<double> plus(pts.size()), minus(pts.size());
+            for (std::size_t i = 0; i < pts.size(); ++i) {
+                plus[i] = pts[i] + eps * dir[i];
+                minus[i] = pts[i] - eps * dir[i];
+            }
+
+            double f_plus = 0.0, f_minus = 0.0;
+            std::vector<double> g_dummy;
+            evaluate(mesh, 4, false, plus, f_plus, g_dummy);
+            evaluate(mesh, 4, false, minus, f_minus, g_dummy);
+
+            const double numeric = (f_plus - f_minus) / (2.0 * eps);
+            double exact = 0.0;
+            for (std::size_t i = 0; i < pts.size(); ++i) {
+                exact += g[i] * dir[i];
+            }
+
+            EXPECT_NEAR(numeric, exact, 1e-3 * std::fabs(exact) + 1e-9)
+                << "trial " << trial;
         }
     }
 }

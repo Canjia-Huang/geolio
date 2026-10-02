@@ -71,12 +71,15 @@ namespace geolio
      *      adjacency has been computed (``mesh.facets.are_simplices()`` and
      *      ``mesh.facets.connect()``), since both are required by
      *      ``RestrictedVoronoiDiagram::compute_initial_sampling_on_surface()`` and
-     *      by the RVD propagation. In volume mode @p mesh must additionally be
-     *      filled with tetrahedra (``mesh.cells``) with computed adjacency, for
-     *      instance through ``GEO::mesh_tetrahedralize()``. ``GEO::mesh_repair()``
-     *      with ``MESH_REPAIR_DEFAULT`` performs the triangulation and the
-     *      connection in one call, but it renumbers the elements, so it must be
-     *      called @b before constructing this object.
+     *      by the RVD propagation. The surface may be @b open: Geogram's restricted
+     *      Voronoi diagram supports borders, which it encodes as "virtual" boundary
+     *      facets standing for the border edges, and the Lp gradient resolves those
+     *      by recovering the border edge from the facet that owns it. In volume mode
+     *      @p mesh must additionally be filled with tetrahedra (``mesh.cells``) with
+     *      computed adjacency, for instance through ``GEO::mesh_tetrahedralize()``.
+     *      ``GEO::mesh_repair()`` with ``MESH_REPAIR_DEFAULT`` performs the
+     *      triangulation and the connection in one call, but it renumbers the
+     *      elements, so it must be called @b before constructing this object.
      */
     class LpCVT : public GEO::CentroidalVoronoiTesselation {
     public:
