@@ -171,6 +171,16 @@ int main(int argc, char** argv) {
     /*== Parse ===================================================================================================== */
     GEO::CmdLine::set_arg("algo:predicates", predicates);
 
+    const auto model_name = get_filename(in_mesh_filepath);
+    if (!out_rdt_filepath.empty()) {
+        if (std::filesystem::is_directory(out_rdt_filepath))
+            out_rdt_filepath = out_rdt_filepath + model_name + ".res_rdt.obj";
+    }
+    if (!out_pts_filepath.empty()) {
+        if (std::filesystem::is_directory(out_pts_filepath))
+            out_pts_filepath = out_pts_filepath + get_filename(in_mesh_filepath) + ".res_sample.pts";
+    }
+
     LOG::DEBUG("in_mesh_filepath: {}", in_mesh_filepath);
     LOG::DEBUG("in_pts_filepath: {}", in_pts_filepath);
     LOG::DEBUG("exponent: {}", exponent);
@@ -268,9 +278,6 @@ int main(int argc, char** argv) {
 
             /* Output */
             if (!out_rdt_filepath.empty()) {
-                if (std::filesystem::is_directory(out_rdt_filepath))
-                    out_rdt_filepath = out_rdt_filepath + get_filename(in_mesh_filepath) + ".res_rdt.obj";
-
                 GEO::Mesh rdt;
 
                 cvt.set_use_RVC_centroids(false);
@@ -289,9 +296,6 @@ int main(int argc, char** argv) {
 
         /* Output */
         if (!out_pts_filepath.empty()) {
-            if (std::filesystem::is_directory(out_pts_filepath))
-                out_pts_filepath = out_pts_filepath + get_filename(in_mesh_filepath) + ".res_sample.pts";
-
             if (!pts.save(out_pts_filepath)) {
                 LOG::ERROR("Could not save the points file: {}", out_pts_filepath);
                 return EXIT_FAILURE;
