@@ -2,85 +2,29 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/10/3.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
+#include <cstdlib>
+#include <exception>
+#include <fstream>
+#include <string>
 #include <CLI/CLI.hpp>
-#include <geolio/LpCVT/lp_cvt.h>
-#include <geolio/LpCVT/lp_measure.h>
-#include <geolio/common/config.h>
-#include <geolio/common/log.h>
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/command_line_args.h>
 #include <geogram/basic/common.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram/mesh/mesh_repair.h>
-#include <cstdlib>
-#include <exception>
-#include <fstream>
-#include <string>
-#include <vector>
+#include <geolio/common/config.h>
+#include <geolio/common/log.h>
+#include <geolio/io/io.h>
+#include <geolio/LpCVT/lp_cvt.h>
+#include <geolio/LpCVT/lp_measure.h>
+#include <geolio/common/parse_filepath.h>
 
 using namespace geolio;
 
+const std::string APP_NAME = "LpCVT";
+
 namespace
 {
-    /** @brief Name of the application, used as the CLI title and in log messages. */
-    const std::string APP_NAME = "LpCVT";
-
-    /**
-     * @brief Loads a point set in the ".pts" format of the reference LpCVT.
-     * @details One point per line, written as ``v x y z``. This is exactly the
-     *          format the reference implementation reads and writes, so point sets
-     *          can be exchanged between the two programs.
-     * @param[in] filename Path to the point file.
-     * @param[out] points The loaded coordinates, three doubles per point.
-     * @return true on success.
-     */
-    bool load_points(const std::string& filename, std::vector<double>& points) {
-        std::ifstream in(filename);
-        if (!in) {
-            LOG::ERROR("Could not open {}", filename);
-            return false;
-        }
-
-        points.clear();
-        std::string keyword;
-        while (in >> keyword) {
-            if (keyword != "v") {
-                // Skip the rest of the line of any other directive.
-                std::string rest;
-                std::getline(in, rest);
-                continue;
-            }
-            double x = 0.0, y = 0.0, z = 0.0;
-            in >> x >> y >> z;
-            points.push_back(x);
-            points.push_back(y);
-            points.push_back(z);
-        }
-
-        LOG::INFO("Loaded {} points from {}", points.size() / 3, filename);
-        return !points.empty();
-    }
-
-    /**
-     * @brief Saves a point set in the ".pts" format of the reference LpCVT.
-     * @param[in] filename Path to the point file to write.
-     * @param[in] points The coordinates, three doubles per point.
-     * @return true on success.
-     */
-    bool save_points(const std::string& filename, const std::vector<double>& points) {
-        std::ofstream out(filename);
-        if (!out) {
-            LOG::ERROR("Could not write {}", filename);
-            return false;
-        }
-        out.precision(17);
-        for (std::size_t i = 0; i + 2 < points.size(); i += 3) {
-            out << "v " << points[i] << ' ' << points[i + 1] << ' ' << points[i + 2] << '\n';
-        }
-        LOG::INFO("Wrote {} points to {}", points.size() / 3, filename);
-        return true;
-    }
-
     /**
      * @brief An LpCVT that reports the objective as the optimizer evaluates it.
      * @details The objective evaluation is protected, since client code is meant to
@@ -144,11 +88,12 @@ int main(int argc, char** argv) {
     GEO::initialize(GEO::GEOGRAM_INSTALL_ALL);
     GEO::CmdLine::import_arg_group("standard");
     GEO::CmdLine::import_arg_group("algo");
+    geolio::register_additional_MeshIOHandlers();
 
-    int exponent = 2;
+    GEO::index_t exponent = 2;
     bool volumetric = false;
-    int nb_iterations = 100;
-    int nb_samples = 10000;
+    GEO::index_t nb_iterations = 100;
+    GEO::index_t nb_samples = 10000;
     std::string predicates = "fast";
     std::string in_mesh_filepath;
     std::string in_pts_filepath;
@@ -167,7 +112,7 @@ int main(int argc, char** argv) {
         in_mesh_filepath,
         "Reference mesh; it has to be a triangulated surface, or a tetrahedralized "
         "volume when --volumetric is used."
-        )->check(CLI::ExistingFile)->required();
+        )->required()->check(CLI::ExistingFile)->required();
 
     app.add_option(
         "--i-pts,--in-pts",
@@ -179,33 +124,33 @@ int main(int argc, char** argv) {
     app.add_option(
         "-p,--exponent",
         exponent,
-        "Lp norm exponent: a larger even exponent sharpens the tessellation."
+        "Lp norm exponent: a larger even exponent sharpens the tessellation (default: "+std::to_string(exponent)+")."
         )->check(CLI::IsMember({2, 4, 6, 8, 10, 12, 14, 16}));
 
     app.add_flag(
         "-v,--volumetric",
         volumetric,
-        "Mesh the volume bounded by the surface instead of the surface itself; "
+        "Mesh the volume bounded by the surface instead of the surface itself (default: false); "
         "the mesh then has to be filled with tetrahedra."
         );
 
     app.add_option(
         "-m,--iterations",
         nb_iterations,
-        "Maximum number of Newton iterations."
+        "Maximum number of Newton iterations (default: "+std::to_string(nb_iterations)+")."
         )->check(CLI::Range(0, 1000000));
 
     app.add_option(
         "-s,--samples",
         nb_samples,
-        "Number of points to sample the mesh with when no input point file is given."
+        "Number of points to sample the mesh with when no input point file is given (default: "+std::to_string(nb_samples)+")."
         )->check(CLI::Range(1, 100000000));
 
     app.add_option(
         "--predicates",
         predicates,
         "Geogram's geometric predicate mode for the restricted Voronoi diagram; "
-        "\"exact\" is slower but avoids misclassifications on degenerate configurations."
+        "\"exact\" is slower but avoids misclassifications on degenerate configurations (default: "+predicates+")."
         )->check(CLI::IsMember({"fast", "exact"}));
 
     app.add_option(
@@ -225,8 +170,6 @@ int main(int argc, char** argv) {
 
     /*== Parse ===================================================================================================== */
     GEO::CmdLine::set_arg("algo:predicates", predicates);
-
-    const GEO::index_t p = GEO::index_t(exponent);
 
     LOG::DEBUG("in_mesh_filepath: {}", in_mesh_filepath);
     LOG::DEBUG("in_pts_filepath: {}", in_pts_filepath);
@@ -276,32 +219,39 @@ int main(int argc, char** argv) {
             }
         }
 
+        /* Load sites */
+        GEO::Mesh pts;
+        if (!in_pts_filepath.empty()) {
+            if (!pts.load(in_pts_filepath)) {
+                LOG::ERROR("Could not load points file: {}", in_pts_filepath);
+                return EXIT_FAILURE;
+            }
+
+            if (pts.vertices.dimension() == 2) {
+                LOG::ERROR("LpCVT only support 3D sites!");
+                return EXIT_FAILURE;
+            }
+        }
+
         mesh.show_stats("LpCVT input");
 
         /* Optimize */
-        std::vector<double> final_points;
         {
-            ReportingLpCVT cvt(&mesh, p, volumetric);
+            ReportingLpCVT cvt(&mesh, exponent, volumetric);
 
-            if (!in_pts_filepath.empty()) {
-                std::vector<double> points;
-                if (!load_points(in_pts_filepath, points))
-                    return EXIT_FAILURE;
-
-                cvt.set_points(static_cast<GEO::index_t>(points.size()/3), points.data());
-            }
-            else if (!cvt.compute_initial_sampling(static_cast<GEO::index_t>(nb_samples), true)) {
+            if (pts.vertices.nb() > 0)
+                cvt.set_points(pts.vertices.nb(), pts.vertices.point_ptr(0));
+            else if (!cvt.compute_initial_sampling(nb_samples, true)) {
                 LOG::ERROR("Initial sampling failed.");
                 return EXIT_FAILURE;
             }
 
-            cvt.Newton_iterations(static_cast<GEO::index_t>(nb_iterations), 7);
+            cvt.Newton_iterations(nb_iterations, 7);
 
-            final_points.resize(cvt.nb_points() * 3);
-            for (GEO::index_t i = 0; i < cvt.nb_points(); ++i) {
-                const double* pp = cvt.embedding(i);
-                for (GEO::index_t c = 0; c < 3; ++c)
-                    final_points[3 * i + c] = pp[c];
+            pts.vertices.create_vertices(cvt.nb_points()-pts.vertices.nb());
+            for (const auto& v : pts.vertices) {
+                const double* pp = cvt.embedding(v);
+                pts.vertices.point(v) = GEO::vec3(pp[0], pp[1], pp[2]);
             }
 
             // Report the objective, divided by the constant that the reference
@@ -310,17 +260,19 @@ int main(int argc, char** argv) {
             unsigned int nb_evals = 0;
             cvt.report(f_first, f_last, nb_evals);
             const double normalization = volumetric
-                                             ? lp_volume_energy_normalization(p)
-                                             : lp_surface_energy_normalization(p);
+                                             ? lp_volume_energy_normalization(exponent)
+                                             : lp_surface_energy_normalization(exponent);
 
             LOG::INFO("Newton iterations: {} objective evaluations, energy {} -> {}",
                       nb_evals, f_first / normalization, f_last / normalization);
 
+            /* Output */
             if (!out_rdt_filepath.empty()) {
+                if (std::filesystem::is_directory(out_rdt_filepath))
+                    out_rdt_filepath = out_rdt_filepath + get_filename(in_mesh_filepath) + ".res_rdt.obj";
+
                 GEO::Mesh rdt;
-                // Use the seeds themselves as vertices, i.e. the restricted Delaunay
-                // triangulation of the optimized point set, rather than the centroids of
-                // the restricted Voronoi cells.
+
                 cvt.set_use_RVC_centroids(false);
                 if (volumetric)
                     cvt.compute_volume(&rdt);
@@ -336,11 +288,16 @@ int main(int argc, char** argv) {
         }
 
         /* Output */
-        if (out_pts_filepath.empty())
-            out_pts_filepath = in_mesh_filepath + ".res_sample.pts";
+        if (!out_pts_filepath.empty()) {
+            if (std::filesystem::is_directory(out_pts_filepath))
+                out_pts_filepath = out_pts_filepath + get_filename(in_mesh_filepath) + ".res_sample.pts";
 
-        if (!save_points(out_pts_filepath, final_points)) {
-            return EXIT_FAILURE;
+            if (!pts.save(out_pts_filepath)) {
+                LOG::ERROR("Could not save the points file: {}", out_pts_filepath);
+                return EXIT_FAILURE;
+            }
+
+            LOG::INFO("Saved final sites: {}", out_pts_filepath);
         }
     }
     catch (const std::exception& e) {
