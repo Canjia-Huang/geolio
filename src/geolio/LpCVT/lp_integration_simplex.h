@@ -62,26 +62,33 @@ namespace geolio
          * @param[in] mesh The background mesh: a triangulated surface for surface
          *                 meshing, a tetrahedralized volume for volume meshing.
          * @param[in] volumetric true for volume meshing, false for surface meshing.
-         * @param[in] nb_frames Number of per-element anisotropy frames, or 0 for
-         *                 the isotropic case (identity matrix), which is what the
+         * @param[in] nb_matrices Number of per-element matrices, or 0 for the
+         *                 isotropic case (identity matrix), which is what the
          *                 reference LpCVT implementation always used.
-         * @param[in] nb_comp_per_frame Number of doubles per frame, or 0 when
-         *                 @p nb_frames is 0. A value of 9 denotes a full 3x3
+         * @param[in] nb_comp_per_matrix Number of doubles per matrix, or 0 when
+         *                 @p nb_matrices is 0. A value of 9 denotes a full 3x3
          *                 matrix.
-         * @param[in] frames Pointer to the ``9 * nb_frames`` frame coefficients, or
-         *                 nullptr when @p nb_frames is 0. Not owned: the array must
-         *                 outlive this object. Frames are stored row-major, i.e.
-         *                 ``frames[9 * t + 3 * i + j]`` is coefficient ``(i, j)`` of
-         *                 the frame of element @p t, matching the layout expected by
-         *                 ``GEO::mat3(const double*)``.
+         * @param[in] matrices Pointer to the ``9 * nb_matrices`` matrix
+         *                 coefficients, or nullptr when @p nb_matrices is 0. Not
+         *                 owned: the array must outlive this object. Matrices are
+         *                 stored row-major, i.e. ``matrices[9 * t + 3 * i + j]`` is
+         *                 coefficient ``(i, j)`` of the matrix of element @p t,
+         *                 matching the layout expected by ``GEO::mat3(const
+         *                 double*)``.
+         * @note Geogram's base class names these parameters ``nb_frames``,
+         *       ``nb_comp_per_frame`` and ``frames`` and documents them in terms of
+         *       anisotropy frames. That is narrower than what is actually used here:
+         *       the objective accepts any 3x3 matrix, orthonormal or not.
          */
         LpIntegrationSimplex(
             const GEO::Mesh& mesh,
             const bool volumetric,
-            const GEO::index_t nb_frames,
-            const GEO::index_t nb_comp_per_frame,
-            const double* frames
-            ) : GEO::IntegrationSimplex(mesh, volumetric, nb_frames, nb_comp_per_frame, frames)
+            const GEO::index_t nb_matrices,
+            const GEO::index_t nb_comp_per_matrix,
+            const double* matrices
+            ) : GEO::IntegrationSimplex(
+                    mesh, volumetric, nb_matrices, nb_comp_per_matrix, matrices
+                    )
         {}
 
         /**
@@ -128,7 +135,7 @@ namespace geolio
             const GEO::vec3 p2 = to_vec3(v1.point());
             const GEO::vec3 p3 = to_vec3(v2.point());
 
-            const GEO::mat3 M = element_frame(t);
+            const GEO::mat3 M = element_matrix(t);
 
             // dFdC[j] is the gradient with respect to the j-th integration simplex
             // vertex other than the seed.
@@ -162,22 +169,25 @@ namespace geolio
         }
 
         /**
-         * @brief Returns the anisotropy frame of a background element.
-         * @details When no frame array was supplied, the identity matrix is
-         *          returned, which is the isotropic LpCVT of the paper.
+         * @brief Returns the matrix attached to a background element.
+         * @details When no matrix array was supplied, or when the element is beyond
+         *          the supplied blocks, the identity is returned, which is the
+         *          isotropic LpCVT of the paper.
          * @param[in] t Index of the background element, or ``GEO::NO_INDEX``.
-         * @return The 3x3 anisotropy matrix ``M``; the objective is expressed in
-         *         terms of ``U_k = M (p_k - p0)``.
+         * @return The 3x3 matrix ``M``; the objective is expressed in terms of
+         *         ``U_k = M (p_k - p0)``.
+         * @note ``nb_frames_`` and ``frame(t)`` are Geogram's names for the
+         *       underlying storage; see the constructor's note.
          */
-        GEO::mat3 element_frame(const GEO::index_t t) const {
+        GEO::mat3 element_matrix(const GEO::index_t t) const {
             GEO::mat3 M;
             if (nb_frames_ == 0 || t >= nb_frames_) {
                 return M;
             }
-            const double* f = frame(t);
+            const double* m = frame(t);
             for (GEO::index_t i = 0; i < 3; ++i) {
                 for (GEO::index_t j = 0; j < 3; ++j) {
-                    M(i, j) = f[3 * i + j];
+                    M(i, j) = m[3 * i + j];
                 }
             }
             return M;
@@ -533,10 +543,10 @@ namespace geolio
      *                 returned object.
      * @param[in] p The integer norm exponent. Must be even and in ``[2, 16]``.
      * @param[in] volumetric true for volume meshing, false for surface meshing.
-     * @param[in] nb_frames Number of per-element anisotropy frames, or 0 for the
-     *                 isotropic case.
-     * @param[in] frames Pointer to the ``9 * nb_frames`` frame coefficients, or
-     *                 nullptr when @p nb_frames is 0.
+     * @param[in] nb_matrices Number of per-element matrices, or 0 for the isotropic
+     *                 case.
+     * @param[in] matrices Pointer to the ``9 * nb_matrices`` matrix coefficients, or
+     *                 nullptr when @p nb_matrices is 0. Row-major 3x3 blocks.
      * @return The newly created integrand, or a null pointer if @p p is not a
      *         supported exponent.
      */
@@ -544,8 +554,8 @@ namespace geolio
         const GEO::Mesh& mesh,
         unsigned int p,
         bool volumetric,
-        GEO::index_t nb_frames = 0,
-        const double* frames = nullptr
+        GEO::index_t nb_matrices = 0,
+        const double* matrices = nullptr
         );
 }
 

@@ -58,8 +58,8 @@ namespace geolio
      *          place, vertices/facets/cells alike) the background mesh the first
      *          time it traverses it with several threads. Since @p mesh is shared
      *          with the caller, its element indices may change as a side effect of
-     *          running the optimization. Set anisotropy frames, if any, through
-     *          set_frames(), which pins the traversal ranges and disables that
+     *          running the optimization. Set per-element matrices, if any, through
+     *          set_matrices(), which pins the traversal ranges and disables that
      *          partitioning.
      *
      * @warning Only one ``GEO::CentroidalVoronoiTesselation`` (and therefore one
@@ -130,37 +130,52 @@ namespace geolio
         void set_p(GEO::index_t p);
 
         /**
-         * @brief Installs one anisotropy frame per background element.
-         * @details Frames implement the anisotropic variant of the paper. Element
-         *          @p t uses the matrix ``M`` such that the objective is expressed in
-         *          terms of ``M (p_k - p0)``; the frame of facet @p f (surface mode)
-         *          or tetrahedron @p t (volume mode) is therefore expected to encode
-         *          the inverse of the desired metric in the tangent plane, after the
-         *          usual normalization.
+         * @brief Installs one matrix per background element.
+         * @details Implements the anisotropic variant of the paper by attaching a
+         *          matrix to every element of the background mesh. For an
+         *          integration simplex belonging to element @p t, the objective is
+         *          expressed in terms of ``M (p_k - p0)`` where ``M`` is the matrix
+         *          of element @p t; the gradient is then projected back with ``M^T``,
+         *          which is the chain rule for ``grad(F(MX))``.
          *
-         *          The storage layout is 9 doubles per element, row-major, i.e.
-         *          ``frames[9 * t + 3 * i + j]`` is coefficient ``(i, j)``, which is
-         *          the layout ``GEO::mat3(const double*)`` expects. Note that
-         *          ``GEO::FrameField::frames()`` stores three basis vectors
-         *          consecutively, which is the transposed convention.
+         *          @b Any 3x3 matrix is accepted: ``M`` need not be orthonormal, nor
+         *          even symmetric. This is strictly more general than a rotation
+         *          frame, and covers a metric tensor, a shear, a non-uniform scale,
+         *          or the inverse of an anisotropy field. Note that Geogram's
+         *          underlying storage calls these objects "frames" and documents
+         *          ``nb_comp_per_frame`` as "3 for 3-axis anisotropy, 1 for vector
+         *          anisotropy"; that plumbing is unused by Geogram itself and the
+         *          layout below is the one this class defines.
          *
-         *          @b Side effect: setting frames disables the RVD mesh
+         *          An element @p t uses the nine doubles starting at ``9 * t``, stored
+         *          row-major, i.e. ``matrices[9 * t + 3 * i + j]`` is coefficient
+         *          ``(i, j)``. That is the layout ``GEO::mat3(const double*)``
+         *          expects. Beware that ``GEO::FrameField::frames()`` instead stores
+         *          three basis vectors consecutively, which is the transposed
+         *          convention.
+         *
+         *          If fewer matrices than background elements are supplied, the
+         *          remaining elements keep the identity and the objective stays
+         *          isotropic there.
+         *
+         *          @b Side effect: setting matrices disables the RVD mesh
          *          partitioning, and therefore its multi-threaded traversal, because
          *          partitioning reorders the background mesh in place and would
-         *          otherwise misalign a per-element attribute. This is documented in
-         *          @ref LpCVT's class comment; the restriction lasts for the lifetime
-         *          of this object.
-         * @param[in] frames The frame coefficients, ``9 * nb_frames`` of them.
-         * @param[in] nb_frames Number of background elements, or 0 to return to the
-         *                 isotropic case.
+         *          otherwise misalign a per-element attribute. See the class comment;
+         *          the restriction lasts for the lifetime of this object.
+         * @param[in] matrices The matrix coefficients, a multiple of nine of them,
+         *                 which is ``9 * nb_elements`` to cover every element. An
+         *                 empty vector restores the isotropic objective.
+         * @note Prefer this over building the array by hand when the matrices are
+         *       meant to be uniform: fill ``9 * nb_elements`` identical blocks.
          */
-        void set_frames(const std::vector<double>& frames, GEO::index_t nb_frames);
+        void set_matrices(const std::vector<double>& matrices);
 
         /**
-         * @brief Removes the anisotropy frames and returns to the isotropic LpCVT.
-         * @details Equivalent to ``set_frames({}, 0)``.
+         * @brief Removes the per-element matrices and returns to the isotropic LpCVT.
+         * @details Equivalent to ``set_matrices({})``.
          */
-        void clear_frames();
+        void clear_matrices();
 
         /**
          * @brief Switches between surface and volume meshing and rebuilds the
@@ -229,10 +244,10 @@ namespace geolio
         GEO::index_t p_;
         /** @brief Whether the volume bounded by the mesh is being meshed. */
         bool volumetric_;
-        /** @brief Anisotropy frames, 9 doubles per background element. */
-        std::vector<double> frames_;
-        /** @brief Number of anisotropy frames, or 0 when isotropic. */
-        GEO::index_t nb_frames_;
+        /** @brief Per-element matrices, nine doubles per element, row-major. */
+        std::vector<double> matrices_;
+        /** @brief Number of elements covered by @ref matrices_, 0 when isotropic. */
+        GEO::index_t nb_matrices_;
         /**
          * @brief Keeps the integrand alive.
          * @details ``simplex_func_`` already owns a reference, but the base class

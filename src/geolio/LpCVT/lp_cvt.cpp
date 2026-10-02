@@ -37,7 +37,7 @@ namespace geolio
         ) : GEO::CentroidalVoronoiTesselation(mesh, 3, delaunay),
             p_(p),
             volumetric_(volumetric),
-            nb_frames_(0) {
+            nb_matrices_(0) {
         geo_cite("DBLP:journals/tog/LevyL10");
 
         if (!is_supported_norm_exponent(p_))
@@ -77,30 +77,29 @@ namespace geolio
         rebuild_integrand();
     }
 
-    void LpCentroidalVoronoiTesselation::set_frames(
-        const std::vector<double>& frames,
-        const GEO::index_t nb_frames
-        ) {
-        if (nb_frames == 0) {
-            clear_frames();
+    void LpCentroidalVoronoiTesselation::set_matrices(const std::vector<double>& matrices) {
+        if (matrices.empty()) {
+            clear_matrices();
             return;
         }
-        if (frames.size() != static_cast<std::size_t>(nb_frames) * 9) {
-            LOG::ERROR("Expected 9 doubles per anisotropy frame, got {} for {} frames",
-                       frames.size(), nb_frames);
+        if (matrices.size() % 9 != 0) {
+            LOG::ERROR("Per-element matrices must be given as blocks of 9 doubles "
+                       "(row-major 3x3), but {} doubles were supplied", matrices.size());
             return;
         }
 
-        frames_ = frames;
-        nb_frames_ = nb_frames;
+        matrices_ = matrices;
+        // The number of covered elements follows from the array size, so the two can
+        // never disagree. Elements beyond the supplied blocks keep the identity.
+        nb_matrices_ = GEO::index_t(matrices_.size() / 9);
 
         // Geogram's restricted Voronoi diagram partitions the background mesh with a
         // Hilbert order on its first multi-threaded traversal, and partitioning
         // reorders the mesh in place (vertices, facets and cells alike). A
-        // per-element attribute such as an anisotropy frame would then no longer
-        // match the element it was built for, so partitioning is disabled by pinning
-        // the traversal ranges to the whole mesh. Pinning both ranges is required
-        // because the early-out in the RVD only inspects the facet range.
+        // per-element attribute would then no longer match the element it was built
+        // for, so partitioning is disabled by pinning the traversal ranges to the
+        // whole mesh. Pinning both ranges is required because the early-out in the
+        // RVD only inspects the facet range.
         RVD_->set_facets_range(0, mesh_->facets.nb());
         if (mesh_->cells.nb() != 0) {
             RVD_->set_tetrahedra_range(0, mesh_->cells.nb());
@@ -109,9 +108,9 @@ namespace geolio
         rebuild_integrand();
     }
 
-    void LpCentroidalVoronoiTesselation::clear_frames() {
-        frames_.clear();
-        nb_frames_ = 0;
+    void LpCentroidalVoronoiTesselation::clear_matrices() {
+        matrices_.clear();
+        nb_matrices_ = 0;
         rebuild_integrand();
     }
 
@@ -175,8 +174,8 @@ namespace geolio
             *mesh_,
             p_,
             volumetric_,
-            nb_frames_,
-            frames_.empty() ? nullptr : frames_.data()
+            nb_matrices_,
+            matrices_.empty() ? nullptr : matrices_.data()
             );
 
         if (integrand_.is_null()) {

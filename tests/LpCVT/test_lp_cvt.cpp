@@ -647,6 +647,95 @@ namespace geolio::test
     }
 
     // =====================================================================
+    // T1b: generality of the matrix, as opposed to an orthonormal frame.
+    //
+    // A frame is only a rotation; the integrand accepts any 3x3 matrix, so the
+    // matrix below is deliberately non-symmetric (it shears) and non-uniform (it
+    // scales the axes differently). Changing variables with U_k = M (p_k - p0)
+    // maps the integration simplex to the simplex (U_1, U_2, U_3), so the identity
+    // below must hold for any invertible M with a positive determinant:
+    //
+    //     f = normalization * integral over simplex(U_1,U_2,U_3) of ||y||_p^p
+    // =====================================================================
+
+    TEST_F(LpCVTTest, non_orthogonal_matrix_matches_quadrature) {
+        // A shear plus a non-uniform scale, with a positive determinant. Note
+        // M(0,1) != M(1,0): this is not a rotation, so it is not a frame.
+        GEO::mat3 M;
+        M(0, 0) = 1.3;
+        M(0, 1) = 0.25;
+        M(0, 2) = -0.1;
+        M(1, 0) = 0.0;
+        M(1, 1) = 0.8;
+        M(1, 2) = 0.15;
+        M(2, 0) = 0.2;
+        M(2, 1) = 0.0;
+        M(2, 2) = 1.1;
+        ASSERT_GT(GEO::det(M), 0.0);
+
+        std::mt19937 gen(8675309);
+        for (const unsigned int p : {2u, 4u, 6u}) {
+            const GEO::vec3 p0 = random_vec3(gen);
+            // A positively oriented base simplex, so that the signed tetrahedron
+            // measure and the quadrature's absolute volume agree in sign.
+            const GEO::vec3 p1 = p0 + GEO::vec3(1.0, 0.0, 0.0);
+            const GEO::vec3 p2 = p0 + GEO::vec3(0.3, 1.1, 0.0);
+            const GEO::vec3 p3 = p0 + GEO::vec3(0.2, 0.4, 0.9);
+            const GEO::vec3 U[3] = {M * (p1 - p0), M * (p2 - p0), M * (p3 - p0)};
+
+            // Integrand value, surface measure.
+            GEO::vec3 d0, d1, d2, d3;
+            double f_surface = 0.0;
+            double f_volume = 0.0;
+            switch (p) {
+            case 2:
+                f_surface = LpPolynomial<2>().eval(
+                    LpTriArea(), p0, p1, p2, p3, M, d0, d1, d2, d3);
+                f_volume = LpPolynomial<2>().eval(
+                    LpTetVolume(), p0, p1, p2, p3, M, d0, d1, d2, d3);
+                break;
+            case 4:
+                f_surface = LpPolynomial<4>().eval(
+                    LpTriArea(), p0, p1, p2, p3, M, d0, d1, d2, d3);
+                f_volume = LpPolynomial<4>().eval(
+                    LpTetVolume(), p0, p1, p2, p3, M, d0, d1, d2, d3);
+                break;
+            default:
+                f_surface = LpPolynomial<6>().eval(
+                    LpTriArea(), p0, p1, p2, p3, M, d0, d1, d2, d3);
+                f_volume = LpPolynomial<6>().eval(
+                    LpTetVolume(), p0, p1, p2, p3, M, d0, d1, d2, d3);
+                break;
+            }
+
+            const auto norm_p_pow = [p](const GEO::vec3& y) {
+                double acc = 0.0;
+                for (int c = 0; c < 3; ++c) {
+                    acc += std::pow(std::fabs(y[c]), double(p));
+                }
+                return acc;
+            };
+
+            // Reference integrals over the transformed simplices.
+            const double tri_ref = integrate_triangle(
+                U[0], U[1], U[2], norm_p_pow, quadrature_order(p)
+                );
+            const double tet_ref = integrate_tetrahedron(
+                GEO::vec3(0, 0, 0), U[0], U[1], U[2], norm_p_pow, quadrature_order(p)
+                );
+
+            EXPECT_NEAR(
+                f_surface, lp_surface_energy_normalization(p) * tri_ref,
+                1e-9 * std::fabs(f_surface) + 1e-12
+                ) << "surface, p = " << p;
+            EXPECT_NEAR(
+                f_volume, lp_volume_energy_normalization(p) * tet_ref,
+                1e-9 * std::fabs(f_volume) + 1e-12
+                ) << "volume, p = " << p;
+        }
+    }
+
+    // =====================================================================
     // T2: the simplex gradients against central differences.
     // =====================================================================
 
@@ -1020,42 +1109,42 @@ namespace geolio::test
     }
 
     // =====================================================================
-    // T10: the anisotropy frame plumbing. Identity frames must reproduce the
-    //      isotropic result exactly, which checks the frame indexing, the
-    //      row-major layout and the range pinning that keeps frames aligned
+    // T10: the per-element matrix plumbing. Identity matrices must reproduce the
+    //      isotropic result exactly, which checks the matrix indexing, the
+    //      row-major layout and the range pinning that keeps matrices aligned
     //      with their elements.
     // =====================================================================
 
-    TEST_F(LpCVTTest, identity_frames_reproduce_the_isotropic_result) {
+    TEST_F(LpCVTTest, identity_matrices_reproduce_the_isotropic_result) {
         const std::vector<double> pts = sample_cube_surface(24, 1212);
 
         double f_iso = 0.0;
         std::vector<double> g_iso;
         evaluate(cube_, 4, false, pts, f_iso, g_iso);
 
-        std::vector<double> frames(cube_.facets.nb() * 9, 0.0);
+        std::vector<double> matrices(cube_.facets.nb() * 9, 0.0);
         for (GEO::index_t t = 0; t < cube_.facets.nb(); ++t) {
-            frames[9 * t + 0] = 1.0;
-            frames[9 * t + 4] = 1.0;
-            frames[9 * t + 8] = 1.0;
+            matrices[9 * t + 0] = 1.0;
+            matrices[9 * t + 4] = 1.0;
+            matrices[9 * t + 8] = 1.0;
         }
 
-        double f_frames = 0.0;
-        std::vector<double> g_frames;
+        double f_mat = 0.0;
+        std::vector<double> g_mat;
         {
             TestableLpCVT cvt(&cube_, 4, false);
-            cvt.set_frames(frames, cube_.facets.nb());
+            cvt.set_matrices(matrices);
             cvt.set_points(pts.size() / 3, pts.data());
-            g_frames.assign(pts.size(), 0.0);
+            g_mat.assign(pts.size(), 0.0);
             cvt.funcgrad(
                 GEO::index_t(pts.size()), const_cast<double*>(pts.data()),
-                f_frames, g_frames.data()
+                f_mat, g_mat.data()
                 );
         }
 
-        EXPECT_NEAR(f_frames, f_iso, 1e-12 * std::fabs(f_iso) + 1e-15);
+        EXPECT_NEAR(f_mat, f_iso, 1e-12 * std::fabs(f_iso) + 1e-15);
         for (std::size_t i = 0; i < g_iso.size(); ++i) {
-            EXPECT_NEAR(g_frames[i], g_iso[i], 1e-12 * (1.0 + std::fabs(g_iso[i])))
+            EXPECT_NEAR(g_mat[i], g_iso[i], 1e-12 * (1.0 + std::fabs(g_iso[i])))
                 << "component " << i;
         }
     }
