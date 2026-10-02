@@ -32,12 +32,12 @@ namespace geolio::test
      *          the analytic gradient against finite differences, so it is promoted
      *          here.
      */
-    class TestableLpCVT : public LpCVT {
+    class TestableLpCVT : public LpCentroidalVoronoiTesselation {
     public:
-        using LpCVT::LpCVT;
+        using LpCentroidalVoronoiTesselation::LpCentroidalVoronoiTesselation;
 
         /** @brief Promotes the protected objective evaluation to public. */
-        using LpCVT::funcgrad;
+        using LpCentroidalVoronoiTesselation::funcgrad;
     };
 
     /**
@@ -953,7 +953,7 @@ namespace geolio::test
             double f_after = 0.0;
             std::vector<double> final_pts;
             {
-                LpCVT cvt(&cube_, p, false);
+                LpCentroidalVoronoiTesselation cvt(&cube_, p, false);
                 cvt.set_points(initial.size() / 3, initial.data());
                 cvt.Newton_iterations(20, 7);
 
@@ -1163,7 +1163,7 @@ namespace geolio::test
         double f_after = 0.0;
         std::vector<double> final_pts;
         {
-            LpCVT cvt(&open_cube_, 4, false);
+            LpCentroidalVoronoiTesselation cvt(&open_cube_, 4, false);
             cvt.set_points(initial.size() / 3, initial.data());
             cvt.Newton_iterations(20, 7);
 

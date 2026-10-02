@@ -81,7 +81,7 @@ namespace geolio
      *      triangulation and the connection in one call, but it renumbers the
      *      elements, so it must be called @b before constructing this object.
      */
-    class LpCVT : public GEO::CentroidalVoronoiTesselation {
+    class LpCentroidalVoronoiTesselation : public GEO::CentroidalVoronoiTesselation {
     public:
         /**
          * @brief Constructs an LpCVT over a background mesh.
@@ -102,9 +102,9 @@ namespace geolio
          *                 Note that Geogram's own ``"default"`` resolves to
          *                 ``algo:delaunay``, whose default value is ``"NN"``.
          */
-        LpCVT(
+        LpCentroidalVoronoiTesselation(
             GEO::Mesh* mesh,
-            unsigned int p,
+            GEO::index_t p,
             bool volumetric = false,
             const std::string& delaunay = "BDEL"
             );
@@ -112,15 +112,13 @@ namespace geolio
         /**
          * @brief Destroys the LpCVT and releases the process-wide CVT instance.
          */
-        ~LpCVT() override;
+        ~LpCentroidalVoronoiTesselation() override;
 
         /**
          * @brief Returns the current norm exponent.
          * @return The value of @p p.
          */
-        unsigned int p() const {
-            return p_;
-        }
+        [[nodiscard]] GEO::index_t p() const { return p_; }
 
         /**
          * @brief Changes the norm exponent and rebuilds the integrand.
@@ -129,7 +127,7 @@ namespace geolio
          *              values are rejected with an error message and leave the
          *              object unchanged.
          */
-        void set_p(unsigned int p);
+        void set_p(GEO::index_t p);
 
         /**
          * @brief Installs one anisotropy frame per background element.
@@ -188,10 +186,7 @@ namespace geolio
          * @param[in] m Number of L-BFGS corrections kept in the Hessian
          *              approximation.
          */
-        void Newton_iterations(
-            GEO::index_t nb_iter,
-            GEO::index_t m = 7
-            ) override;
+        void Newton_iterations(GEO::index_t nb_iter, GEO::index_t m = 7) override;
 
         /**
          * @brief Runs Lloyd iterations and warns that they ignore the Lp objective.
@@ -219,12 +214,7 @@ namespace geolio
          * @param[out] f The objective value.
          * @param[out] g The gradient, of size @p n.
          */
-        void funcgrad(
-            GEO::index_t n,
-            double* x,
-            double& f,
-            double* g
-            ) override;
+        void funcgrad(GEO::index_t n, double* x, double& f, double* g) override;
 
     private:
         /**
@@ -236,7 +226,7 @@ namespace geolio
         void rebuild_integrand();
 
         /** @brief The norm exponent. */
-        unsigned int p_;
+        GEO::index_t p_;
         /** @brief Whether the volume bounded by the mesh is being meshed. */
         bool volumetric_;
         /** @brief Anisotropy frames, 9 doubles per background element. */

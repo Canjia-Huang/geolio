@@ -24,14 +24,14 @@ namespace geolio
          * @param[in] p The norm exponent to test.
          * @return true if @p p is even and in ``[2, 16]``.
          */
-        bool is_supported_norm_exponent(const unsigned int p) {
+        bool is_supported_norm_exponent(const GEO::index_t p) {
             return p >= 2 && p <= 16 && (p / 2) * 2 == p;
         }
     }
 
-    LpCVT::LpCVT(
+    LpCentroidalVoronoiTesselation::LpCentroidalVoronoiTesselation(
         GEO::Mesh* mesh,
-        const unsigned int p,
+        const GEO::index_t p,
         const bool volumetric,
         const std::string& delaunay
         ) : GEO::CentroidalVoronoiTesselation(mesh, 3, delaunay),
@@ -40,9 +40,8 @@ namespace geolio
             nb_frames_(0) {
         geo_cite("DBLP:journals/tog/LevyL10");
 
-        if (!is_supported_norm_exponent(p_)) {
-            LOG::ERROR("Unsupported Lp norm exponent p = {} (expected an even integer in [2, 16])", p_);
-        }
+        if (!is_supported_norm_exponent(p_))
+            throw std::logic_error("Unsupported Lp norm exponent p = "+std::to_string(p)+" (expected an even integer in [2, 16])");
 
         // Meshing a volume needs the background mesh to be filled with tetrahedra,
         // and meshing a surface needs the facets to be triangles with a valid
@@ -50,15 +49,15 @@ namespace geolio
         // for us (only the RDT it produces on output is repaired).
         if (volumetric_) {
             if (mesh->cells.nb() == 0) {
-                LOG::ERROR("Volume meshing requires a tetrahedralized background mesh, "
-                           "but mesh.cells is empty; call GEO::mesh_tetrahedralize() "
-                           "before constructing the LpCVT");
+                throw std::logic_error("Volume meshing requires a tetrahedralized background mesh, "
+                                       "but mesh.cells is empty; call GEO::mesh_tetrahedralize() "
+                                       "before constructing the LpCVT");
             }
         } else {
             if (!mesh->facets.are_simplices()) {
-                LOG::ERROR("Surface meshing requires a triangulated background mesh; call "
-                           "GEO::mesh_repair() with MESH_REPAIR_DEFAULT or "
-                           "mesh.facets.triangulate() before constructing the LpCVT");
+                throw std::logic_error("Surface meshing requires a triangulated background mesh; call "
+                                       "GEO::mesh_repair() with MESH_REPAIR_DEFAULT or "
+                                       "mesh.facets.triangulate() before constructing the LpCVT");
             }
         }
 
@@ -66,9 +65,9 @@ namespace geolio
         rebuild_integrand();
     }
 
-    LpCVT::~LpCVT() = default;
+    LpCentroidalVoronoiTesselation::~LpCentroidalVoronoiTesselation() = default;
 
-    void LpCVT::set_p(const unsigned int p) {
+    void LpCentroidalVoronoiTesselation::set_p(const GEO::index_t p) {
         if (!is_supported_norm_exponent(p)) {
             LOG::ERROR("Unsupported Lp norm exponent p = {} (expected an even integer in "
                        "[2, 16]); keeping p = {}", p, p_);
@@ -78,7 +77,7 @@ namespace geolio
         rebuild_integrand();
     }
 
-    void LpCVT::set_frames(
+    void LpCentroidalVoronoiTesselation::set_frames(
         const std::vector<double>& frames,
         const GEO::index_t nb_frames
         ) {
@@ -110,19 +109,19 @@ namespace geolio
         rebuild_integrand();
     }
 
-    void LpCVT::clear_frames() {
+    void LpCentroidalVoronoiTesselation::clear_frames() {
         frames_.clear();
         nb_frames_ = 0;
         rebuild_integrand();
     }
 
-    void LpCVT::set_volumetric(const bool x) {
+    void LpCentroidalVoronoiTesselation::set_volumetric(const bool x) {
         volumetric_ = x;
         GEO::CentroidalVoronoiTesselation::set_volumetric(x);
         rebuild_integrand();
     }
 
-    void LpCVT::Newton_iterations(
+    void LpCentroidalVoronoiTesselation::Newton_iterations(
         const GEO::index_t nb_iter,
         const GEO::index_t m
         ) {
@@ -145,7 +144,7 @@ namespace geolio
         GEO::CentroidalVoronoiTesselation::Newton_iterations(nb_iter, m);
     }
 
-    void LpCVT::Lloyd_iterations(const GEO::index_t nb_iter) {
+    void LpCentroidalVoronoiTesselation::Lloyd_iterations(const GEO::index_t nb_iter) {
         if (p_ != 2) {
             LOG::WARN("Lloyd_iterations() replaces each point with the centroid of its "
                       "restricted Voronoi cell, which is the stationary condition of the "
@@ -156,7 +155,7 @@ namespace geolio
         GEO::CentroidalVoronoiTesselation::Lloyd_iterations(nb_iter);
     }
 
-    void LpCVT::funcgrad(
+    void LpCentroidalVoronoiTesselation::funcgrad(
         const GEO::index_t n,
         double* x,
         double& f,
@@ -171,7 +170,7 @@ namespace geolio
         GEO::CentroidalVoronoiTesselation::funcgrad(n, x, f, g);
     }
 
-    void LpCVT::rebuild_integrand() {
+    void LpCentroidalVoronoiTesselation::rebuild_integrand() {
         integrand_ = create_lp_integration_simplex(
             *mesh_,
             p_,

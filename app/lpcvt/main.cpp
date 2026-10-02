@@ -92,9 +92,9 @@ namespace
      *          command line front end a way to report that the optimization actually
      *          progressed.
      */
-    class ReportingLpCVT : public geolio::LpCVT {
+    class ReportingLpCVT : public geolio::LpCentroidalVoronoiTesselation {
     public:
-        using LpCVT::LpCVT;
+        using LpCentroidalVoronoiTesselation::LpCentroidalVoronoiTesselation;
 
         /**
          * @brief Returns the objective values observed so far.
@@ -119,7 +119,7 @@ namespace
             double& f,
             double* g
             ) override {
-            LpCVT::funcgrad(n, x, f, g);
+            LpCentroidalVoronoiTesselation::funcgrad(n, x, f, g);
             if (nb_evals_ == 0) {
                 first_f_ = f;
             }

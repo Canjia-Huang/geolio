@@ -81,10 +81,8 @@ namespace geolio
             const GEO::index_t nb_frames,
             const GEO::index_t nb_comp_per_frame,
             const double* frames
-            ) : GEO::IntegrationSimplex(
-                    mesh, volumetric, nb_frames, nb_comp_per_frame, frames
-                    ) {
-        }
+            ) : GEO::IntegrationSimplex(mesh, volumetric, nb_frames, nb_comp_per_frame, frames)
+        {}
 
         /**
          * @brief Evaluates the Lp objective and its gradient on one integration
