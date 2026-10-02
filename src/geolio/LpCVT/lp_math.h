@@ -4,7 +4,6 @@
 //
 #ifndef GEOLIO_LP_MATH_H
 #define GEOLIO_LP_MATH_H
-
 #include <geogram/basic/geometry.h>
 
 /**

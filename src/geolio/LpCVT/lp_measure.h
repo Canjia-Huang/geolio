@@ -4,7 +4,6 @@
 //
 #ifndef GEOLIO_LP_MEASURE_H
 #define GEOLIO_LP_MEASURE_H
-
 #include <geogram/basic/geometry.h>
 #include <cmath>
 

@@ -4,9 +4,7 @@
 //
 #ifndef GEOLIO_LP_VORONOI_VERTEX_H
 #define GEOLIO_LP_VORONOI_VERTEX_H
-
 #include "lp_math.h"
-
 #include <geogram/basic/thread_sync.h>
 
 namespace geolio

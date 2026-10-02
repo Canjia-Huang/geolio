@@ -4,11 +4,8 @@
 //
 #ifndef GEOLIO_LP_INTEGRATION_SIMPLEX_H
 #define GEOLIO_LP_INTEGRATION_SIMPLEX_H
-
-#include "lp_measure.h"
 #include "lp_polynomial.h"
 #include "lp_voronoi_vertex.h"
-
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/voronoi/integration_simplex.h>

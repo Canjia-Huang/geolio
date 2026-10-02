@@ -3,12 +3,8 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "lp_cvt.h"
-
 #include "lp_integration_simplex.h"
-#include "lp_measure.h"
-
 #include <geolio/common/log.h>
-
 #include <geogram/bibliography/bibliography.h>
 #include <geogram/numerics/optimizer.h>
 

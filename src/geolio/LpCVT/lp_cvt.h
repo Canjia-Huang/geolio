@@ -4,10 +4,8 @@
 //
 #ifndef GEOLIO_LP_CVT_H
 #define GEOLIO_LP_CVT_H
-
 #include <geogram/voronoi/CVT.h>
 #include <geogram/mesh/mesh.h>
-
 #include <string>
 #include <vector>
 

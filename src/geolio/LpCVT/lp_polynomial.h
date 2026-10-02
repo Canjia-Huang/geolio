@@ -4,7 +4,6 @@
 //
 #ifndef GEOLIO_LP_POLYNOMIAL_H
 #define GEOLIO_LP_POLYNOMIAL_H
-
 #include "lp_math.h"
 
 namespace geolio
