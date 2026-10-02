@@ -72,7 +72,7 @@ namespace geolio
         matrices_ = matrices;
         // The number of covered elements follows from the array size, so the two can
         // never disagree. Elements beyond the supplied blocks keep the identity.
-        nb_matrices_ = GEO::index_t(matrices_.size() / 9);
+        nb_matrices_ = static_cast<GEO::index_t>(matrices_.size() / 9);
 
         // Geogram's restricted Voronoi diagram partitions the background mesh with a
         // Hilbert order on its first multi-threaded traversal, and partitioning
@@ -82,9 +82,8 @@ namespace geolio
         // whole mesh. Pinning both ranges is required because the early-out in the
         // RVD only inspects the facet range.
         RVD_->set_facets_range(0, mesh_->facets.nb());
-        if (mesh_->cells.nb() != 0) {
+        if (mesh_->cells.nb() != 0)
             RVD_->set_tetrahedra_range(0, mesh_->cells.nb());
-        }
 
         rebuild_integrand();
     }

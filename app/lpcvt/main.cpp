@@ -268,7 +268,7 @@ int main(int argc, char** argv) {
                 return EXIT_FAILURE;
             }
 
-            cvt.Newton_iterations(nb_iterations, 7);
+            cvt.Newton_iterations(nb_iterations);
 
             pts.vertices.create_vertices(cvt.nb_points()-pts.vertices.nb());
             for (const auto& v : pts.vertices) {

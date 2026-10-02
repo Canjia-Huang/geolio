@@ -25,6 +25,8 @@
 #include <utility>
 #include <vector>
 
+#include "../utils.h"
+
 namespace geolio::test
 {
     /**
@@ -1395,5 +1397,57 @@ namespace geolio::test
             EXPECT_NEAR(numeric, exact, 1e-3 * std::fabs(exact) + 1e-9)
                 << "trial " << trial;
         }
+    }
+
+    class LpCVTTestExample : public ::testing::Test {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes.geogram"));
+            LpCVT = std::make_unique<LpCentroidalVoronoiTesselation>(&mesh, p, false);
+        }
+
+        void compute() const {
+            LpCVT->compute_initial_sampling(nb_samples);
+            LpCVT->Newton_iterations(nb_iterations);
+        }
+
+        void save_results() const {
+            {
+                GEO::Mesh mesh_out;
+                LpCVT->RVD()->compute_RVD(mesh_out, 0);
+                EXPECT_TRUE(mesh_out.save(get_current_test_name()+"_rvd.geogram"));
+            }
+            {
+                GEO::Mesh mesh_out;
+                LpCVT->set_use_RVC_centroids(false);
+                LpCVT->compute_surface(&mesh_out, true);
+                EXPECT_TRUE(mesh_out.save(get_current_test_name()+"_rdt.geogram"));
+            }
+        }
+
+        const GEO::index_t p = 4;
+        const GEO::index_t nb_samples = 1e3;
+        const GEO::index_t nb_iterations = 100;
+        GEO::Mesh mesh;
+        std::unique_ptr<LpCentroidalVoronoiTesselation> LpCVT;
+    };
+
+    TEST_F(LpCVTTestExample, example) {
+        compute();
+        save_results();
+    }
+
+    TEST_F(LpCVTTestExample, example_anisotropic) {
+        std::vector<double> matrices;
+        matrices.reserve(9*mesh.facets.nb());
+        for ([[maybe_unused]] const auto& f : mesh.facets) {
+            matrices.push_back(1);  matrices.push_back(0);  matrices.push_back(0);
+            matrices.push_back(0);  matrices.push_back(2);  matrices.push_back(0);
+            matrices.push_back(0);  matrices.push_back(0);  matrices.push_back(5);
+        }
+        LpCVT->set_matrices(matrices);
+
+        compute();
+        save_results();
     }
 }
