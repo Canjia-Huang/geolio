@@ -1101,13 +1101,13 @@ namespace geolio::test
         // An unsupported exponent is refused: the exponent is unchanged, and so is the
         // integrand, so the objective must come out identical.
         cvt.set_p(0);
-        EXPECT_EQ(cvt.p(), GEO::index_t(4));
+        EXPECT_EQ(cvt.p(), static_cast<GEO::index_t>(4));
         evaluate(f_after_bad);
         EXPECT_EQ(f_after_bad, f_before);
 
         // A supported exponent is taken into account, so the objective changes.
         cvt.set_p(6);
-        EXPECT_EQ(cvt.p(), GEO::index_t(6));
+        EXPECT_EQ(cvt.p(), static_cast<GEO::index_t>(6));
         evaluate(f_after_good);
         EXPECT_TRUE(std::isfinite(f_after_good));
         EXPECT_NE(f_after_good, f_before);
