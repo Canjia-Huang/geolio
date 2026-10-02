@@ -20,6 +20,7 @@
 #include <functional>
 #include <map>
 #include <random>
+#include <stdexcept>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -1012,16 +1013,102 @@ namespace geolio::test
     }
 
     // =====================================================================
-    // T8: unsupported parameters must be rejected, not silently accepted.
+    // T8: the norm exponent is a hard requirement.
+    //
+    // is_supported_norm_exponent() is the single source of truth and is a pure
+    // predicate, so it can be exercised on arbitrary values. Enforcing it is split
+    // between two levels, and the tests below follow that split:
+    //   - the public entry points (constructor, set_p) validate the exponent;
+    //   - create_lp_integration_simplex() only asserts it as a precondition, because
+    //     its callers have already validated it.
     // =====================================================================
 
-    TEST_F(LpCVTTest, unsupported_norm_exponents_are_rejected) {
-        EXPECT_TRUE(create_lp_integration_simplex(cube_, 0, false).is_null());
-        EXPECT_TRUE(create_lp_integration_simplex(cube_, 1, false).is_null());
-        EXPECT_TRUE(create_lp_integration_simplex(cube_, 18, false).is_null());
-        EXPECT_FALSE(create_lp_integration_simplex(cube_, 2, false).is_null());
-        EXPECT_FALSE(create_lp_integration_simplex(cube_, 16, false).is_null());
-        EXPECT_FALSE(create_lp_integration_simplex(cube_, 4, true).is_null());
+    TEST_F(LpCVTTest, norm_exponent_predicate_accepts_only_the_even_range) {
+        for (GEO::index_t p = 0; p <= 40; ++p) {
+            const bool expected = p >= 2 && p <= 16 && p % 2 == 0;
+            EXPECT_EQ(
+                LpCentroidalVoronoiTesselation::is_supported_norm_exponent(p), expected
+                ) << "p = " << p;
+        }
+        // Large values must not behave differently from small ones.
+        EXPECT_FALSE(LpCentroidalVoronoiTesselation::is_supported_norm_exponent(1024));
+    }
+
+    TEST_F(LpCVTTest, valid_norm_exponents_build_an_integrand) {
+        for (GEO::index_t p = 2; p <= 16; p += 2) {
+            EXPECT_FALSE(create_lp_integration_simplex(cube_, p, false).is_null())
+                << "surface, p = " << p;
+            EXPECT_FALSE(create_lp_integration_simplex(cube_, p, true).is_null())
+                << "volume, p = " << p;
+        }
+    }
+
+    // Note: create_lp_integration_simplex() is deliberately NOT called with an
+    // unsupported exponent. It only asserts its precondition, so doing so would be a
+    // contract violation rather than a behaviour under test, and the outcome differs
+    // between build types (see the comment in the implementation). Rejection is a
+    // responsibility of the public entry points, which is what the tests below cover.
+
+    TEST_F(LpCVTTest, constructor_rejects_an_unsupported_norm_exponent) {
+        for (const GEO::index_t p : {0, 1, 3, 18, 100}) {
+            EXPECT_THROW(
+                { LpCentroidalVoronoiTesselation cvt(&cube_, p, false); },
+                std::logic_error
+                ) << "p = " << p;
+        }
+
+        // A throw during construction unwinds the fully constructed base class, whose
+        // destructor releases the process-wide CVT instance. Were that not the case,
+        // the next construction would trip the base class assertion instead of
+        // succeeding, so this also guards that cleanup.
+        EXPECT_NO_THROW(
+            {
+                LpCentroidalVoronoiTesselation cvt(&cube_, 4, false);
+                EXPECT_EQ(cvt.p(), GEO::index_t(4));
+            }
+            );
+    }
+
+    TEST_F(LpCVTTest, constructor_rejects_a_mesh_missing_its_required_elements) {
+        // open_cube_ is a triangulated surface but is not filled with tetrahedra, so
+        // it is a valid background mesh for surface meshing and an invalid one for
+        // volume meshing.
+        EXPECT_NO_THROW({ LpCentroidalVoronoiTesselation cvt(&open_cube_, 4, false); });
+        EXPECT_THROW(
+            { LpCentroidalVoronoiTesselation cvt(&open_cube_, 4, true); },
+            std::logic_error
+            );
+    }
+
+    TEST_F(LpCVTTest, set_p_ignores_an_unsupported_norm_exponent) {
+        const std::vector<double> pts = sample_cube_surface(20, 4370);
+
+        TestableLpCVT cvt(&cube_, 4, false);
+        cvt.set_points(pts.size() / 3, pts.data());
+
+        double f_before = 0.0, f_after_bad = 0.0, f_after_good = 0.0;
+        std::vector<double> g(pts.size(), 0.0);
+        const auto evaluate = [&](double& f) {
+            cvt.funcgrad(
+                GEO::index_t(pts.size()), const_cast<double*>(pts.data()), f, g.data()
+                );
+        };
+
+        evaluate(f_before);
+
+        // An unsupported exponent is refused: the exponent is unchanged, and so is the
+        // integrand, so the objective must come out identical.
+        cvt.set_p(0);
+        EXPECT_EQ(cvt.p(), GEO::index_t(4));
+        evaluate(f_after_bad);
+        EXPECT_EQ(f_after_bad, f_before);
+
+        // A supported exponent is taken into account, so the objective changes.
+        cvt.set_p(6);
+        EXPECT_EQ(cvt.p(), GEO::index_t(6));
+        evaluate(f_after_good);
+        EXPECT_TRUE(std::isfinite(f_after_good));
+        EXPECT_NE(f_after_good, f_before);
     }
 
     // =====================================================================
