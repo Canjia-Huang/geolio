@@ -247,6 +247,8 @@ namespace geolio
         for (const auto& e : mesh.edges)
             out << "2 " << mesh.edges.vertex(e, 0) << " " << mesh.edges.vertex(e, 1) << std::endl;
 
+        out.close();
+
         return true;
     }
 }
