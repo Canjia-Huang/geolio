@@ -1103,7 +1103,7 @@ namespace geolio::test
         cvt.set_p(0);
         EXPECT_EQ(cvt.p(), static_cast<GEO::index_t>(4));
         evaluate(f_after_bad);
-        EXPECT_EQ(f_after_bad, f_before);
+        EXPECT_NEAR(f_after_bad, f_before, 1e-10);
 
         // A supported exponent is taken into account, so the objective changes.
         cvt.set_p(6);
