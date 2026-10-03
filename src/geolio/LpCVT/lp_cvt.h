@@ -235,19 +235,34 @@ namespace geolio
          * @param[in] nb_iter Maximum number of iterations.
          * @param[in] m Number of L-BFGS corrections kept in the Hessian
          *              approximation.
+         * @pre At least one point, and a Geogram build that provides HLBFGS. Both are
+         *      checked and reported with an error message, leaving the points
+         *      untouched; the points have to be populated first, with
+         *      compute_initial_sampling() or set_points().
          */
         void Newton_iterations(GEO::index_t nb_iter, GEO::index_t m = 7) override;
 
         /**
-         * @brief Runs Lloyd iterations and warns that they ignore the Lp objective.
+         * @brief Runs Lloyd iterations, which are available for @f$p = 2@f$ only.
          * @details Lloyd relaxation as implemented by Geogram replaces every point
          *          with the centroid of its restricted Voronoi cell, which is the
-         *          stationary condition of the @b L2 energy only. It is therefore
-         *          not a valid optimizer for @f$p \neq 2@f$ and is kept accessible
-         *          only as a cheap pre-relaxation step, which is how the reference
-         *          LpCVT pipeline used it too. A warning is emitted whenever
-         *          @f$p \neq 2@f$.
+         *          stationary condition of the @b L2 energy. It is therefore a valid
+         *          optimizer for this class only when the objective is the L2 one, and
+         *          is refused with an error message for every other exponent, leaving
+         *          the points untouched.
+         *
+         *          The reference implementation has no Lloyd stage at all: it optimizes
+         *          every exponent with a quasi-Newton method on the Lp objective. An L2
+         *          relaxation in front of it is a plausible initializer (measured to
+         *          lower the final Lp energy by up to a few tens of percent when the
+         *          initial sampling is poor and the Newton budget is modest), but its
+         *          effect vanishes as the Newton budget grows, and it is an addition
+         *          rather than part of the published method, so it is not offered for a
+         *          non-L2 objective.
          * @param[in] nb_iter Number of Lloyd iterations.
+         * @pre @f$p = 2@f$ and at least one point, both checked and reported with an
+         *      error message, leaving the points untouched. The points have to be
+         *      populated first, with compute_initial_sampling() or set_points().
          */
         void Lloyd_iterations(GEO::index_t nb_iter) override;
 

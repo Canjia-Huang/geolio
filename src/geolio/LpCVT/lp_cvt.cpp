@@ -126,6 +126,15 @@ namespace geolio
         const GEO::index_t nb_iter,
         const GEO::index_t m
         ) {
+        // Geogram's HLBFGS driver does not check this and terminates the process when
+        // asked to optimize an empty point set, so the case is caught here. Checked
+        // before the optimizer probe below, which is the more expensive of the two.
+        if (nb_points() == 0) {
+            LOG::ERROR("Newton_iterations() called with no points: populate them first, "
+                       "with compute_initial_sampling() or set_points()");
+            return;
+        }
+
         // The base class falls back to Lloyd iterations, with a mere warning, when
         // the optimizer could not be created. That path never reaches the integrand,
         // so the Lp objective would be silently ignored; refuse to proceed instead.
@@ -146,13 +155,29 @@ namespace geolio
     }
 
     void LpCentroidalVoronoiTesselation::Lloyd_iterations(const GEO::index_t nb_iter) {
+        // Lloyd relaxation moves every point to the centroid of its restricted Voronoi
+        // cell, which is the stationary condition of the L2 energy and not of the Lp
+        // one. It is therefore only offered when the objective really is the L2 one;
+        // nothing is done for any other exponent. Failing here rather than silently
+        // running an L2 step on an Lp objective keeps the class honest about what it
+        // optimizes.
         if (p_ != 2) {
-            LOG::WARN("Lloyd_iterations() replaces each point with the centroid of its "
-                      "restricted Voronoi cell, which is the stationary condition of the "
-                      "L2 energy only; it therefore ignores the Lp objective (p = {}). Use "
-                      "Newton_iterations() for LpCVT, and keep Lloyd iterations only as a "
-                      "cheap L2 pre-relaxation", p_);
+            LOG::ERROR("Lloyd_iterations() is only available for p = 2: it replaces each "
+                       "point with the centroid of its restricted Voronoi cell, which is "
+                       "the stationary condition of the L2 energy and not of the Lp one "
+                       "(p = {}). Use Newton_iterations() instead", p_);
+            return;
         }
+
+        // Geogram's implementation does not check this and walks the restricted Voronoi
+        // cells of an empty point set, which corrupts memory, so the case is caught here
+        // rather than left to crash.
+        if (nb_points() == 0) {
+            LOG::ERROR("Lloyd_iterations() called with no points: populate them first, "
+                       "with compute_initial_sampling() or set_points()");
+            return;
+        }
+
         GEO::CentroidalVoronoiTesselation::Lloyd_iterations(nb_iter);
     }
 
