@@ -2,17 +2,16 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/19.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#include <CLI/CLI.hpp>
-#include <geolio/miq/miq_interface.h>
-#include <geolio/common/config.h>
-#include <geogram/mesh/mesh.h>
 #include <string>
-#include <geolio/common/parse_filepath.h>
-#include <geolio/common/log.h>
+#include <CLI/CLI.hpp>
 #include <geogram/basic/command_line_args.h>
-#include <geogram/basic/command_line.h>
+#include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_repair.h>
+#include <geolio/common/config.h>
+#include <geolio/common/log.h>
+#include <geolio/common/parse_filepath.h>
 #include <geolio/io/fra_io.h>
+#include <geolio/MIQ/miq_interface.h>
 
 using namespace geolio;
 

@@ -3,7 +3,6 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include <gtest/gtest.h>
-
 #include <cmath>
 #include <functional>
 #include <map>

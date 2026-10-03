@@ -38,7 +38,7 @@ file(GLOB SOURCE_FILES
 # CMakeLists.txt), neither of which the default build brings in.
 if(GEOLIO_ENABLE_MIQ)
     file(GLOB MIQ_SOURCE_FILES
-            ${CMAKE_CURRENT_SOURCE_DIR}/miq/*.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/MIQ/*.cpp
     )
     list(APPEND SOURCE_FILES ${MIQ_SOURCE_FILES})
 

@@ -4,7 +4,7 @@
 //
 #ifdef GEOLIO_ENABLE_MIQ
 #include <gtest/gtest.h>
-#include <geolio/miq/miq_interface.h>
+#include <geolio/MIQ/miq_interface.h>
 #include <geogram/mesh/mesh_frame_field.h>
 #include "../utils.h"
 

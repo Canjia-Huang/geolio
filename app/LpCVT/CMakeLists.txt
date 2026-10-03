@@ -1,4 +1,4 @@
-set(CURRENT_APP_NAME miq)
+set(CURRENT_APP_NAME LpCVT_CLI)
 
 add_executable(${CURRENT_APP_NAME}
         main.cpp

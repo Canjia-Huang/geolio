@@ -34,7 +34,7 @@ file(GLOB SOURCE_FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/local_operation_optimization/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/LpCVT/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/mesh/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/miq/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/MIQ/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/motorcycle/*.cpp
 )
 
