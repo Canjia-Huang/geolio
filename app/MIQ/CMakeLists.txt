@@ -1,4 +1,4 @@
-set(CURRENT_APP_NAME MIQ_CLI)
+set(CURRENT_APP_NAME MIQ)
 
 add_executable(${CURRENT_APP_NAME}
         main.cpp
