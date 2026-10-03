@@ -20,6 +20,7 @@ target_include_directories(${CURRENT_LIB_NAME}
 file(GLOB SOURCE_FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/common/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/frame_field/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/geobox/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/geobox/object/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/geobox/application/*.cpp

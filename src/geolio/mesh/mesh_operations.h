@@ -4,11 +4,11 @@
 //
 #ifndef GEOLIO_MESH_OPERATIONS_H
 #define GEOLIO_MESH_OPERATIONS_H
-
 #include <geogram/mesh/mesh.h>
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <cassert>
 
 namespace geolio
 {
@@ -104,6 +104,52 @@ namespace geolio
         GEO::index_t start_lf,
         GEO::index_t start_lv,
         std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& ordered_c_le_lf);
+
+    /**
+     * @brief Normalize mesh vertices into a centered, unit-scale coordinate system.
+     * @details Computes the axis-aligned bounding box of the mesh in the first
+     *          @p DIM coordinates. The bounding-box center is written to @p center,
+     *          the largest axis extent is written to @p scale, and every vertex is
+     *          transformed in place by `(p - center) / scale`. Only 2D and 3D
+     *          normalization are supported.
+     * @param[in,out] mesh Mesh whose vertex coordinates are normalized in place.
+     * @param[out] center Center of the mesh bounding box before normalization.
+     * @param[out] scale Maximum extent of the mesh bounding box before normalization.
+     */
+    template <GEO::index_t DIM>
+    void normalize(
+        GEO::Mesh& mesh,
+        GEO::vecng<DIM, double>& center,
+        double& scale
+        ) {
+        static_assert(DIM == 2 || DIM == 3);
+        assert(mesh.vertices.dimension() == DIM);
+
+        std::array<double, DIM> xyz_min{};
+        std::array<double, DIM> xyz_max{};
+        for (GEO::index_t d = 0; d < DIM; ++d) {
+            xyz_min[d] = std::numeric_limits<double>::max();
+            xyz_max[d] = -std::numeric_limits<double>::max();
+        }
+
+        for (const auto& p : mesh.vertices.points<DIM>()) {
+            for (GEO::index_t d = 0; d < DIM; ++d) {
+                xyz_min[d] = std::min(xyz_min[d], p[d]);
+                xyz_max[d] = std::max(xyz_max[d], p[d]);
+            }
+        }
+
+        scale = 0;
+        for (GEO::index_t d = 0; d < DIM; ++d) {
+            center[d] = 0.5*(xyz_min[d]+xyz_max[d]);
+            scale = std::max(scale, xyz_max[d]-xyz_min[d]);
+        }
+
+        for (auto& p : mesh.vertices.points<DIM>()) {
+            p -= center;
+            p /= scale;
+        }
+    }
 }
 
 #endif //GEOLIO_MESH_OPERATIONS_H
