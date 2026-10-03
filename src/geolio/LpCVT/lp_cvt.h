@@ -163,26 +163,52 @@ namespace geolio
          *          three basis vectors consecutively, which is the transposed
          *          convention.
          *
-         *          If fewer matrices than background elements are supplied, the
-         *          remaining elements keep the identity and the objective stays
-         *          isotropic there.
+         *          The expected length is exactly ``9 * nb_elements``, where
+         *          ``nb_elements`` is the number of facets in surface mode and the
+         *          number of tetrahedra in volume mode; the count is derived by this
+         *          class rather than asked of the caller, so the array and the
+         *          elements it describes cannot disagree. Covering only part of the
+         *          mesh is therefore not expressible: fill the remaining blocks with
+         *          the identity instead.
+         *
+         *          The coefficients are @b copied, so the caller may release or
+         *          overwrite the array as soon as the call returns.
          *
          *          @b Side effect: setting matrices disables the RVD mesh
          *          partitioning, and therefore its multi-threaded traversal, because
          *          partitioning reorders the background mesh in place and would
          *          otherwise misalign a per-element attribute. See the class comment;
          *          the restriction lasts for the lifetime of this object.
-         * @param[in] matrices The matrix coefficients, a multiple of nine of them,
-         *                 which is ``9 * nb_elements`` to cover every element. An
-         *                 empty vector restores the isotropic objective.
-         * @note Prefer this over building the array by hand when the matrices are
-         *       meant to be uniform: fill ``9 * nb_elements`` identical blocks.
+         * @param[in] matrices The ``9 * nb_elements`` coefficients, row-major 3x3
+         *                 blocks, or nullptr to restore the isotropic objective. The
+         *                 array is not owned.
+         * @note Elements beyond the count stored at the time of the call keep the
+         *       identity. This only matters after set_volumetric(), which changes the
+         *       number of elements: the matrices then stay valid for whatever element
+         *       index they still cover, and the remaining elements become isotropic
+         *       instead of being read out of bounds.
+         * @see clear_matrices()
+         */
+        void set_matrices(const double* matrices);
+
+        /**
+         * @brief Installs one matrix per background element, from a vector.
+         * @details Convenience overload for callers that already hold the
+         *          coefficients in a ``std::vector``. It performs the same work as
+         *          set_matrices(const double*), and additionally checks the length,
+         *          because a vector carries one.
+         * @param[in] matrices The coefficients. Its size must be exactly
+         *                 ``9 * nb_elements``, as documented on
+         *                 set_matrices(const double*); a different size is rejected
+         *                 with an error message and leaves the object unchanged. An
+         *                 empty vector is equivalent to passing nullptr.
+         * @see set_matrices(const double*)
          */
         void set_matrices(const std::vector<double>& matrices);
 
         /**
          * @brief Removes the per-element matrices and returns to the isotropic LpCVT.
-         * @details Equivalent to ``set_matrices({})``.
+         * @details Equivalent to ``set_matrices(nullptr)``.
          */
         void clear_matrices();
 
@@ -248,6 +274,18 @@ namespace geolio
          *          parameters are unsupported.
          */
         void rebuild_integrand();
+
+        /**
+         * @brief Number of per-element matrices the current mode expects.
+         * @details One matrix per facet when meshing the surface, one per tetrahedron
+         *          when meshing the volume. Derived here rather than supplied by the
+         *          caller, so the matrix array and the elements it describes cannot
+         *          disagree.
+         * @return The number of background elements of the current mode.
+         */
+        [[nodiscard]] GEO::index_t nb_matrix_elements() const {
+            return volumetric_ ? mesh_->cells.nb() : mesh_->facets.nb();
+        }
 
         /** @brief The norm exponent. */
         GEO::index_t p_;

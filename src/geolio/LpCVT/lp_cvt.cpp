@@ -58,34 +58,56 @@ namespace geolio
         rebuild_integrand();
     }
 
+    void LpCentroidalVoronoiTesselation::set_matrices(const double* matrices) {
+        if (matrices == nullptr) {
+            clear_matrices();
+            return;
+        }
+
+        // One matrix per element of the background mesh, the count being derived from
+        // the mode rather than asked of the caller. The coefficients are copied, so
+        // the caller keeps ownership of the array it passed.
+        nb_matrices_ = nb_matrix_elements();
+        matrices_.assign(matrices, matrices + 9 * nb_matrices_);
+
+        // Geogram's restricted Voronoi diagram partitions the background mesh with a
+        // Hilbert order on its first multi-threaded traversal, and partitioning
+        // reorders the mesh in place (vertices, facets and cells alike, see
+        // mesh_partition.cpp). A per-element attribute would then no longer match the
+        // element it was built for, so partitioning is disabled by pinning the
+        // traversal range.
+        //
+        // Pinning the facet range is what does it: the early-out of
+        // RVD_Nd_Impl::create_threads() tests facets_begin_ and facets_end_ only, so
+        // it returns before mesh_partition() is ever reached. The range of
+        // tetrahedra needs no pinning, both because that guard does not look at it
+        // and because the generic RVD already resolves an unspecified range to
+        // (0, cells.nb()), i.e. to the very range one would otherwise pin. Pinning it
+        // would furthermore silence the verbose message that
+        // compute_initial_sampling_in_volume() prints while tets_begin_ is NO_INDEX.
+        RVD_->set_facets_range(0, mesh_->facets.nb());
+
+        rebuild_integrand();
+    }
+
     void LpCentroidalVoronoiTesselation::set_matrices(const std::vector<double>& matrices) {
         if (matrices.empty()) {
             clear_matrices();
             return;
         }
-        if (matrices.size() % 9 != 0) {
-            LOG::ERROR("Per-element matrices must be given as blocks of 9 doubles "
-                       "(row-major 3x3), but {} doubles were supplied", matrices.size());
+
+        // A vector carries its length, so the contract of set_matrices(const double*)
+        // can be checked here instead of being silently trusted.
+        const GEO::index_t expected = nb_matrix_elements();
+        if (matrices.size() != static_cast<std::size_t>(9 * expected)) {
+            LOG::ERROR("Expected one row-major 3x3 matrix per background element, that "
+                       "is {} doubles for {}, but {} were supplied",
+                       std::size_t(9) * expected,
+                       volumetric_ ? "the volume" : "the surface", matrices.size());
             return;
         }
 
-        matrices_ = matrices;
-        // The number of covered elements follows from the array size, so the two can
-        // never disagree. Elements beyond the supplied blocks keep the identity.
-        nb_matrices_ = static_cast<GEO::index_t>(matrices_.size() / 9);
-
-        // Geogram's restricted Voronoi diagram partitions the background mesh with a
-        // Hilbert order on its first multi-threaded traversal, and partitioning
-        // reorders the mesh in place (vertices, facets and cells alike). A
-        // per-element attribute would then no longer match the element it was built
-        // for, so partitioning is disabled by pinning the traversal ranges to the
-        // whole mesh. Pinning both ranges is required because the early-out in the
-        // RVD only inspects the facet range.
-        RVD_->set_facets_range(0, mesh_->facets.nb());
-        if (mesh_->cells.nb() != 0)
-            RVD_->set_tetrahedra_range(0, mesh_->cells.nb());
-
-        rebuild_integrand();
+        set_matrices(matrices.data());
     }
 
     void LpCentroidalVoronoiTesselation::clear_matrices() {
