@@ -83,7 +83,7 @@ namespace geolio
         }
 
         MeshElementManager<DIM>& manager_;
-        const std::string attribute_name_; // Prevent anyone from using these attributes externally (unsafety).
+        const std::string attribute_id_; // Prevent anyone from using these attributes externally (unsafety).
 
         GEO::Mesh& mesh_;
         GEO::Attribute<GEO::index_t> mesh_f_timestamping_; // f -> timestamp counter to detect stale queue entries

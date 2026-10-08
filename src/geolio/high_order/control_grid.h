@@ -20,7 +20,7 @@ namespace geolio
          * @param[in] order Polynomial order of the high-order representation.
          */
         ControlGrid(const GEO::Mesh& mesh, const GEO::index_t order)
-            : attribute_name_(generate_random_string(22)),
+            : attribute_id_(generate_random_string(22)),
             mesh_(mesh),
             order_(order),
             CONTROL_POINTS_NB_PER_EDGE_(order+1),
@@ -65,7 +65,7 @@ namespace geolio
                        control_nodes_quantities_.destroy();
                     control_nodes_quantities_.create_vector_attribute(
                        control_nodes_.vertices.attributes(),
-                       attribute_name_+":quantities",
+                       attribute_id_+":quantities",
                        dim);
                 }
             }
@@ -208,7 +208,7 @@ namespace geolio
         }
 
     protected:
-        const std::string attribute_name_; // unique id
+        const std::string attribute_id_; // unique id
 
         const GEO::Mesh& mesh_;
 

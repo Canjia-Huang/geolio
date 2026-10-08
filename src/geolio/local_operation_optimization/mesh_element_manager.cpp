@@ -12,20 +12,20 @@ namespace geolio
     MeshElementManager<DIM>::MeshElementManager(
         GEO::Mesh& _mesh
         ) : mesh(_mesh),
-            attribute_name_(generate_random_string(22))
+            attribute_id_(generate_random_string(22))
     {
         assert(mesh.facets.are_simplices());
 
         /* Bind attributes */
-        mesh_v_boundary.bind(mesh.vertices.attributes(), attribute_name_+":boundary");
+        mesh_v_boundary.bind(mesh.vertices.attributes(), attribute_id_+":boundary");
         mesh_v_boundary.fill(false);
-        mesh_v_fixed.bind(mesh.vertices.attributes(), attribute_name_+":fixed");
+        mesh_v_fixed.bind(mesh.vertices.attributes(), attribute_id_+":fixed");
         mesh_v_fixed.fill(false);
-        mesh_v_non_manifold.bind(mesh.vertices.attributes(), attribute_name_+":non-manifold");
+        mesh_v_non_manifold.bind(mesh.vertices.attributes(), attribute_id_+":non-manifold");
         mesh_v_non_manifold.fill(false);
-        mesh_v_used.bind(mesh.vertices.attributes(), attribute_name_+":used");
+        mesh_v_used.bind(mesh.vertices.attributes(), attribute_id_+":used");
         mesh_v_used.fill(true);
-        mesh_f_used.bind(mesh.facets.attributes(), attribute_name_+":used");
+        mesh_f_used.bind(mesh.facets.attributes(), attribute_id_+":used");
         mesh_f_used.fill(true);
     }
 

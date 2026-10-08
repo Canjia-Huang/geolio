@@ -169,7 +169,7 @@ namespace geolio
          */
         void allocate_new_facets();
 
-        const std::string attribute_name_; // Prevent anyone from using these attributes externally (unsafety).
+        const std::string attribute_id_; // Prevent anyone from using these attributes externally (unsafety).
 
         std::vector<GEO::index_t> free_vertices_;
         std::vector<GEO::index_t> free_facets_;

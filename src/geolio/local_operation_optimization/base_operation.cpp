@@ -13,10 +13,10 @@ namespace geolio
         MeshElementManager<DIM>& mesh_element_manager
         ) : manager_(mesh_element_manager),
             mesh_(mesh_element_manager.mesh),
-            attribute_name_(generate_random_string(22))
+            attribute_id_(generate_random_string(22))
     {
         /* Bind attributes */
-        mesh_f_timestamping_.bind(mesh_.facets.attributes(), attribute_name_+":timestamping");
+        mesh_f_timestamping_.bind(mesh_.facets.attributes(), attribute_id_+":timestamping");
         mesh_f_timestamping_.fill(false);
     }
 

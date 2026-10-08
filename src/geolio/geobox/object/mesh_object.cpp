@@ -46,7 +46,7 @@ namespace geolio::geobox
         if (mesh_.cells.nb() == 0)
             show_volume_ = false;
 
-        set_attribute(attribute_);
+        set_attribute(vertices_point_attribute_name_);
     }
 
     void MeshObject::draw_object_properties(
@@ -125,7 +125,7 @@ namespace geolio::geobox
                     autorange();
 
                 if (ImGui::Button(
-                    (attribute_ + "##Attribute").c_str(),
+                    (vertices_point_attribute_name_ + "##Attribute").c_str(),
                     ImVec2(-1, 0)))
                     ImGui::OpenPopup("##Attributes");
 
@@ -295,7 +295,7 @@ namespace geolio::geobox
         if (show_attributes_) {
             mesh_gfx_.set_scalar_attribute(
                 attribute_subelements_,
-                attribute_name_,
+                point_attribute_name_,
                 colormap_range_min(),
                 colormap_range_max(),
                 colormaps_[current_colormap_index_].texture,
@@ -407,7 +407,7 @@ namespace geolio::geobox
         if (show_attributes_ &&
             attribute_subelements_ == GEO::MESH_VERTICES) {
             scalar_attribute.bind_if_is_defined(
-                mesh_.vertices.attributes(), attribute_name_
+                mesh_.vertices.attributes(), point_attribute_name_
             );
             if (scalar_attribute.is_bound()) {
                 textured = true;
@@ -922,7 +922,7 @@ namespace geolio::geobox
         const GEO::MeshSubElementsStore& subelements =
             mesh_.get_subelements_by_type(attribute_subelements_);
         scalar_attribute_.bind_if_is_defined(
-            subelements.attributes(), attribute_name_);
+            subelements.attributes(), point_attribute_name_);
         if (!scalar_attribute_.is_bound()) {
             // No attribute to display: keep the plain element color.
             return;
@@ -974,7 +974,7 @@ namespace geolio::geobox
         const GEO::MeshSubElementsStore& subelements =
             mesh_.get_subelements_by_type(attribute_subelements_);
             GEO::ReadOnlyScalarAttributeAdapter attribute(
-            subelements.attributes(), attribute_name_
+            subelements.attributes(), point_attribute_name_
             );
 
         attribute_min_ = 0.0;
@@ -1012,7 +1012,7 @@ namespace geolio::geobox
         const GEO::MeshSubElementsStore& subelements =
             mesh_.get_subelements_by_type(attribute_subelements_);
         GEO::ReadOnlyScalarAttributeAdapter attribute(
-            subelements.attributes(), attribute_name_
+            subelements.attributes(), point_attribute_name_
         );
 
         // Scanning the attribute is only worth it when its range changed: the
@@ -1105,12 +1105,12 @@ namespace geolio::geobox
     void MeshObject::set_attribute(
         const std::string& attribute
         ) {
-        attribute_ = attribute;
+        vertices_point_attribute_name_ = attribute;
         std::string subelements_name;
         GEO::String::split_string(
-            attribute_, '.',
+            vertices_point_attribute_name_, '.',
             subelements_name,
-            attribute_name_);
+            point_attribute_name_);
 
         attribute_subelements_ = GEO::Mesh::name_to_subelements_type(subelements_name);
 
