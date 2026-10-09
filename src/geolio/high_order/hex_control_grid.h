@@ -209,7 +209,8 @@ namespace geolio
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vecng<DIM, double> p(0, 0, 0);
+            GEO::vecng<DIM, double> p;
+            std::fill_n(p.data(), DIM, 0.0);
 
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
@@ -223,7 +224,7 @@ namespace geolio
                     const double basis_uv = Bu[i] * Bv[j];
                     for (GEO::index_t k = 0; k <= this->order_; ++k) {
                         const double lag_basis = basis_uv * Bw[k];
-                        p += lag_basis * control_node(this->cell_nd(c, i, j, k));
+                        p += lag_basis * this->control_node(this->cell_nd(c, i, j, k));
                     }
                 }
             }
@@ -329,7 +330,7 @@ namespace geolio
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
                     const auto& p = GEO::Memory::pointer_as_reference<GEO::vec3>(
-                        control_node_ptr(this->cell_facet_nd(c, lf, i, j)));
+                        this->control_node_ptr(this->cell_facet_nd(c, lf, i, j)));
                     Tu += p * dBu[i] * Bv[j];
                     Tv += p * Bu[i] * dBv[j];
                 }
@@ -401,9 +402,9 @@ namespace geolio
                         const double lag_basis_duvw = dBu[i] * basis_vw;
                         const double lag_basis_udvw = Bu[i] * basis_dvw;
                         const double lag_basis_uvdw = Bu[i] * basis_vdw;
-                        du += lag_basis_duvw * control_node(this->cell_nd(c, i, j, k));
-                        dv += lag_basis_udvw * control_node(this->cell_nd(c, i, j, k));
-                        dw += lag_basis_uvdw * control_node(this->cell_nd(c, i, j, k));
+                        du += lag_basis_duvw * this->control_node(this->cell_nd(c, i, j, k));
+                        dv += lag_basis_udvw * this->control_node(this->cell_nd(c, i, j, k));
+                        dw += lag_basis_uvdw * this->control_node(this->cell_nd(c, i, j, k));
                     }
                 }
             }
@@ -483,7 +484,7 @@ namespace geolio
             const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
             const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
             const GEO::vec3 dw = GEO::Memory::pointer_as_reference<GEO::vec3>(dw_all.data());
-            const double det_J = GEO::dot(dw,GEO::cross(du,dv));
+            const double det_J = GEO::dot(dw, GEO::cross(du,dv));
             switch (quality_type) {
                 case MeasureType::DET_JACOBIAN: {
                     return det_J;
@@ -686,7 +687,7 @@ namespace geolio
                             const GEO::vec3 uvw = project_hex_lf_uv_to_uvw(GEO::vec2(u,v), lf);
 
                             const auto& p = compute_cell_uvw_position(c, uvw);
-                            std::copy_n(mesh_out.vertices.point_ptr(new_v), this->mesh_v_dim_, p.data());
+                            std::copy_n(p.data(), this->mesh_v_dim_, mesh_out.vertices.point_ptr(new_v));
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;

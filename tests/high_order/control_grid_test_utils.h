@@ -104,13 +104,17 @@ namespace geolio::test
     [[nodiscard]] inline std::vector<GEO::vec3> grid_unit_samples_3d(const GEO::index_t resolution) {
         std::vector<GEO::vec3> samples;
         samples.reserve((resolution+1)*(resolution+1)*(resolution+1));
-        for (GEO::index_t i = 0; i <= resolution; ++i)
-            for (GEO::index_t j = 0; j <= resolution; ++j)
-                for (GEO::index_t k = 0; k <= resolution; ++k)
+        for (GEO::index_t i = 0; i <= resolution; ++i) {
+            for (GEO::index_t j = 0; j <= resolution; ++j) {
+                for (GEO::index_t k = 0; k <= resolution; ++k) {
                     samples.emplace_back(
                         static_cast<double>(i)/resolution,
                         static_cast<double>(j)/resolution,
                         static_cast<double>(k)/resolution);
+                }
+            }
+        }
+
         return samples;
     }
 
