@@ -87,7 +87,11 @@ namespace geolio
     template<GEO::index_t DIM>
     class QuadControlGrid : public SurfaceControlGrid<DIM> {
     public:
-        QuadControlGrid(const GEO::Mesh& mesh, GEO::index_t order): SurfaceControlGrid<DIM>(mesh, order) {
+        QuadControlGrid(
+            const GEO::Mesh& mesh,
+            GEO::index_t order
+            ): SurfaceControlGrid<DIM>(mesh, order)
+        {
             assert([&]() {
                 for (const auto& f : this->mesh_.facets) {
                     if (this->mesh_.facets.nb_vertices(f) != 4)
@@ -118,7 +122,10 @@ namespace geolio
          *       function uses the control-point coordinates currently stored in
          *       the internal control grid to compute the mapped position.
          */
-        [[nodiscard]] GEO::vecng<DIM, double> compute_facet_uv_position(const GEO::index_t f, const GEO::vec2& uv) const {
+        [[nodiscard]] GEO::vecng<DIM, double> compute_facet_uv_position(
+            const GEO::index_t f,
+            const GEO::vec2& uv
+            ) const {
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -161,7 +168,11 @@ namespace geolio
          * @note The function does not take ownership of `cur_control_nodes_ptr` and
          *       treats it as read-only. Caller must ensure the buffer is valid.
          */
-        [[nodiscard]] GEO::vecng<DIM, double> compute_facet_uv_position(const GEO::index_t f, const GEO::vec2& uv, const double* cur_control_nodes_ptr) const {
+        [[nodiscard]] GEO::vecng<DIM, double> compute_facet_uv_position(
+            const GEO::index_t f,
+            const GEO::vec2& uv,
+            const double* cur_control_nodes_ptr
+            ) const {
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -199,8 +210,11 @@ namespace geolio
          * @pre `uv.x` and `uv.y` are in [0, 1].
          * @note The returned vector is not normalized; its magnitude equals the local area scaling.
          */
-        [[nodiscard]] GEO::vec3 compute_facet_uv_normal(GEO::index_t f, const GEO::vec2& uv) const requires (DIM == 3)
-        {
+        [[nodiscard]] GEO::vec3 compute_facet_uv_normal(
+            const GEO::index_t f,
+            const GEO::vec2& uv
+            ) {
+            assert(this->mesh_v_dim_ == 3);
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -217,7 +231,8 @@ namespace geolio
             GEO::vec3 Tu(0, 0, 0), Tv(0, 0, 0);
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const auto& p = this->control_node(this->facet_nd(f, i, j));
+                    const GEO::vec3& p = GEO::Memory::pointer_as_reference<GEO::vec3>(
+                        this->control_node_ptr(this->facet_nd(f, i, j)));
                     Tu += p * dBu[i] * Bv[j];
                     Tv += p * Bu[i] * dBv[j];
                 }
@@ -243,10 +258,15 @@ namespace geolio
          * @param[out] dBv Output buffer that receives the 1D basis derivatives in the v direction.
          */
         void compute_facet_uv_dudv(
-            GEO::index_t f, const GEO::vec2& uv,
-            GEO::vecng<DIM, double>& du, GEO::vecng<DIM, double>& dv,
-            std::vector<double>& Bu, std::vector<double>& Bv,
-            std::vector<double>& dBu, std::vector<double>& dBv) const {
+            const GEO::index_t f,
+            const GEO::vec2& uv,
+            GEO::vecng<DIM, double>& du,
+            GEO::vecng<DIM, double>& dv,
+            std::vector<double>& Bu,
+            std::vector<double>& Bv,
+            std::vector<double>& dBu,
+            std::vector<double>& dBv
+            ) const {
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -276,125 +296,6 @@ namespace geolio
         }
 
         /**
-         * Evaluate one scalar physical quantity at a parameter point in a facet.
-         * @param[in] f facet index, 0,1,...,quad_mesh.facets.nb()-1
-         * @param[in] uv parameter point in the facet parameter domain [0, 1]^2
-         * @param[in] d physical quantity component index, 0,1,...,PHYS_DIM_-1
-         * @return interpolated physical quantity value of component \p d
-         */
-        [[nodiscard]] double compute_facet_uv_quantity(GEO::index_t f, const GEO::vec2& uv, GEO::index_t d) const {
-            assert(f < this->mesh_.facets.nb());
-            assert(uv.x >= 0 && uv.x <= 1);
-            assert(uv.y >= 0 && uv.y <= 1);
-            assert(this->control_nodes_quantities_.is_bound());
-            const auto dim = this->control_node_quantities_dimension();
-            assert(d < dim);
-
-            double q = 0;
-
-            std::vector<double> Bu(this->order_+1);
-            std::vector<double> Bv(this->order_+1);
-            geolio::Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
-            geolio::Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
-
-            for (GEO::index_t i = 0; i <= this->order_; ++i) {
-                for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const double lag_basis = Bu[i] * Bv[j];
-                    q += lag_basis * this->control_nodes_quantities_[dim*this->facet_nd(f, i, j)+d];
-                }
-            }
-
-            return q;
-        }
-
-        /**
-         * Evaluate all physical quantity components at a parameter point in a facet.
-         * @param[in] f cell index, 0,1,...,quad_mesh.facets.nb()-1
-         * @param[in] uv parameter point in the facet parameter domain [0, 1]^2
-         * @param[out] q output buffer with length at least PHYS_DIM_; receives interpolated values
-         */
-        void compute_facet_uv_quantities(GEO::index_t f, const GEO::vec2& uv, double* q) const {
-            assert(f < this->mesh_.facets.nb());
-            assert(uv.x >= 0 && uv.x <= 1);
-            assert(uv.y >= 0 && uv.y <= 1);
-            assert(this->control_nodes_quantities_.is_bound());
-            const auto phys_dim = this->control_node_quantities_dimension();
-
-            std::fill_n(q, phys_dim, 0.0);
-
-            std::vector<double> Bu(this->order_+1);
-            std::vector<double> Bv(this->order_+1);
-            geolio::Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
-            geolio::Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
-
-            for (GEO::index_t i = 0; i <= this->order_; ++i) {
-                for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const double lag_basis = Bu[i] * Bv[j];
-                    for (GEO::index_t d = 0; d < phys_dim; ++d)
-                        q[d] += lag_basis * this->control_nodes_quantities_[phys_dim*this->facet_nd(f, i, j)+d];
-                }
-            }
-        }
-
-        /**
-         * Evaluate the parametric derivatives of all physical quantities at a facet point.
-         *
-         * The physical quantities stored at the facet control nodes are interpolated with the
-         * tensor-product Lagrange basis, and their partial derivatives with respect to the local
-         * parameters `u` and `v` are returned.
-         *
-         * @param[in] f Facet index, 0,1,...,mesh_.facets.nb()-1.
-         * @param[in] uv Facet-local parameter point `(u, v)` in [0, 1]^2.
-         * @param[out] du Output buffer of length at least `control_node_quantities_dimension()`;
-         *                 receives the partial derivatives with respect to `u`.
-         * @param[out] dv Output buffer of length at least `control_node_quantities_dimension()`;
-         *                 receives the partial derivatives with respect to `v`.
-         * @param[out] Bu Output buffer receiving the 1D Lagrange basis values at `uv.x`.
-         * @param[out] Bv Output buffer receiving the 1D Lagrange basis values at `uv.y`.
-         * @param[out] dBu Output buffer receiving the derivatives of the 1D basis at `uv.x`.
-         * @param[out] dBv Output buffer receiving the derivatives of the 1D basis at `uv.y`.
-         * @pre `f < mesh_.facets.nb()`.
-         * @pre `uv.x` and `uv.y` are in [0, 1].
-         * @pre Facet control-node physical quantities are bound.
-         */
-        void compute_facet_uv_quantities_dudv(
-            GEO::index_t f, const GEO::vec2& uv,
-            double* du, double* dv,
-            std::vector<double>& Bu, std::vector<double>& Bv,
-            std::vector<double>& dBu, std::vector<double>& dBv) const {
-            assert(f < this->mesh_.facets.nb());
-            assert(uv.x >= 0 && uv.x <= 1);
-            assert(uv.y >= 0 && uv.y <= 1);
-            assert(this->control_nodes_quantities_.is_bound());
-            const auto phys_dim = this->control_node_quantities_dimension();
-
-            std::fill_n(du, phys_dim, 0.0);
-            std::fill_n(dv, phys_dim, 0.0);
-
-            Bu.resize(this->order_+1);
-            Bv.resize(this->order_+1);
-            dBu.resize(this->order_+1);
-            dBv.resize(this->order_+1);
-            Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_deriv_1D(uv.x, this->node_positions_1D_, dBu);
-            Lagrange_basis_deriv_1D(uv.y, this->node_positions_1D_, dBv);
-
-            std::vector<double> node_quantities(phys_dim);
-            for (GEO::index_t i = 0; i <= this->order_; ++i) {
-                for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    compute_facet_uv_quantities(f, GEO::vec2(this->node_positions_1D_[i], this->node_positions_1D_[j]), &node_quantities[0]);
-                    const double lag_basis_duv = dBu[i] * Bv[j];
-                    const double lag_basis_udv = Bu[i] * dBv[j];
-                    for (GEO::index_t d = 0; d < phys_dim; ++d) {
-                        du[d] += lag_basis_duv * node_quantities[d];
-                        dv[d] += lag_basis_udv * node_quantities[d];
-                    }
-                }
-            }
-        }
-
-        /**
          * @brief Compute a unit-length reference normal for a 3D quadrilateral facet.
          *
          * The reference normal is computed from the four corner control-node positions
@@ -411,8 +312,10 @@ namespace geolio
          * @pre DIM == 3
          * @pre f < mesh_.facets.nb()
          */
-        [[nodiscard]] GEO::vec3 compute_facet_reference_normal(GEO::index_t f) const requires (DIM == 3)
-        {
+        [[nodiscard]] GEO::vec3 compute_facet_reference_normal(
+            const GEO::index_t f
+            ) {
+            assert(this->mesh_v_dim_ == 3);
             assert(f < this->mesh_.facets.nb());
             const auto nd0 = this->control_node(this->facet_vertex_nd(f, 0));
             const auto nd1 = this->control_node(this->facet_vertex_nd(f, 1));
@@ -441,19 +344,31 @@ namespace geolio
          *                       - `QualityType::MIPS`: penalizes shear and anisotropic stretching, [1, inf], best: 1
          * @return the requested quality value at the given parameter point
          */
-        [[nodiscard]] double compute_facet_uv_measure(GEO::index_t f, const GEO::vec2& uv, MeasureType quality_type) const {
+        [[nodiscard]] double compute_facet_uv_measure(
+            const GEO::index_t f,
+            const GEO::vec2& uv,
+            MeasureType quality_type
+            ) const {
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
 
-            GEO::vecng<DIM, double> du, dv;
+            GEO::vecng<DIM, double> du_all, dv_all;
             std::vector<double> Bu, Bv, dBu, dBv;
-            this->compute_facet_uv_dudv(f, uv, du, dv, Bu, Bv, dBu, dBv);
+            this->compute_facet_uv_dudv(f, uv, du_all, dv_all, Bu, Bv, dBu, dBv);
 
             double det_J = 0;
-            if constexpr (DIM == 2)
+            double du_length, dv_length;
+            if (this->mesh_v_dim_ == 2) {
+                const GEO::vec2 du = GEO::Memory::pointer_as_reference<GEO::vec2>(du_all.data());
+                const GEO::vec2 dv = GEO::Memory::pointer_as_reference<GEO::vec2>(dv_all.data());
                 det_J = geolio::cross(du, dv);
-            else if constexpr (DIM == 3) { // Pseudo-Jacobian
+                du_length = du.length();
+                dv_length = dv.length();
+            }
+            else if (this->mesh_v_dim_ == 3) {
+                const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
+                const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
                 const auto cross = GEO::cross(du, dv);
                 if (quality_type == MeasureType::ABSOLUTE_SQ_AREA)
                     det_J = GEO::length(cross);
@@ -461,7 +376,11 @@ namespace geolio
                     const auto ref_normal = compute_facet_reference_normal(f);
                     det_J = GEO::dot(cross, ref_normal);
                 }
+                du_length = du.length();
+                dv_length = dv.length();
             }
+            else
+                assert(0);
 
             switch (quality_type) {
                 case MeasureType::DET_JACOBIAN: {
@@ -471,14 +390,14 @@ namespace geolio
                     return 0.5*det_J*det_J;
                 }
                 case MeasureType::MIPS: {
-                    const double F_sq_norm = du.length2()+dv.length2();
+                    const double F_sq_norm = du_length*du_length + dv_length*dv_length;
                     return F_sq_norm / (2.0 * std::abs(det_J));
                 }
                 case MeasureType::SCALED_JACOBIAN: {
-                    return det_J/(du.length()*dv.length());
+                    return det_J/(du_length*dv_length);
                 }
                 case MeasureType::INVERSE_MEAN_RATIO: {
-                    const double F_sq_norm = du.length2()+dv.length2();
+                    const double F_sq_norm = du_length*du_length + dv_length*dv_length;
                     return 2.0*std::abs(det_J)/F_sq_norm;
                 }
                 default: assert(0);
@@ -500,18 +419,24 @@ namespace geolio
          *                      - `gradient[2*N+0] = d(detJ)/dP_N.x`
          *                      - `gradient[2*N+1] = d(detJ)/dP_N.y`
          */
-        void compute_facet_uv_detJ_gradient(GEO::index_t f, const GEO::vec2& uv, std::vector<double>& gradient) const {
+        void compute_facet_uv_detJ_gradient(
+            const GEO::index_t f,
+            const GEO::vec2& uv,
+            std::vector<double>& gradient
+            ) const {
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
 
-            GEO::vecng<DIM, double> du, dv;
+            GEO::vecng<DIM, double> du_all, dv_all;
             std::vector<double> Bu, Bv, dBu, dBv;
-            this->compute_facet_uv_dudv(f, uv, du, dv, Bu, Bv, dBu, dBv);
+            this->compute_facet_uv_dudv(f, uv, du_all, dv_all, Bu, Bv, dBu, dBv);
 
-            gradient.resize(DIM*this->CONTROL_POINTS_NB_PER_FACET_);
+            gradient.resize(this->mesh_v_dim_ * this->CONTROL_POINTS_NB_PER_FACET_);
 
-            if constexpr (DIM == 2) {
+            if (this->mesh_v_dim_ == 2) {
+                const GEO::vec2 du = GEO::Memory::pointer_as_reference<GEO::vec2>(du_all.data());
+                const GEO::vec2 dv = GEO::Memory::pointer_as_reference<GEO::vec2>(dv_all.data());
                 const GEO::vec2 perp_dv(dv.y, -dv.x); // (-dv_y, dv_x)
                 const GEO::vec2 perp_du(-du.y, du.x);  // (du_y, -du_x)
                 for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
@@ -525,7 +450,9 @@ namespace geolio
                     }
                 }
             }
-            else if constexpr (DIM == 3) { // gradient 0.5 * \Vert cross(du, dv) \Vert^2
+            else if (this->mesh_v_dim_ == 3) { // gradient 0.5 * \Vert cross(du, dv) \Vert^2
+                const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
+                const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
                 const auto ref_normal = compute_facet_reference_normal(f);
                 const auto perp_du = GEO::cross(ref_normal, du);
                 const auto perp_dv = GEO::cross(dv, ref_normal);
@@ -543,7 +470,7 @@ namespace geolio
                 }
             }
             else
-                static_assert(false);
+                assert(0);
         }
 
         /**
@@ -570,18 +497,24 @@ namespace geolio
          *       compute the appropriate analytical gradient for each case using the Lagrange
          *       basis derivatives returned by compute_facet_uv_dudv.
          */
-        void compute_facet_uv_absolute_area_sq_gradient(GEO::index_t f, const GEO::vec2& uv, std::vector<double>& gradient) const {
+        void compute_facet_uv_absolute_area_sq_gradient(
+            const GEO::index_t f,
+            const GEO::vec2& uv,
+            std::vector<double>& gradient
+            ) const {
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
 
-            GEO::vecng<DIM, double> du, dv;
+            GEO::vecng<DIM, double> du_all, dv_all;
             std::vector<double> Bu, Bv, dBu, dBv;
-            this->compute_facet_uv_dudv(f, uv, du, dv, Bu, Bv, dBu, dBv);
+            this->compute_facet_uv_dudv(f, uv, du_all, dv_all, Bu, Bv, dBu, dBv);
 
-            gradient.resize(DIM * this->CONTROL_POINTS_NB_PER_FACET_);
+            gradient.resize(this->mesh_v_dim_ * this->CONTROL_POINTS_NB_PER_FACET_);
 
-            if constexpr (DIM == 2) {
+            if (this->mesh_v_dim_ == 2) {
+                const GEO::vec2 du = GEO::Memory::pointer_as_reference<GEO::vec2>(du_all.data());
+                const GEO::vec2 dv = GEO::Memory::pointer_as_reference<GEO::vec2>(dv_all.data());
                 // 2D objective function: f = 0.5 * det(J)^2
                 // det(J) = du.x * dv.y - du.y * dv.x
                 const double detJ = du.x * dv.y - du.y * dv.x;
@@ -602,7 +535,9 @@ namespace geolio
                     }
                 }
             }
-            else if constexpr (DIM == 3) {
+            else if (this->mesh_v_dim_ == 3) {
+                const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
+                const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
                 // 3D objective function: f = 0.5 * || du x dv ||^2
                 const GEO::vec3 du_3d(du.x, du.y, du.z);
                 const GEO::vec3 dv_3d(dv.x, dv.y, dv.z);
@@ -633,7 +568,7 @@ namespace geolio
                 }
             }
             else
-                static_assert(false);
+                assert(0);
         }
 
         /**
@@ -643,7 +578,9 @@ namespace geolio
          *            facet, in the same order as `quad_mesh_.facets`.
          * @note The caller is responsible for providing storage for all facets.
          */
-        void compute_facets_area(std::vector<double>& areas) {
+        void compute_facets_area(
+            std::vector<double>& areas
+            ) {
             areas.resize(this->mesh_.facets.nb());
 
             /*
@@ -667,18 +604,21 @@ namespace geolio
          * @param[in] f facet index, 0,1,...,quad_mesh.facets.nb()-1
          * @param[out] P matrix of control-point positions for facet \\p f
          */
-        void compute_cell_vertices_position_matrix(GEO::index_t f, Eigen::MatrixXd& P) const {
+        void compute_facet_vertices_position_matrix(
+            const GEO::index_t f,
+            Eigen::MatrixXd& P
+            ) const {
             assert(f < this->mesh_.facets.nb());
-            assert(P.rows() == DIM);
+            assert(P.rows() == this->mesh_v_dim_);
             assert(P.cols() == this->CONTROL_POINTS_NB_PER_FACET_);
 
             for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_FACET_; ++i) {
                 const auto& nd = this->element_control_nodes_[this->CONTROL_POINTS_NB_PER_FACET_*f+i];
                 const auto& ndp = this->control_node(nd);
-                P(0, i) = ndp.x;
-                P(1, i) = ndp.y;
-                if constexpr (DIM == 3)
-                    P(2, i) = ndp.z;
+                P(0, i) = ndp[0];
+                P(1, i) = ndp[1];
+                if constexpr (this->mesh_v_dim_ == 3)
+                    P(2, i) = ndp[2];
             }
         }
 
@@ -688,7 +628,10 @@ namespace geolio
          * @param[out] Bg gradient matrix of tensor-product basis values
          * @pre Bg.size == CONTROL_POINTS_NB_PER_FACET * 2
          */
-        void compute_basis_gradient_matrix(const GEO::vec2& uv, Eigen::MatrixXd& Bg) const {
+        void compute_basis_gradient_matrix(
+            const GEO::vec2& uv,
+            Eigen::MatrixXd& Bg
+            ) const {
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
             assert(Bg.rows() == this->CONTROL_POINTS_NB_PER_FACET_);
@@ -735,7 +678,7 @@ namespace geolio
             GEO::Attribute<GEO::vec2>* mesh_out_v_uv = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_f_facet = nullptr
             ) const {
-            assert(mesh_out.vertices.dimension() == DIM);
+            assert(mesh_out.vertices.dimension() == this->mesh_v_dim_);
             if (mesh_out_v_facet != nullptr) {
                 assert(mesh_out_v_facet->is_bound());
                 assert(mesh_out_v_facet->size() == mesh_out.vertices.nb());
@@ -773,7 +716,8 @@ namespace geolio
 
                         const GEO::vec2 uv(u, v);
 
-                        mesh_out.vertices.point<DIM>(new_v) = this->compute_facet_uv_position(f, uv);
+                        const auto& p = this->compute_facet_uv_position(f, uv);
+                        std::copy_n(mesh_out.vertices.point_ptr(new_v), this->mesh_v_dim_, p.data());
 
                         if (mesh_out_v_facet != nullptr)
                             (*mesh_out_v_facet)[new_v] = f;
