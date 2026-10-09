@@ -686,7 +686,7 @@ namespace geolio::test
     }
 
     TYPED_TEST(SingleQuadControlGridTest, measure_not_inverse) {
-        constexpr GEO::index_t DIM = TypeParam::value;
+        constexpr GEO::index_t DIM = TypeParam::value+2;
 
         // Ridge over the interior control-node lines. Whatever the amplitude, such a profile keeps
         // the orientation of the mapping, hence detJ stays strictly positive (it is exactly 1 for
@@ -707,122 +707,122 @@ namespace geolio::test
         this->save_high_order_mesh_facets();
     }
 
-    // TYPED_TEST(SingleQuadControlGridTest, measure_inverse) {
-    //     constexpr GEO::index_t DIM = TypeParam::value;
-    //
-    //     // Push the u = 0.25 and u = 0.75 lines apart and bulge the facet: the control net folds
-    //     // over itself, so the mapping is inverted on part of the facet.
-    //     this->offset_line(1, axis_offset<DIM>(0, -1.0) + bulge_offset<DIM>(0.5));
-    //     this->offset_line(2, bulge_offset<DIM>(1.0));
-    //     this->offset_line(3, axis_offset<DIM>(0, +1.0) + bulge_offset<DIM>(0.5));
-    //
-    //     this->expect_mapping_interpolates_control_nodes(FACET);
-    //
-    //     double min_det_jacobian = std::numeric_limits<double>::max();
-    //     double max_det_jacobian = -std::numeric_limits<double>::max();
-    //     for (const auto& uv : grid_unit_samples_2d(SAMPLE_RESOLUTION)) {
-    //         const auto quality = this->evaluate_quality(FACET, uv);
-    //         expect_quality_invariants(quality, parametric_context("uv", uv));
-    //
-    //         min_det_jacobian = std::min(min_det_jacobian, quality.det_jacobian);
-    //         max_det_jacobian = std::max(max_det_jacobian, quality.det_jacobian);
-    //     }
-    //
-    //     // The fold is local: the facet holds both an inverted and a valid region.
-    //     EXPECT_LT(min_det_jacobian, 0.0);
-    //     EXPECT_GT(max_det_jacobian, 0.0);
-    //
-    //     this->save_control_nodes();
-    //     this->save_high_order_mesh_facets();
-    // }
-    //
-    // TYPED_TEST(SingleQuadControlGridTest, measure_degenerate) {
-    //     // Collapse two control nodes of the same line onto each other.
-    //     this->control_grid->control_node(this->control_grid->facet_nd(FACET, 2, 2)) =
-    //         this->control_grid->control_node(this->control_grid->facet_nd(FACET, 2, 1));
-    //
-    //     this->expect_mapping_interpolates_control_nodes(FACET);
-    //
-    //     double min_abs_det_jacobian = std::numeric_limits<double>::max();
-    //     double min_det_jacobian = std::numeric_limits<double>::max();
-    //     double max_det_jacobian = -std::numeric_limits<double>::max();
-    //     for (const auto& uv : grid_unit_samples_2d(2*SAMPLE_RESOLUTION)) {
-    //         const auto quality = this->evaluate_quality(FACET, uv);
-    //         expect_quality_invariants(quality, parametric_context("uv", uv));
-    //
-    //         min_abs_det_jacobian = std::min(min_abs_det_jacobian, std::abs(quality.det_jacobian));
-    //         min_det_jacobian = std::min(min_det_jacobian, quality.det_jacobian);
-    //         max_det_jacobian = std::max(max_det_jacobian, quality.det_jacobian);
-    //     }
-    //
-    //     // The Jacobian is continuous and changes sign across the facet, so it vanishes somewhere
-    //     // in between: the mapping of the collapsed control net is degenerate.
-    //     EXPECT_LT(min_det_jacobian, 0.0);
-    //     EXPECT_GT(max_det_jacobian, 0.0);
-    //
-    //     // It also gets far below the nominal value of the reference element (|detJ| ~ 7e-4
-    //     // around (u, v) = (0.425, 0.375), which the sampling grid must be fine enough to see).
-    //     EXPECT_LT(min_abs_det_jacobian, DEGENERATE_DET_JACOBIAN_TOL);
-    //
-    //     this->save_control_nodes();
-    //     this->save_high_order_mesh_facets();
-    // }
-    //
-    // /**
-    //  * @brief Fixture of the tests running on the mesh made of two unit quads sharing an edge.
-    //  * @tparam DimType Wrapper carrying the physical dimension, as in DimTypes.
-    //  */
-    // template <typename DimType>
-    // class TwoQuadControlGridTest : public QuadControlGridTest<DimType::value> {
-    // protected:
-    //     static constexpr GEO::index_t DIM = DimType::value;
-    //     static constexpr GEO::index_t ORDER = 5;
-    //
-    //     void SetUp() override {
-    //         this->create_vertices(TWO_QUAD_CORNERS);
-    //         this->mesh.facets.create_quad(0, 1, 2, 3);
-    //         this->mesh.facets.create_quad(5, 2, 1, 4);
-    //         this->mesh.facets.connect();
-    //
-    //         this->control_grid = std::make_unique<QuadControlGrid<DIM>>(this->mesh, ORDER);
-    //     }
-    // };
-    //
-    // TYPED_TEST_SUITE(TwoQuadControlGridTest, MeshDimTypes);
-    //
-    // TYPED_TEST(TwoQuadControlGridTest, regular) {
-    //     this->expect_mapping_interpolates_control_nodes(0);
-    //     this->expect_mapping_interpolates_control_nodes(1);
-    //     this->expect_identity_mapping(0);
-    //     this->expect_quality_invariants_over_grid(0, SAMPLE_RESOLUTION);
-    //     this->expect_quality_invariants_over_grid(1, SAMPLE_RESOLUTION);
-    //
-    //     // The facets share their common edge, hence they must also share its control nodes.
-    //     EXPECT_EQ(this->control_grid->facet_vertex_nd(0, 1), this->control_grid->facet_vertex_nd(1, 2));
-    //     EXPECT_EQ(this->control_grid->facet_vertex_nd(0, 2), this->control_grid->facet_vertex_nd(1, 1));
-    //     for (GEO::index_t k = 0, order = this->control_grid->order(); k <= order; ++k) {
-    //         SCOPED_TRACE(::testing::Message() << "edge node " << k);
-    //         EXPECT_EQ(
-    //             this->control_grid->facet_edge_nd(0, 1, k),
-    //             this->control_grid->facet_edge_nd(1, 1, order - k) // shared edge, opposite orientations
-    //             );
-    //     }
-    //
-    //     this->save_control_nodes();
-    //     this->save_high_order_mesh_facets();
-    // }
-    //
-    // TYPED_TEST(TwoQuadControlGridTest, random) {
-    //     this->jiggle_control_node(this->control_grid->facet_edge_nd(0, 1, 3), +0.2);
-    //     this->jiggle_control_node(this->control_grid->facet_nd(0, 2, 2), -0.2);
-    //     this->jiggle_control_node(this->control_grid->facet_nd(1, 1, 4), +0.2);
-    //
-    //     this->expect_mapping_interpolates_control_nodes(0);
-    //     this->expect_mapping_interpolates_control_nodes(1);
-    //     this->expect_quality_invariants_over_grid(0, SAMPLE_RESOLUTION);
-    //     this->expect_quality_invariants_over_grid(1, SAMPLE_RESOLUTION);
-    //
-    //     this->save_control_nodes();
-    //     this->save_high_order_mesh_facets();
-    // }
+    TYPED_TEST(SingleQuadControlGridTest, measure_inverse) {
+        constexpr GEO::index_t DIM = TypeParam::value+2;
+
+        // Push the u = 0.25 and u = 0.75 lines apart and bulge the facet: the control net folds
+        // over itself, so the mapping is inverted on part of the facet.
+        this->offset_line(1, axis_offset<DIM>(0, -1.0) + bulge_offset<DIM>(0.5));
+        this->offset_line(2, bulge_offset<DIM>(1.0));
+        this->offset_line(3, axis_offset<DIM>(0, +1.0) + bulge_offset<DIM>(0.5));
+
+        this->expect_mapping_interpolates_control_nodes(FACET);
+
+        double min_det_jacobian = std::numeric_limits<double>::max();
+        double max_det_jacobian = -std::numeric_limits<double>::max();
+        for (const auto& uv : grid_unit_samples_2d(SAMPLE_RESOLUTION)) {
+            const auto quality = this->evaluate_quality(FACET, uv);
+            expect_quality_invariants(quality, parametric_context("uv", uv));
+
+            min_det_jacobian = std::min(min_det_jacobian, quality.det_jacobian);
+            max_det_jacobian = std::max(max_det_jacobian, quality.det_jacobian);
+        }
+
+        // The fold is local: the facet holds both an inverted and a valid region.
+        EXPECT_LT(min_det_jacobian, 0.0);
+        EXPECT_GT(max_det_jacobian, 0.0);
+
+        this->save_control_nodes();
+        this->save_high_order_mesh_facets();
+    }
+
+    TYPED_TEST(SingleQuadControlGridTest, measure_degenerate) {
+        // Collapse two control nodes of the same line onto each other.
+        this->control_grid->control_node(this->control_grid->facet_nd(FACET, 2, 2)) =
+            this->control_grid->control_node(this->control_grid->facet_nd(FACET, 2, 1));
+
+        this->expect_mapping_interpolates_control_nodes(FACET);
+
+        double min_abs_det_jacobian = std::numeric_limits<double>::max();
+        double min_det_jacobian = std::numeric_limits<double>::max();
+        double max_det_jacobian = -std::numeric_limits<double>::max();
+        for (const auto& uv : grid_unit_samples_2d(2*SAMPLE_RESOLUTION)) {
+            const auto quality = this->evaluate_quality(FACET, uv);
+            expect_quality_invariants(quality, parametric_context("uv", uv));
+
+            min_abs_det_jacobian = std::min(min_abs_det_jacobian, std::abs(quality.det_jacobian));
+            min_det_jacobian = std::min(min_det_jacobian, quality.det_jacobian);
+            max_det_jacobian = std::max(max_det_jacobian, quality.det_jacobian);
+        }
+
+        // The Jacobian is continuous and changes sign across the facet, so it vanishes somewhere
+        // in between: the mapping of the collapsed control net is degenerate.
+        EXPECT_LT(min_det_jacobian, 0.0);
+        EXPECT_GT(max_det_jacobian, 0.0);
+
+        // It also gets far below the nominal value of the reference element (|detJ| ~ 7e-4
+        // around (u, v) = (0.425, 0.375), which the sampling grid must be fine enough to see).
+        EXPECT_LT(min_abs_det_jacobian, DEGENERATE_DET_JACOBIAN_TOL);
+
+        this->save_control_nodes();
+        this->save_high_order_mesh_facets();
+    }
+
+    /**
+     * @brief Fixture of the tests running on the mesh made of two unit quads sharing an edge.
+     * @tparam DimType Wrapper carrying the physical dimension, as in DimTypes.
+     */
+    template <typename DimType>
+    class TwoQuadControlGridTest : public QuadControlGridTest<DimType::value, 3> {
+    protected:
+        static constexpr GEO::index_t DIM = DimType::value+3;
+        static constexpr GEO::index_t ORDER = 5;
+
+        void SetUp() override {
+            this->create_vertices(TWO_QUAD_CORNERS);
+            this->mesh.facets.create_quad(0, 1, 2, 3);
+            this->mesh.facets.create_quad(5, 2, 1, 4);
+            this->mesh.facets.connect();
+
+            this->control_grid = std::make_unique<QuadControlGrid<DIM>>(this->mesh, ORDER);
+        }
+    };
+
+    TYPED_TEST_SUITE(TwoQuadControlGridTest, DimTypes);
+
+    TYPED_TEST(TwoQuadControlGridTest, regular) {
+        this->expect_mapping_interpolates_control_nodes(0);
+        this->expect_mapping_interpolates_control_nodes(1);
+        this->expect_identity_mapping(0);
+        this->expect_quality_invariants_over_grid(0, SAMPLE_RESOLUTION);
+        this->expect_quality_invariants_over_grid(1, SAMPLE_RESOLUTION);
+
+        // The facets share their common edge, hence they must also share its control nodes.
+        EXPECT_EQ(this->control_grid->facet_vertex_nd(0, 1), this->control_grid->facet_vertex_nd(1, 2));
+        EXPECT_EQ(this->control_grid->facet_vertex_nd(0, 2), this->control_grid->facet_vertex_nd(1, 1));
+        for (GEO::index_t k = 0, order = this->control_grid->order(); k <= order; ++k) {
+            SCOPED_TRACE(::testing::Message() << "edge node " << k);
+            EXPECT_EQ(
+                this->control_grid->facet_edge_nd(0, 1, k),
+                this->control_grid->facet_edge_nd(1, 1, order - k) // shared edge, opposite orientations
+                );
+        }
+
+        this->save_control_nodes();
+        this->save_high_order_mesh_facets();
+    }
+
+    TYPED_TEST(TwoQuadControlGridTest, random) {
+        this->jiggle_control_node(this->control_grid->facet_edge_nd(0, 1, 3));
+        this->jiggle_control_node(this->control_grid->facet_nd(0, 2, 2));
+        this->jiggle_control_node(this->control_grid->facet_nd(1, 1, 4));
+
+        this->expect_mapping_interpolates_control_nodes(0);
+        this->expect_mapping_interpolates_control_nodes(1);
+        this->expect_quality_invariants_over_grid(0, SAMPLE_RESOLUTION);
+        this->expect_quality_invariants_over_grid(1, SAMPLE_RESOLUTION);
+
+        this->save_control_nodes();
+        this->save_high_order_mesh_facets();
+    }
 }
