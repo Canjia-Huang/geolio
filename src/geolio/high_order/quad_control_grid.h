@@ -271,10 +271,8 @@ namespace geolio
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
 
-            for (GEO::index_t d = 0; d < DIM; ++d) {
-                du[d] = 0;
-                dv[d] = 0;
-            }
+            std::fill_n(du.data(), DIM, 0.0);
+            std::fill_n(dv.data(), DIM, 0.0);
 
             Bu.resize(this->order_+1);
             Bv.resize(this->order_+1);
@@ -347,7 +345,7 @@ namespace geolio
         [[nodiscard]] double compute_facet_uv_measure(
             const GEO::index_t f,
             const GEO::vec2& uv,
-            MeasureType quality_type
+            const MeasureType quality_type
             ) const {
             assert(f < this->mesh_.facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
@@ -600,29 +598,6 @@ namespace geolio
         }
 
         /**
-         * Assemble physical control-point coordinates of one facet into a dense matrix.
-         * @param[in] f facet index, 0,1,...,quad_mesh.facets.nb()-1
-         * @param[out] P matrix of control-point positions for facet \\p f
-         */
-        void compute_facet_vertices_position_matrix(
-            const GEO::index_t f,
-            Eigen::MatrixXd& P
-            ) const {
-            assert(f < this->mesh_.facets.nb());
-            assert(P.rows() == this->mesh_v_dim_);
-            assert(P.cols() == this->CONTROL_POINTS_NB_PER_FACET_);
-
-            for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_FACET_; ++i) {
-                const auto& nd = this->element_control_nodes_[this->CONTROL_POINTS_NB_PER_FACET_*f+i];
-                const auto& ndp = this->control_node(nd);
-                P(0, i) = ndp[0];
-                P(1, i) = ndp[1];
-                if constexpr (this->mesh_v_dim_ == 3)
-                    P(2, i) = ndp[2];
-            }
-        }
-
-        /**
          * Assemble basis gradients at a parameter point for all local control points.
          * @param[in] uv parameter point in [0,1]^2
          * @param[out] Bg gradient matrix of tensor-product basis values
@@ -716,7 +691,7 @@ namespace geolio
 
                         const GEO::vec2 uv(u, v);
 
-                        const auto& p = this->compute_facet_uv_position(f, uv);
+                        const auto& p = compute_facet_uv_position(f, uv);
                         std::copy_n(mesh_out.vertices.point_ptr(new_v), this->mesh_v_dim_, p.data());
 
                         if (mesh_out_v_facet != nullptr)

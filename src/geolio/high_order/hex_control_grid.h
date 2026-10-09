@@ -168,7 +168,10 @@ namespace geolio
          * @param[in] mesh Input hexahedral mesh used as the reference topology/geometry.
          * @param[in] order Polynomial order of the tensor-product hexahedral mapping.
          */
-        HexControlGrid(const GEO::Mesh& mesh, GEO::index_t order) : VolumeControlGrid<DIM>(mesh, order)
+        HexControlGrid(
+            const GEO::Mesh& mesh,
+            GEO::index_t order
+            ) : VolumeControlGrid<DIM>(mesh, order)
         {
             assert(std::all_of(
                 mesh.cells.cell_type_ptr(0),
@@ -197,13 +200,16 @@ namespace geolio
          *       function uses the control-point coordinates currently stored in
          *       `grid_` to compute the mapped position.
          */
-        [[nodiscard]] GEO::vec3 compute_cell_uvw_position(GEO::index_t c, const GEO::vec3& uvw) const {
+        [[nodiscard]] GEO::vecng<DIM, double> compute_cell_uvw_position(
+            const GEO::index_t c,
+            const GEO::vec3& uvw
+            ) const {
             assert(c < this->mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vec3 p(0, 0, 0);
+            GEO::vecng<DIM, double> p(0, 0, 0);
 
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
@@ -246,13 +252,17 @@ namespace geolio
          * @note The function does not take ownership of `control_nodes_position` and
          *       treats it as read-only. Caller must ensure the buffer is valid.
          */
-        [[nodiscard]] GEO::vec3 compute_cell_uvw_position(GEO::index_t c, const GEO::vec3& uvw, const double* cur_control_nodes_ptr) const {
+        [[nodiscard]] GEO::vecng<DIM, double> compute_cell_uvw_position(
+            const GEO::index_t c,
+            const GEO::vec3& uvw,
+            const double* cur_control_nodes_ptr
+            ) const {
             assert(c < this->mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vec3 p(0, 0, 0);
+            GEO::vecng<DIM, double> p(0, 0, 0);
 
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
@@ -296,7 +306,11 @@ namespace geolio
          * @pre `parameter_point.x` and `parameter_point.y` are in [0, 1].
          * @note The returned vector is not normalized; its magnitude equals the local area scaling.
          */
-        [[nodiscard]] GEO::vec3 compute_cell_facet_uv_normal(GEO::index_t c, GEO::index_t lf, const GEO::vec2& uv) const {
+        [[nodiscard]] GEO::vec3 compute_cell_facet_uv_normal(
+            const GEO::index_t c,
+            const GEO::index_t lf,
+            const GEO::vec2& uv
+            ) const {
             assert(c < this->mesh_.cells.nb());
             assert(lf < this->mesh_.cells.nb_facets(c));
             assert(uv.x >= 0 && uv.x <= 1);
@@ -314,7 +328,8 @@ namespace geolio
             GEO::vec3 Tu(0, 0, 0), Tv(0, 0, 0);
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const auto& p = control_node(this->cell_facet_nd(c, lf, i, j));
+                    const auto& p = GEO::Memory::pointer_as_reference<GEO::vec3>(
+                        control_node_ptr(this->cell_facet_nd(c, lf, i, j)));
                     Tu += p * dBu[i] * Bv[j];
                     Tv += p * Bu[i] * dBv[j];
                 }
@@ -343,18 +358,26 @@ namespace geolio
          * @param[out] dBw Output buffer that receives the 1D basis derivatives in the w direction.
          */
         void compute_cell_uvw_dudvdw(
-            GEO::index_t c, const GEO::vec3& uvw,
-            GEO::vec3& du, GEO::vec3& dv, GEO::vec3& dw,
-            std::vector<double>& Bu, std::vector<double>& Bv, std::vector<double>& Bw,
-            std::vector<double>& dBu, std::vector<double>& dBv, std::vector<double>& dBw) const {
+            const GEO::index_t c,
+            const GEO::vec3& uvw,
+            GEO::vecng<DIM, double>& du,
+            GEO::vecng<DIM, double>& dv,
+            GEO::vecng<DIM, double>& dw,
+            std::vector<double>& Bu,
+            std::vector<double>& Bv,
+            std::vector<double>& Bw,
+            std::vector<double>& dBu,
+            std::vector<double>& dBv,
+            std::vector<double>& dBw
+            ) const {
             assert(c < this->mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            du.x = 0; du.y = 0; du.z = 0;
-            dv.x = 0; dv.y = 0; dv.z = 0;
-            dw.x = 0; dw.y = 0; dw.z = 0;
+            std::fill_n(du.data(), DIM, 0.0);
+            std::fill_n(dv.data(), DIM, 0.0);
+            std::fill_n(dw.data(), DIM, 0.0);
 
             Bu.resize(this->order_+1);
             Bv.resize(this->order_+1);
@@ -387,154 +410,6 @@ namespace geolio
         }
 
         /**
-         * Evaluate one scalar physical quantity at a parameter point in a cell.
-         * @param[in] c cell index, 0,1,...,hex_mesh.cells.nb()-1
-         * @param[in] uvw parameter point in the cell parameter domain [0, 1]^3
-         * @param[in] d physical quantity component index, 0,1,...,PHYS_DIM_-1
-         * @return interpolated physical quantity value of component \p d
-         */
-        [[nodiscard]] double compute_cell_uvw_quantity(GEO::index_t c, const GEO::vec3& uvw, GEO::index_t d) const {
-            // assert(c < this->mesh_.cells.nb());
-            // assert(uvw.x >= 0 && uvw.x <= 1);
-            // assert(uvw.y >= 0 && uvw.y <= 1);
-            // assert(uvw.z >= 0 && uvw.z <= 1);
-            // assert(control_nodes_quantities_.is_bound());
-            // const auto dim = control_node_quantities_dimension();
-            // assert(d < dim);
-            //
-            // double q = 0;
-            //
-            // std::vector<double> Bu(this->order_+1);
-            // std::vector<double> Bv(this->order_+1);
-            // std::vector<double> Bw(this->order_+1);
-            // Lagrange_basis_1D(uvw.x, this->node_positions_1D__, Bu);
-            // Lagrange_basis_1D(uvw.y, this->node_positions_1D__, Bv);
-            // Lagrange_basis_1D(uvw.z, this->node_positions_1D__, Bw);
-            //
-            // for (GEO::index_t i = 0; i <= this->order_; ++i) {
-            //     for (GEO::index_t j = 0; j <= this->order_; ++j) {
-            //         const double basis_uv = Bu[i] * Bv[j];
-            //         for (GEO::index_t k = 0; k <= this->order_; ++k) {
-            //             const double lag_basis = basis_uv * Bw[k];
-            //             q += lag_basis * control_nodes_quantities_[dim*this->cell_nd(c, i, j, k)+d];
-            //         }
-            //     }
-            // }
-            //
-            // return q;
-        }
-
-        /**
-         * Evaluate all physical quantity components at a parameter point in a cell.
-         * @param[in] c cell index, 0,1,...,hex_mesh.cells.nb()-1
-         * @param[in] uvw parameter point in the cell parameter domain [0, 1]^3
-         * @param[out] q output buffer with length at least PHYS_DIM_; receives interpolated values
-         */
-        void compute_cell_uvw_quantities(GEO::index_t c, const GEO::vec3& uvw, double* q) const {
-            // assert(c < this->mesh_.cells.nb());
-            // assert(uvw.x >= 0 && uvw.x <= 1);
-            // assert(uvw.y >= 0 && uvw.y <= 1);
-            // assert(uvw.z >= 0 && uvw.z <= 1);
-            // assert(control_nodes_quantities_.is_bound());
-            // const auto dim = control_node_quantities_dimension();
-            //
-            // std::fill_n(q, dim, 0.0);
-            //
-            // std::vector<double> Bu(this->order_+1);
-            // std::vector<double> Bv(this->order_+1);
-            // std::vector<double> Bw(this->order_+1);
-            // Lagrange_basis_1D(uvw.x, this->node_positions_1D__, Bu);
-            // Lagrange_basis_1D(uvw.y, this->node_positions_1D__, Bv);
-            // Lagrange_basis_1D(uvw.z, this->node_positions_1D__, Bw);
-            //
-            // for (GEO::index_t i = 0; i <= this->order_; ++i) {
-            //     for (GEO::index_t j = 0; j <= this->order_; ++j) {
-            //         const double basis_uv = Bu[i] * Bv[j];
-            //         for (GEO::index_t k = 0; k <= this->order_; ++k) {
-            //             const double lag_basis = basis_uv * Bw[k];
-            //             for (GEO::index_t d = 0; d < dim; ++d)
-            //                 q[d] += lag_basis * control_nodes_quantities_[dim*this->cell_nd(c, i, j, k)+d];
-            //         }
-            //     }
-            // }
-        }
-
-        /**
-         * Evaluate the parametric derivatives of all physical quantities at a cell point.
-         *
-         * The physical quantities stored at the cell control nodes are interpolated with the
-         * tensor-product Lagrange basis, and their partial derivatives with respect to the local
-         * parameters `u`, `v`, and `w` are returned.
-         *
-         * @param[in] c Cell index, 0,1,...,mesh_.cells.nb()-1.
-         * @param[in] uvw Cell-local parameter point `(u, v, w)` in [0, 1]^3.
-         * @param[out] du Output buffer of length at least `control_node_quantities_dimension()`;
-         *                 receives the partial derivatives with respect to `u`.
-         * @param[out] dv Output buffer of length at least `control_node_quantities_dimension()`;
-         *                 receives the partial derivatives with respect to `v`.
-         * @param[out] dw Output buffer of length at least `control_node_quantities_dimension()`;
-         *                 receives the partial derivatives with respect to `w`.
-         * @param[out] Bu Output buffer receiving the 1D Lagrange basis values at `uvw.x`.
-         * @param[out] Bv Output buffer receiving the 1D Lagrange basis values at `uvw.y`.
-         * @param[out] Bw Output buffer receiving the 1D Lagrange basis values at `uvw.z`.
-         * @param[out] dBu Output buffer receiving the derivatives of the 1D basis at `uvw.x`.
-         * @param[out] dBv Output buffer receiving the derivatives of the 1D basis at `uvw.y`.
-         * @param[out] dBw Output buffer receiving the derivatives of the 1D basis at `uvw.z`.
-         * @pre `c < mesh_.cells.nb()`.
-         * @pre `uvw.x`, `uvw.y`, and `uvw.z` are in [0, 1].
-         * @pre Cell control-node physical quantities are bound.
-         */
-        void compute_cell_uvw_quantities_dudvdw(
-            GEO::index_t c, const GEO::vec3& uvw,
-            double* du, double* dv, double* dw,
-            std::vector<double>& Bu, std::vector<double>& Bv, std::vector<double>& Bw,
-            std::vector<double>& dBu, std::vector<double>& dBv, std::vector<double>& dBw) const {
-            assert(c < this->mesh_.cells.nb());
-            assert(uvw.x >= 0 && uvw.x <= 1);
-            assert(uvw.y >= 0 && uvw.y <= 1);
-            assert(uvw.z >= 0 && uvw.z <= 1);
-            assert(this->control_nodes_quantities_.is_bound());
-            const auto phys_dim = this->control_node_quantities_dimension();
-
-            std::fill_n(du, phys_dim, 0.0);
-            std::fill_n(dv, phys_dim, 0.0);
-            std::fill_n(dw, phys_dim, 0.0);
-
-            Bu.resize(this->order_+1);
-            Bv.resize(this->order_+1);
-            Bw.resize(this->order_+1);
-            dBu.resize(this->order_+1);
-            dBv.resize(this->order_+1);
-            dBw.resize(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D__, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D__, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D__, Bw);
-            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D__, dBu);
-            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D__, dBv);
-            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D__, dBw);
-
-            std::vector<double> node_quantities(phys_dim);
-            for (GEO::index_t k = 0; k <= this->order_; ++k) {
-                for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const double basis_vw = Bv[j] * Bw[k];
-                    const double basis_dvw= dBv[j] * Bw[k];
-                    const double basis_vdw= Bv[j] * dBw[k];
-                    for (GEO::index_t i = 0; i <= this->order_; ++i) {
-                        compute_cell_uvw_quantities(c, GEO::vec3(this->node_positions_1D_[i], this->node_positions_1D_[j], this->node_positions_1D_[k]), &node_quantities[0]);
-                        const double lag_basis_duvw = dBu[i] * basis_vw;
-                        const double lag_basis_udvw = Bu[i] * basis_dvw;
-                        const double lag_basis_uvdw = Bu[i] * basis_vdw;
-                        for (GEO::index_t d = 0; d < phys_dim; ++d) {
-                            du[d] += lag_basis_duvw * node_quantities[d];
-                            dv[d] += lag_basis_udvw * node_quantities[d];
-                            dw[d] += lag_basis_uvdw * node_quantities[d];
-                        }
-                    }
-                }
-            }
-        }
-
-        /**
          * Evaluate the Jacobian matrix of the cell mapping at a parameter point.
          *
          * The Jacobian is a 3x3 matrix containing the partial derivatives of the physical
@@ -547,25 +422,29 @@ namespace geolio
          *               - columns 0, 1, 2 correspond to u, v, w derivatives
          *               - rows 0, 1, 2 correspond to x, y, z physical coordinates
          */
-        void compute_cell_uvw_Jacobian(GEO::index_t c, const GEO::vec3& uvw, Eigen::Matrix3d& J) const {
+        void compute_cell_uvw_Jacobian(
+            const GEO::index_t c,
+            const GEO::vec3& uvw,
+            Eigen::Matrix3d& J
+            ) const {
             assert(c < this->mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vec3 du, dv, dw;
+            GEO::vecng<DIM, double> du, dv, dw;
             std::vector<double> Bu, Bv, Bw, dBu, dBv, dBw;
             compute_cell_uvw_dudvdw(c, uvw, du, dv, dw, Bu, Bv, Bw, dBu, dBv, dBw);
 
-            J(0, 0) = du.x;
-            J(1, 0) = du.y;
-            J(2, 0) = du.z;
-            J(0, 1) = dv.x;
-            J(1, 1) = dv.y;
-            J(2, 1) = dv.z;
-            J(0, 2) = dw.x;
-            J(1, 2) = dw.y;
-            J(2, 2) = dw.z;
+            J(0, 0) = du[0];
+            J(1, 0) = du[1];
+            J(2, 0) = du[2];
+            J(0, 1) = dv[0];
+            J(1, 1) = dv[1];
+            J(2, 1) = dv[2];
+            J(0, 2) = dw[0];
+            J(1, 2) = dw[1];
+            J(2, 2) = dw[2];
         }
 
         enum class MeasureType {
@@ -587,16 +466,23 @@ namespace geolio
          *                       - `QualityType::MIPS`: penalizes shear and anisotropic stretching, [1, inf], best: 1
          * @return the requested quality value at the given parameter point
          */
-        [[nodiscard]] double compute_cell_uvw_measure(GEO::index_t c, const GEO::vec3& uvw, MeasureType quality_type) const {
+        [[nodiscard]] double compute_cell_uvw_measure(
+            const GEO::index_t c,
+            const GEO::vec3& uvw,
+            const MeasureType quality_type
+            ) const {
             assert(c < this->mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vec3 du, dv, dw;
+            GEO::vecng<DIM, double> du_all, dv_all, dw_all;
             std::vector<double> Bu, Bv, Bw, dBu, dBv, dBw;
-            compute_cell_uvw_dudvdw(c, uvw, du, dv, dw, Bu, Bv, Bw, dBu, dBv, dBw);
+            compute_cell_uvw_dudvdw(c, uvw, du_all, dv_all, dw_all, Bu, Bv, Bw, dBu, dBv, dBw);
 
+            const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
+            const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
+            const GEO::vec3 dw = GEO::Memory::pointer_as_reference<GEO::vec3>(dw_all.data());
             const double det_J = GEO::dot(dw,GEO::cross(du,dv));
             switch (quality_type) {
                 case MeasureType::DET_JACOBIAN: {
@@ -632,16 +518,23 @@ namespace geolio
          *                      - `gradient[3*N+1] = d(detJ)/dP_N.y`
          *                      - `gradient[3*N+2] = d(detJ)/dP_N.z`
          */
-        void compute_cell_uvw_detJ_gradient(GEO::index_t c, const GEO::vec3& uvw, std::vector<double>& gradient) const {
+        void compute_cell_uvw_detJ_gradient(
+            const GEO::index_t c,
+            const GEO::vec3& uvw,
+            std::vector<double>& gradient
+            ) const {
             assert(c < this->mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vec3 du, dv, dw;
+            GEO::vecng<DIM, double> du_all, dv_all, dw_all;
             std::vector<double> Bu, Bv, Bw, dBu, dBv, dBw;
-            compute_cell_uvw_dudvdw(c, uvw, du, dv, dw, Bu, Bv, Bw, dBu, dBv, dBw);
+            compute_cell_uvw_dudvdw(c, uvw, du_all, dv_all, dw_all, Bu, Bv, Bw, dBu, dBv, dBw);
 
+            const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
+            const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
+            const GEO::vec3 dw = GEO::Memory::pointer_as_reference<GEO::vec3>(dw_all.data());
             const GEO::vec3 cross_dvdw = GEO::cross(dv, dw);
             const GEO::vec3 cross_dwdu = GEO::cross(dw, du);
             const GEO::vec3 cross_dudv = GEO::cross(du, dv);
@@ -674,7 +567,9 @@ namespace geolio
          *            cell, in the same order as `hex_mesh_.cells`.
          * @note The caller is responsible for providing storage for all cells.
          */
-        void compute_cells_volume(std::vector<double>& volumes) const {
+        void compute_cells_volume(
+            std::vector<double>& volumes
+            ) const {
             volumes.resize(this->mesh_.cells.nb());
 
             /* 2k-1 >= 3*order-1  ->  k >= 1.5*order */
@@ -690,31 +585,15 @@ namespace geolio
         }
 
         /**
-         * Assemble physical control-point coordinates of one cell into a dense matrix.
-         * @param[in] c cell index, 0,1,...,hex_mesh.cells.nb()-1
-         * @param[out] P matrix of control-point positions for cell \\p c
-         */
-        void compute_cell_vertices_position_matrix(GEO::index_t c, Eigen::MatrixXd& P) const {
-            assert(c < this->mesh_.cells.nb());
-            assert(P.rows() == 3);
-            assert(P.cols() == this->CONTROL_POINTS_NB_PER_CELL__1D__);
-
-            for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_CELL__1D__; ++i) {
-                const auto& nd = this->element_control_nodes_[this->CONTROL_POINTS_NB_PER_CELL__1D__*c+i];
-                const auto& ndp = control_node(nd);
-                P(0, i) = ndp.x;
-                P(1, i) = ndp.y;
-                P(2, i) = ndp.z;
-            }
-        }
-
-        /**
          * Assemble basis gradients at a parameter point for all local control points.
          * @param[in] uvw parameter point in [0,1]^3
          * @param[out] Bg gradient matrix of tensor-product basis values
          * @pre Bg.size == CONTROL_POINTS_NB_PER_CELL * 3
          */
-        void compute_basis_gradient_matrix(const GEO::vec3& uvw, Eigen::MatrixXd& Bg) const {
+        void compute_basis_gradient_matrix(
+            const GEO::vec3& uvw,
+            Eigen::MatrixXd& Bg
+            ) const {
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
@@ -766,7 +645,8 @@ namespace geolio
             GEO::index_t resolution = 10,
             GEO::Attribute<GEO::index_t>* mesh_out_v_cell = nullptr,
             GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
-            GEO::Attribute<GEO::index_t>* mesh_out_f_cell = nullptr) const {
+            GEO::Attribute<GEO::index_t>* mesh_out_f_cell = nullptr
+            ) const {
             if (mesh_out_v_cell != nullptr) {
                 assert(mesh_out_v_cell->is_bound());
                 assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
@@ -805,7 +685,8 @@ namespace geolio
 
                             const GEO::vec3 uvw = project_hex_lf_uv_to_uvw(GEO::vec2(u,v), lf);
 
-                            this->mesh_out.vertices.point(new_v) = compute_cell_uvw_position(c, uvw);
+                            const auto& p = compute_cell_uvw_position(c, uvw);
+                            std::copy_n(mesh_out.vertices.point_ptr(new_v), this->mesh_v_dim_, p.data());
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;
@@ -874,7 +755,8 @@ namespace geolio
             GEO::index_t resolution = 10,
             GEO::Attribute<GEO::index_t>* mesh_out_v_cell = nullptr,
             GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
-            GEO::Attribute<GEO::index_t>* mesh_out_c_cell = nullptr) const {
+            GEO::Attribute<GEO::index_t>* mesh_out_c_cell = nullptr
+            ) const {
             if (mesh_out_v_cell != nullptr) {
                 assert(mesh_out_v_cell->is_bound());
                 assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
@@ -903,7 +785,9 @@ namespace geolio
                         for (GEO::index_t k = 0; k < VERTICES_NB_PER_EDGE; ++k) {
                             const double w = static_cast<double>(k)/resolution;
                             const GEO::vec3 uvw(u, v, w);
-                            mesh_out.vertices.point(new_v) = compute_cell_uvw_position(c, uvw);
+
+                            const auto& p = compute_cell_uvw_position(c, uvw);
+                            std::copy_n(mesh_out.vertices.point_ptr(new_v), this->mesh_v_dim_, p.data());
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;
