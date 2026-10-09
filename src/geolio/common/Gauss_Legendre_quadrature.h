@@ -100,7 +100,7 @@ namespace geolio
                     J(i+1, i) = beta;
                 }
                 const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(J);
-                const auto nodes = es.eigenvalues();
+                const auto& nodes = es.eigenvalues();
                 const auto weights = 2.0 * es.eigenvectors().row(0).array().square();
                 assert(nodes.size() == weights.size());
 
