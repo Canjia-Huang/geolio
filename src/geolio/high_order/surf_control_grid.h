@@ -10,6 +10,7 @@ namespace geolio
 {
     template <GEO::index_t DIM>
     class SurfaceControlGrid : public ControlGrid<DIM> {
+    static_assert(DIM >= 2);
     public:
         /**
          * @brief Construct a surface control grid.
