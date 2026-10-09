@@ -244,6 +244,63 @@ namespace geolio
         }
     }
 
+    void HexControlGrid::compute_cell_uvw_quantities_dudvdw(
+        const GEO::index_t c,
+        const GEO::vec3& uvw,
+        double* du,
+        double* dv,
+        double* dw,
+        std::vector<double>& Bu,
+        std::vector<double>& Bv,
+        std::vector<double>& Bw,
+        std::vector<double>& dBu,
+        std::vector<double>& dBv,
+        std::vector<double>& dBw
+        ) const {
+        assert(f < this->mesh_.facets.nb());
+        assert(uv.x >= 0 && uv.x <= 1);
+        assert(uv.y >= 0 && uv.y <= 1);
+        assert(this->control_nodes_quantities_.is_bound());
+        const auto phys_dim = this->control_node_quantities_dimension();
+
+        std::fill_n(du, phys_dim, 0.0);
+        std::fill_n(dv, phys_dim, 0.0);
+        std::fill_n(dw, phys_dim, 0.0);
+
+        Bu.resize(order_+1);
+        Bv.resize(order_+1);
+        Bw.resize(order_+1);
+        dBu.resize(order_+1);
+        dBv.resize(order_+1);
+        dBw.resize(order_+1);
+        Lagrange_basis_1D(uvw.x, node_positions_1D_, Bu);
+        Lagrange_basis_1D(uvw.y, node_positions_1D_, Bv);
+        Lagrange_basis_1D(uvw.z, node_positions_1D_, Bw);
+        Lagrange_basis_deriv_1D(uvw.x, node_positions_1D_, dBu);
+        Lagrange_basis_deriv_1D(uvw.y, node_positions_1D_, dBv);
+        Lagrange_basis_deriv_1D(uvw.z, node_positions_1D_, dBw);
+
+        std::vector<double> node_quantities(phys_dim);
+        for (GEO::index_t k = 0; k <= order_; ++k) {
+            for (GEO::index_t j = 0; j <= order_; ++j) {
+                const double basis_vw = Bv[j] * Bw[k];
+                const double basis_dvw= dBv[j] * Bw[k];
+                const double basis_vdw= Bv[j] * dBw[k];
+                for (GEO::index_t i = 0; i <= order_; ++i) {
+                    compute_cell_uvw_quantities(c, GEO::vec3(this->node_positions_1D_[i], this->node_positions_1D_[j], this->node_positions_1D_[k]), &node_quantities[0]);
+                    const double lag_basis_duvw = dBu[i] * basis_vw;
+                    const double lag_basis_udvw = Bu[i] * basis_dvw;
+                    const double lag_basis_uvdw = Bu[i] * basis_vdw;
+                    for (GEO::index_t d = 0; d < phys_dim; ++d) {
+                        du[d] += lag_basis_duvw * node_quantities[d];
+                        dv[d] += lag_basis_udvw * node_quantities[d];
+                        dw[d] += lag_basis_uvdw * node_quantities[d];
+                    }
+                }
+            }
+        }
+    }
+
     void HexControlGrid::compute_cell_uvw_Jacobian(
         const GEO::index_t c,
         const GEO::vec3& uvw,

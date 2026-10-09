@@ -186,6 +186,33 @@ namespace geolio
         void compute_facet_uv_quantities(GEO::index_t f, const GEO::vec2& uv, double* q) const;
 
         /**
+         * Evaluate the parametric derivatives of all physical quantities at a facet point.
+         *
+         * The physical quantities stored at the facet control nodes are interpolated with the
+         * tensor-product Lagrange basis, and their partial derivatives with respect to the local
+         * parameters `u` and `v` are returned.
+         *
+         * @param[in] f Facet index, 0,1,...,mesh_.facets.nb()-1.
+         * @param[in] uv Facet-local parameter point `(u, v)` in [0, 1]^2.
+         * @param[out] du Output buffer of length at least `control_node_quantities_dimension()`;
+         *                 receives the partial derivatives with respect to `u`.
+         * @param[out] dv Output buffer of length at least `control_node_quantities_dimension()`;
+         *                 receives the partial derivatives with respect to `v`.
+         * @param[out] Bu Output buffer receiving the 1D Lagrange basis values at `uv.x`.
+         * @param[out] Bv Output buffer receiving the 1D Lagrange basis values at `uv.y`.
+         * @param[out] dBu Output buffer receiving the derivatives of the 1D basis at `uv.x`.
+         * @param[out] dBv Output buffer receiving the derivatives of the 1D basis at `uv.y`.
+         * @pre `f < mesh_.facets.nb()`.
+         * @pre `uv.x` and `uv.y` are in [0, 1].
+         * @pre Facet control-node physical quantities are bound.
+         */
+        void compute_facet_uv_quantities_dudv(
+            GEO::index_t f, const GEO::vec2& uv,
+            double* du, double* dv,
+            std::vector<double>& Bu, std::vector<double>& Bv,
+            std::vector<double>& dBu, std::vector<double>& dBv) const;
+
+        /**
          * @brief Compute a unit-length reference normal for a 3D quadrilateral facet.
          *
          * The reference normal is computed from the four corner control-node positions

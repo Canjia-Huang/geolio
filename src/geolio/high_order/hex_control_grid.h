@@ -270,6 +270,37 @@ namespace geolio
         void compute_cell_uvw_quantities(GEO::index_t c, const GEO::vec3& uvw, double* q) const;
 
         /**
+         * Evaluate the parametric derivatives of all physical quantities at a cell point.
+         *
+         * The physical quantities stored at the cell control nodes are interpolated with the
+         * tensor-product Lagrange basis, and their partial derivatives with respect to the local
+         * parameters `u`, `v`, and `w` are returned.
+         *
+         * @param[in] c Cell index, 0,1,...,mesh_.cells.nb()-1.
+         * @param[in] uvw Cell-local parameter point `(u, v, w)` in [0, 1]^3.
+         * @param[out] du Output buffer of length at least `control_node_quantities_dimension()`;
+         *                 receives the partial derivatives with respect to `u`.
+         * @param[out] dv Output buffer of length at least `control_node_quantities_dimension()`;
+         *                 receives the partial derivatives with respect to `v`.
+         * @param[out] dw Output buffer of length at least `control_node_quantities_dimension()`;
+         *                 receives the partial derivatives with respect to `w`.
+         * @param[out] Bu Output buffer receiving the 1D Lagrange basis values at `uvw.x`.
+         * @param[out] Bv Output buffer receiving the 1D Lagrange basis values at `uvw.y`.
+         * @param[out] Bw Output buffer receiving the 1D Lagrange basis values at `uvw.z`.
+         * @param[out] dBu Output buffer receiving the derivatives of the 1D basis at `uvw.x`.
+         * @param[out] dBv Output buffer receiving the derivatives of the 1D basis at `uvw.y`.
+         * @param[out] dBw Output buffer receiving the derivatives of the 1D basis at `uvw.z`.
+         * @pre `c < mesh_.cells.nb()`.
+         * @pre `uvw.x`, `uvw.y`, and `uvw.z` are in [0, 1].
+         * @pre Cell control-node physical quantities are bound.
+         */
+        void compute_cell_uvw_quantities_dudvdw(
+            GEO::index_t c, const GEO::vec3& uvw,
+            double* du, double* dv, double* dw,
+            std::vector<double>& Bu, std::vector<double>& Bv, std::vector<double>& Bw,
+            std::vector<double>& dBu, std::vector<double>& dBv, std::vector<double>& dBw) const;
+
+        /**
          * Evaluate the Jacobian matrix of the cell mapping at a parameter point.
          *
          * The Jacobian is a 3x3 matrix containing the partial derivatives of the physical

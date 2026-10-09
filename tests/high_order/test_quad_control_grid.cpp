@@ -619,7 +619,7 @@ namespace geolio::test
         this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 1), +0.2);
         this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 3), -0.2);
 
-        this->control_grid->create_control_node_quantities(QUANTITY_NB);
+        this->control_grid->set_control_node_quantities(QUANTITY_NB);
         EXPECT_EQ(this->control_grid->control_node_quantities_dimension(), QUANTITY_NB);
 
         auto& quantities = this->control_grid->control_nodes_quantities();

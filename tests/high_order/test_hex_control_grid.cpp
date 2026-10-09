@@ -854,7 +854,7 @@ namespace geolio::test
         jiggle_control_node(control_grid->cell_edge_nd(CELL, 1, 2));
         jiggle_control_node(control_grid->cell_facet_nd(CELL, 2, 2, 3));
 
-        control_grid->create_control_node_quantities(QUANTITY_NB);
+        control_grid->set_control_node_quantities(QUANTITY_NB);
         EXPECT_EQ(control_grid->control_node_quantities_dimension(), QUANTITY_NB);
 
         auto& quantities = control_grid->control_nodes_quantities();
