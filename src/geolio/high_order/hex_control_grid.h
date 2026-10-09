@@ -1131,7 +1131,7 @@ namespace geolio
 
             /* == For vertices == */
             for (const auto& v : this->mesh_.vertices)
-                this->control_node(new_v++) = this->mesh_.vertices.point(v);
+                std::copy_n(this->control_node_ptr(new_v++), this->mesh_v_dim_, this->mesh_.vertices.point_ptr(v));
 
             /* == For edges == */
             for (auto& [edge, control_vertices] : hex_edges_control_points) {
@@ -1270,6 +1270,9 @@ namespace geolio
             }
 
             assert(new_v == this->control_nodes_nb());
+
+            /* Initialize other dimension */
+            this->initialize_control_node_quantities();
 
             /* == Create regular index ================================================================================= */
             this->element_control_nodes_.assign(this->CONTROL_POINTS_NB_PER_CELL__1D__ * this->mesh_.cells.nb(), GEO::NO_VERTEX);

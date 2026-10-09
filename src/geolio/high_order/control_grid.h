@@ -238,6 +238,15 @@ namespace geolio
          * @brief Build control-node connectivity/geometry for the derived grid type.
          */
         virtual void initialize_control_nodes() = 0;
+
+        /**
+         * @brief Initialize control-node coordinates in dimensions not provided by the mesh.
+         */
+        void initialize_control_node_quantities() {
+            const GEO::index_t diff_dim = DIM - mesh_v_dim_;
+            for (const auto& nd : control_nodes_mesh_.vertices)
+                std::fill_n(control_node_ptr(nd)+mesh_v_dim_, diff_dim, 0.0);
+        }
         GEO::Mesh control_nodes_mesh_;
         std::vector<GEO::index_t> element_control_nodes_;
     };

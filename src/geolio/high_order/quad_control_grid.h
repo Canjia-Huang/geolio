@@ -934,9 +934,7 @@ namespace geolio
             assert(new_v == this->control_nodes_nb());
 
             /* Initialize other dimension */
-            const GEO::index_t diff_dim = DIM - this->mesh_v_dim_;
-            for (const auto& nd : this->control_nodes_mesh_)
-                std::fill_n(this->control_node_ptr(nd)+this->mesh_v_dim_, diff_dim, 0.0);
+            this->initialize_control_node_quantities();
 
             /* == Create regular index ================================================================================= */
             this->element_control_nodes_.assign(this->CONTROL_POINTS_NB_PER_FACET_ * this->mesh_.facets.nb(), GEO::NO_VERTEX);
