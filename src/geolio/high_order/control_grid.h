@@ -52,7 +52,7 @@ namespace geolio
          * @param[in] dim Number of quantity components stored per control node.
          *                Use 0 to disable and destroy the attribute.
          */
-        void create_control_node_quantities(const GEO::index_t dim) {
+        void set_control_node_quantities(const GEO::index_t dim) {
             if (dim == 0) {
                 if (control_nodes_quantities_.is_bound())
                     control_nodes_quantities_.destroy();
