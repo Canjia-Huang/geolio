@@ -214,9 +214,9 @@ namespace geolio
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
             std::vector<double> Bw(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D__, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D__, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D__, Bw);
+            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
 
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
@@ -267,9 +267,9 @@ namespace geolio
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
             std::vector<double> Bw(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D__, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D__, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D__, Bw);
+            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
 
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
@@ -320,10 +320,10 @@ namespace geolio
             std::vector<double> Bv(this->order_+1);
             std::vector<double> dBu(this->order_+1);
             std::vector<double> dBv(this->order_+1);
-            Lagrange_basis_1D(uv.x, this->node_positions_1D__, Bu);
-            Lagrange_basis_1D(uv.y, this->node_positions_1D__, Bv);
-            Lagrange_basis_deriv_1D(uv.x, this->node_positions_1D__, dBu);
-            Lagrange_basis_deriv_1D(uv.y, this->node_positions_1D__, dBv);
+            Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
+            Lagrange_basis_deriv_1D(uv.x, this->node_positions_1D_, dBu);
+            Lagrange_basis_deriv_1D(uv.y, this->node_positions_1D_, dBv);
 
             GEO::vec3 Tu(0, 0, 0), Tv(0, 0, 0);
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
@@ -385,12 +385,12 @@ namespace geolio
             dBu.resize(this->order_+1);
             dBv.resize(this->order_+1);
             dBw.resize(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D__, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D__, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D__, Bw);
-            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D__, dBu);
-            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D__, dBv);
-            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D__, dBw);
+            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
+            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D_, dBu);
+            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D_, dBv);
+            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D_, dBw);
 
             for (GEO::index_t k = 0; k <= this->order_; ++k) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
@@ -539,7 +539,7 @@ namespace geolio
             const GEO::vec3 cross_dwdu = GEO::cross(dw, du);
             const GEO::vec3 cross_dudv = GEO::cross(du, dv);
 
-            gradient.resize(3*this->CONTROL_POINTS_NB_PER_CELL__1D__);
+            gradient.resize(3*this->CONTROL_POINTS_NB_PER_CELL_);
 
             for (GEO::index_t k = 0; k < this->CONTROL_POINTS_NB_PER_EDGE_; ++k) {
                 for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
@@ -597,7 +597,7 @@ namespace geolio
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
-            assert(Bg.rows() == this->CONTROL_POINTS_NB_PER_CELL__1D__);
+            assert(Bg.rows() == this->CONTROL_POINTS_NB_PER_CELL_);
             assert(Bg.cols() == 3);
 
             std::vector<double> Bu(this->order_+1);
@@ -606,12 +606,12 @@ namespace geolio
             std::vector<double> dBu(this->order_+1);
             std::vector<double> dBv(this->order_+1);
             std::vector<double> dBw(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D__, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D__, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D__, Bw);
-            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D__, dBu);
-            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D__, dBv);
-            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D__, dBw);
+            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
+            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D_, dBu);
+            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D_, dBv);
+            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D_, dBw);
             for (GEO::index_t i = 0; i < this->CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                 for (GEO::index_t j = 0; j < this->CONTROL_POINTS_NB_PER_EDGE_; ++j) {
                     const auto dBu_Bv = dBu[i]*Bv[j];
@@ -772,6 +772,7 @@ namespace geolio
 
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
             const GEO::index_t VERTICES_NB_PER_FACET = VERTICES_NB_PER_EDGE * VERTICES_NB_PER_EDGE;
+            mesh_out.vertices.set_dimension(DIM);
             GEO::index_t new_v = mesh_out.vertices.create_vertices(this->mesh_.cells.nb() * (resolution+1) * (resolution+1) * (resolution+1));
             GEO::index_t new_c = mesh_out.cells.create_hexes(this->mesh_.cells.nb() * resolution * resolution * resolution);
             for (const auto& c : this->mesh_.cells) {
@@ -786,8 +787,7 @@ namespace geolio
                             const double w = static_cast<double>(k)/resolution;
                             const GEO::vec3 uvw(u, v, w);
 
-                            const auto& p = compute_cell_uvw_position(c, uvw);
-                            std::copy_n(mesh_out.vertices.point_ptr(new_v), this->mesh_v_dim_, p.data());
+                            mesh_out.vertices.point<DIM>(new_v) = compute_cell_uvw_position(c, uvw);
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;
@@ -962,7 +962,7 @@ namespace geolio
          * @brief Build global control-node coordinates and cell-to-control-node connectivity.
          */
         void initialize_control_nodes() override {
-            assert(this->node_positions_1D__.size() == this->order_+1);
+            assert(this->node_positions_1D_.size() == this->order_+1);
 
             /* == Get all shared edges and facets ====================================================================== */
             GEO::index_t hex_facets_nb = 0;
@@ -996,7 +996,7 @@ namespace geolio
                         const std::pair<GEO::index_t, GEO::index_t> edge = std::minmax(
                             this->mesh_.cells.edge_vertex(c, le, 0),
                             this->mesh_.cells.edge_vertex(c, le, 1));
-                        hex_edges_control_points.emplace(edge, std::vector<GEO::index_t>(this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__, GEO::NO_VERTEX));
+                        hex_edges_control_points.emplace(edge, std::vector<GEO::index_t>(this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_, GEO::NO_VERTEX));
                     }
                 }
             }
@@ -1004,10 +1004,10 @@ namespace geolio
             // LOG::DEBUG("found {} facets and {} edges in the hex mesh", hex_facets_nb, hex_edges_control_points.size());
 
             /* == Create grid elements ================================================================================= */
-            this->control_nodes_.vertices.clear();
-            GEO::index_t new_v = this->control_nodes_.vertices.create_vertices(
+            this->control_nodes_mesh_.vertices.clear();
+            GEO::index_t new_v = this->control_nodes_mesh_.vertices.create_vertices(
                                 this->mesh_.vertices.nb() + // vertices
-                                hex_edges_control_points.size() * this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__ + // edges
+                                hex_edges_control_points.size() * this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_ + // edges
                                 hex_facets_nb * this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_ + // facets
                                 this->mesh_.cells.nb() * this->INTERNAL_CONTROL_POINTS_NB_PER_CELL_ // cells
                                 );
@@ -1015,14 +1015,15 @@ namespace geolio
 
             /* == For vertices == */
             for (const auto& v : this->mesh_.vertices)
-                std::copy_n(this->control_node_ptr(new_v++), this->mesh_v_dim_, this->mesh_.vertices.point_ptr(v));
+                std::copy_n(this->mesh_.vertices.point_ptr(v), this->mesh_v_dim_, this->control_node_ptr(new_v++));
 
             /* == For edges == */
             for (auto& [edge, control_vertices] : hex_edges_control_points) {
-                const auto& ep0 = this->mesh_.vertices.point(edge.first);
-                const auto& ep1 = this->mesh_.vertices.point(edge.second);
-                for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++i) {
-                    const double r = this->node_positions_1D__[i+1];
+                GEO::vecng<DIM, double> ep0, ep1;
+                std::copy_n(this->mesh_.vertices.point_ptr(edge.first), this->mesh_v_dim_, ep0.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(edge.second), this->mesh_v_dim_, ep1.data());
+                for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
+                    const double r = this->node_positions_1D_[i+1];
                     this->control_node(new_v) = (1-r)*ep0 + r*ep1;
                     control_vertices[i] = new_v;
                     ++new_v;
@@ -1044,18 +1045,19 @@ namespace geolio
                     const auto& lf_v1 = this->mesh_.cells.facet_vertex(c, lf, 1);
                     const auto& lf_v2 = this->mesh_.cells.facet_vertex(c, lf, 2);
                     const auto& lf_v3 = this->mesh_.cells.facet_vertex(c, lf, 3);
-                    const auto& lf_p0 = this->mesh_.vertices.point(lf_v0);
-                    const auto& lf_p1 = this->mesh_.vertices.point(lf_v1);
-                    const auto& lf_p2 = this->mesh_.vertices.point(lf_v2);
-                    const auto& lf_p3 = this->mesh_.vertices.point(lf_v3);
+                    GEO::vecng<DIM, double> lf_p0, lf_p1, lf_p2, lf_p3;
+                    std::copy_n(this->mesh_.vertices.point_ptr(lf_v0), this->mesh_v_dim_, lf_p0.data());
+                    std::copy_n(this->mesh_.vertices.point_ptr(lf_v1), this->mesh_v_dim_, lf_p1.data());
+                    std::copy_n(this->mesh_.vertices.point_ptr(lf_v2), this->mesh_v_dim_, lf_p2.data());
+                    std::copy_n(this->mesh_.vertices.point_ptr(lf_v3), this->mesh_v_dim_, lf_p3.data());
 
                     auto& lf_control_points = hex_facets_control_points[8*c+lf];
                     lf_control_points.reserve(this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_);
 
-                    for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++i) {
-                        const double ri = this->node_positions_1D__[i+1];
-                        for (GEO::index_t j = 0; j < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++j) {
-                            const double rj = this->node_positions_1D__[j+1];
+                    for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
+                        const double ri = this->node_positions_1D_[i+1];
+                        for (GEO::index_t j = 0; j < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++j) {
+                            const double rj = this->node_positions_1D_[j+1];
 
                             this->control_node(new_v) = (1-ri)*(1-rj)*lf_p0
                                                 + ri*(1-rj)*lf_p3
@@ -1122,21 +1124,22 @@ namespace geolio
                 c_control_points.reserve(this->INTERNAL_CONTROL_POINTS_NB_PER_CELL_);
 
                 assert(this->mesh_.cells.nb_vertices(c) == 8);
-                const auto& c_p0 = this->mesh_.cells.point(c, 0);
-                const auto& c_p1 = this->mesh_.cells.point(c, 4);
-                const auto& c_p2 = this->mesh_.cells.point(c, 2);
-                const auto& c_p3 = this->mesh_.cells.point(c, 6);
-                const auto& c_p4 = this->mesh_.cells.point(c, 1);
-                const auto& c_p5 = this->mesh_.cells.point(c, 5);
-                const auto& c_p6 = this->mesh_.cells.point(c, 3);
-                const auto& c_p7 = this->mesh_.cells.point(c, 7);
+                GEO::vecng<DIM, double> c_p0, c_p1, c_p2, c_p3, c_p4, c_p5, c_p6, c_p7;
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 0)), this->mesh_v_dim_, c_p0.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 1)), this->mesh_v_dim_, c_p1.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 2)), this->mesh_v_dim_, c_p2.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 3)), this->mesh_v_dim_, c_p3.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 4)), this->mesh_v_dim_, c_p4.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 5)), this->mesh_v_dim_, c_p5.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 6)), this->mesh_v_dim_, c_p6.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 7)), this->mesh_v_dim_, c_p7.data());
 
-                for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++i) {
-                    const double ri = this->node_positions_1D__[i+1];
-                    for (GEO::index_t j = 0; j < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++j) {
-                        const double rj = this->node_positions_1D__[j+1];
-                        for (GEO::index_t k = 0; k < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++k) {
-                            const double rk = this->node_positions_1D__[k+1];
+                for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
+                    const double ri = this->node_positions_1D_[i+1];
+                    for (GEO::index_t j = 0; j < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++j) {
+                        const double rj = this->node_positions_1D_[j+1];
+                        for (GEO::index_t k = 0; k < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++k) {
+                            const double rk = this->node_positions_1D_[k+1];
 
                             this->control_node(new_v) = (1-ri)*(1-rj)*(1-rk)*c_p0
                                                     + ri*(1-rj)*(1-rk)*c_p1
@@ -1159,7 +1162,7 @@ namespace geolio
             this->initialize_control_node_quantities();
 
             /* == Create regular index ================================================================================= */
-            this->element_control_nodes_.assign(this->CONTROL_POINTS_NB_PER_CELL__1D__ * this->mesh_.cells.nb(), GEO::NO_VERTEX);
+            this->element_control_nodes_.assign(this->CONTROL_POINTS_NB_PER_CELL_ * this->mesh_.cells.nb(), GEO::NO_VERTEX);
             /* [(order+1)^3 * c + lv] -> hex cell c's control vertex lv
                 For a hex (0, 1, 2, 3, 4, 5, 6, 7),
 
@@ -1180,7 +1183,7 @@ namespace geolio
                     dimension 1: cv0 -> cv1, dimension 2: cv0 -> cv2 ,dimension 3: cv0 -> cv4 */
 
             for (const auto& c : this->mesh_.cells) {
-                const GEO::index_t CELL_BEGIN_IDX = c*this->CONTROL_POINTS_NB_PER_CELL__1D__;
+                const GEO::index_t CELL_BEGIN_IDX = c*this->CONTROL_POINTS_NB_PER_CELL_;
 
                 /* For vertices */
                 for (GEO::index_t lv = 0; lv < 8; ++lv)
@@ -1197,21 +1200,21 @@ namespace geolio
 
                     assert(hex_edges_control_points.contains(edge));
                     const auto& edge_control_points = hex_edges_control_points.at(edge);
-                    assert(edge_control_points.size() == this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__);
+                    assert(edge_control_points.size() == this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_);
 
                     if (ev0 == edge.first) { // do not need to inverse
-                        for (GEO::index_t lv = 0; lv < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++lv)
+                        for (GEO::index_t lv = 0; lv < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++lv)
                             this->element_control_nodes_[
                                 CELL_BEGIN_IDX +
                                 this->cell_edge_inner_lnd(le, lv)
                                 ] = edge_control_points[lv];
                     }
                     else { // need to inverse
-                        for (GEO::index_t lv = 0; lv < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++lv)
+                        for (GEO::index_t lv = 0; lv < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++lv)
                             this->element_control_nodes_[
                                 CELL_BEGIN_IDX +
                                 this->cell_edge_inner_lnd(le, lv)
-                                ] = edge_control_points[this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__-1-lv];
+                                ] = edge_control_points[this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_-1-lv];
                     }
                 }
 
@@ -1220,12 +1223,12 @@ namespace geolio
                     const auto& facet_control_points = hex_facets_control_points[8*c+lf];
                     assert(facet_control_points.size() == this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_);
 
-                    for (GEO::index_t lv1 = 0; lv1 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++lv1) {
-                        for (GEO::index_t lv0 = 0; lv0 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++lv0)
+                    for (GEO::index_t lv1 = 0; lv1 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++lv1) {
+                        for (GEO::index_t lv0 = 0; lv0 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++lv0)
                             this->element_control_nodes_[
                                 CELL_BEGIN_IDX +
                                 this->cell_facet_inner_lnd(lf, lv0, lv1)
-                                ] = facet_control_points[lv1*this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__ + lv0];
+                                ] = facet_control_points[lv1*this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_ + lv0];
                     }
                 }
 
@@ -1233,13 +1236,13 @@ namespace geolio
                 const auto& cell_control_points = hex_cells_control_points[c];
                 assert(cell_control_points.size() == this->INTERNAL_CONTROL_POINTS_NB_PER_CELL_);
 
-                for (GEO::index_t lv2 = 0; lv2 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++lv2) {
-                    for (GEO::index_t lv1 = 0; lv1 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++lv1) {
-                        for (GEO::index_t lv0 = 0; lv0 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__; ++lv0) {
+                for (GEO::index_t lv2 = 0; lv2 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++lv2) {
+                    for (GEO::index_t lv1 = 0; lv1 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++lv1) {
+                        for (GEO::index_t lv0 = 0; lv0 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++lv0) {
                             this->element_control_nodes_[
                                 CELL_BEGIN_IDX +
                                 this->cell_inner_lnd(lv0, lv1, lv2)
-                                ] = cell_control_points[lv2*this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_ + lv1*this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE___1D__ + lv0];
+                                ] = cell_control_points[lv2*this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_ + lv1*this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_ + lv0];
                         }
                     }
                 }

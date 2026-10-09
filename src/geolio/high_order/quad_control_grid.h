@@ -312,13 +312,13 @@ namespace geolio
          */
         [[nodiscard]] GEO::vec3 compute_facet_reference_normal(
             const GEO::index_t f
-            ) {
+            ) const {
             assert(this->mesh_v_dim_ == 3);
             assert(f < this->mesh_.facets.nb());
-            const auto nd0 = this->control_node(this->facet_vertex_nd(f, 0));
-            const auto nd1 = this->control_node(this->facet_vertex_nd(f, 1));
-            const auto nd2 = this->control_node(this->facet_vertex_nd(f, 2));
-            const auto nd3 = this->control_node(this->facet_vertex_nd(f, 3));
+            const auto nd0 = GEO::Memory::pointer_as_reference<GEO::vec3>(this->control_node_ptr(this->facet_vertex_nd(f, 0)));
+            const auto nd1 = GEO::Memory::pointer_as_reference<GEO::vec3>(this->control_node_ptr(this->facet_vertex_nd(f, 1)));
+            const auto nd2 = GEO::Memory::pointer_as_reference<GEO::vec3>(this->control_node_ptr(this->facet_vertex_nd(f, 2)));
+            const auto nd3 = GEO::Memory::pointer_as_reference<GEO::vec3>(this->control_node_ptr(this->facet_vertex_nd(f, 3)));
             return GEO::normalize(GEO::cross(nd2-nd0, nd3-nd1));
         }
 
@@ -653,7 +653,6 @@ namespace geolio
             GEO::Attribute<GEO::vec2>* mesh_out_v_uv = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_f_facet = nullptr
             ) const {
-            assert(mesh_out.vertices.dimension() == this->mesh_v_dim_);
             if (mesh_out_v_facet != nullptr) {
                 assert(mesh_out_v_facet->is_bound());
                 assert(mesh_out_v_facet->size() == mesh_out.vertices.nb());
@@ -669,6 +668,7 @@ namespace geolio
 
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
 
+            mesh_out.vertices.set_dimension(DIM);
             GEO::index_t new_v = mesh_out.vertices.create_vertices(this->mesh_.facets.nb() * (resolution+1) * (resolution+1));
             GEO::index_t new_f = mesh_out.facets.create_quads(this->mesh_.facets.nb() * resolution * resolution);
             for (const auto& f : this->mesh_.facets) {
@@ -691,8 +691,7 @@ namespace geolio
 
                         const GEO::vec2 uv(u, v);
 
-                        const auto& p = compute_facet_uv_position(f, uv);
-                        std::copy_n(mesh_out.vertices.point_ptr(new_v), this->mesh_v_dim_, p.data());
+                        mesh_out.vertices.point<DIM>(new_v) = compute_facet_uv_position(f, uv);
 
                         if (mesh_out_v_facet != nullptr)
                             (*mesh_out_v_facet)[new_v] = f;
@@ -808,12 +807,13 @@ namespace geolio
 
             /* == For vertices == */
             for (const auto& v : this->mesh_.vertices)
-                std::copy_n(this->control_node_ptr(new_v++), this->mesh_v_dim_, this->mesh_.vertices.point_ptr(v));
+                std::copy_n(this->mesh_.vertices.point_ptr(v), this->mesh_v_dim_, this->control_node_ptr(new_v++));
 
             /* == For edges == */
             for (auto& [edge, control_vertices] : quad_edges_control_points) {
-                const auto& ep0 = this->mesh_.vertices.template point<DIM>(edge.first);
-                const auto& ep1 = this->mesh_.vertices.template point<DIM>(edge.second);
+                GEO::vecng<DIM, double> ep0, ep1;
+                std::copy_n(this->mesh_.vertices.point_ptr(edge.first), this->mesh_v_dim_, ep0.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(edge.second), this->mesh_v_dim_, ep1.data());
                 for (GEO::index_t i = 0, i_end = this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; i < i_end; ++i) {
                     const double r = this->node_positions_1D_[i+1];
                     this->control_node(new_v) = (1-r)*ep0 + r*ep1;
@@ -830,10 +830,11 @@ namespace geolio
                 f_control_points.reserve(this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_);
 
                 assert(this->mesh_.facets.nb_vertices(f) == 4);
-                const auto& f_p0 = this->mesh_.facets.template point<DIM>(f, 0);
-                const auto& f_p1 = this->mesh_.facets.template point<DIM>(f, 1);
-                const auto& f_p2 = this->mesh_.facets.template point<DIM>(f, 2);
-                const auto& f_p3 = this->mesh_.facets.template point<DIM>(f, 3);
+                GEO::vecng<DIM, double> f_p0, f_p1, f_p2, f_p3;
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.facets.vertex(f, 0)), this->mesh_v_dim_, f_p0.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.facets.vertex(f, 1)), this->mesh_v_dim_, f_p1.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.facets.vertex(f, 2)), this->mesh_v_dim_, f_p2.data());
+                std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.facets.vertex(f, 3)), this->mesh_v_dim_, f_p3.data());
 
                 for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                     const double ri = this->node_positions_1D_[i+1];

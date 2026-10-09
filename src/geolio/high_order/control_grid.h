@@ -31,6 +31,7 @@ namespace geolio
             INTERNAL_CONTROL_POINTS_NB_PER_FACET_((order-1)*(order-1)),
             INTERNAL_CONTROL_POINTS_NB_PER_CELL_((order-1)*(order-1)*(order-1))
         {
+            assert(mesh_v_dim_ == 2 || mesh_v_dim_ == 3);
             assert(order_ > 0);
 
             initialize_node_positions_1D();
@@ -159,6 +160,15 @@ namespace geolio
          * @return Pointer to the first component of the indexed node position.
          */
         double* control_node_ptr(const GEO::index_t v) {
+            return control_nodes_mesh_.vertices.point_ptr(v);
+        }
+
+        /**
+         * @brief Access the coordinates of one control node through a const pointer.
+         * @param[in] v Control-node index.
+         * @return Pointer to the first coordinate component of the indexed node position.
+         */
+        const double* control_node_ptr(const GEO::index_t v) const {
             return control_nodes_mesh_.vertices.point_ptr(v);
         }
 
