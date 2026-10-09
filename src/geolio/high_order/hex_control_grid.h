@@ -1134,14 +1134,12 @@ namespace geolio
                 std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 5)), this->mesh_v_dim_, c_p5.data());
                 std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 6)), this->mesh_v_dim_, c_p6.data());
                 std::copy_n(this->mesh_.vertices.point_ptr(this->mesh_.cells.vertex(c, 7)), this->mesh_v_dim_, c_p7.data());
-
-                for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
-                    const double ri = this->node_positions_1D_[i+1];
+                for (GEO::index_t k = 0; k < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++k) {
+                    const double rk = this->node_positions_1D_[k+1];
                     for (GEO::index_t j = 0; j < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++j) {
                         const double rj = this->node_positions_1D_[j+1];
-                        for (GEO::index_t k = 0; k < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++k) {
-                            const double rk = this->node_positions_1D_[k+1];
-
+                        for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
+                            const double ri = this->node_positions_1D_[i+1];
                             this->control_node(new_v) = (1-ri)*(1-rj)*(1-rk)*c_p0
                                                     + ri*(1-rj)*(1-rk)*c_p1
                                                     + (1-ri)*rj*(1-rk)*c_p2

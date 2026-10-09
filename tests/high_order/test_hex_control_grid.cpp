@@ -658,7 +658,7 @@ namespace geolio::test
         void save_control_nodes(const std::string_view suffix = "_nodes.geogram") const {
             ASSERT_NE(control_grid, nullptr);
 
-            GEO::Mesh mesh_out;
+            GEO::Mesh mesh_out(DIM);
             GEO::Attribute<GEO::index_t> mesh_out_v_idx(mesh_out.vertices.attributes(), "idx");
 
             mesh_out.vertices.create_vertices(control_grid->control_nodes_nb());
