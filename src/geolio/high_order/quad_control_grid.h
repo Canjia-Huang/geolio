@@ -909,6 +909,18 @@ namespace geolio
             }
         }
     };
+
+    template <typename T>
+    struct isQuadControlGrid : std::false_type {};
+
+    template <GEO::index_t DIM>
+    struct isQuadControlGrid<QuadControlGrid<DIM>> : std::true_type {};
+
+    template <typename T>
+    struct QuadControlGridDim;
+
+    template <GEO::index_t DIM>
+    struct QuadControlGridDim<QuadControlGrid<DIM>> : std::integral_constant<GEO::index_t, DIM> {};
 }
 
 #endif //GEOLIO_QUAD_CONTROL_GRID_H

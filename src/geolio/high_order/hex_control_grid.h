@@ -1246,6 +1246,18 @@ namespace geolio
             }
         }
     };
+
+    template <typename T>
+    struct isHexControlGrid : std::false_type {};
+
+    template <GEO::index_t DIM>
+    struct isHexControlGrid<HexControlGrid<DIM>> : std::true_type {};
+
+    template <typename T>
+    struct HexControlGridDim;
+
+    template <GEO::index_t DIM>
+    struct HexControlGridDim<HexControlGrid<DIM>> : std::integral_constant<GEO::index_t, DIM> {};
 }
 
 #endif //GEOLIO_HEX_CONTROL_GRID_H
