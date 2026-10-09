@@ -127,8 +127,10 @@ namespace geolio
         assert(uv.x >= 0 && uv.x <= 1);
         assert(uv.y >= 0 && uv.y <= 1);
 
-        du.x = 0; du.y = 0;
-        dv.x = 0; dv.y = 0;
+        for (GEO::index_t d = 0; d < DIM; ++d) {
+            du[d] = 0;
+            dv[d] = 0;
+        }
 
         Bu.resize(this->order_+1);
         Bv.resize(this->order_+1);
