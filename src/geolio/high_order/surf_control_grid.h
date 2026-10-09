@@ -20,6 +20,7 @@ namespace geolio
         SurfaceControlGrid(const GEO::Mesh& mesh, const GEO::index_t order)
             : ControlGrid<DIM>(mesh, order)
         {
+            assert(this->mesh_v_dim_ == 2 || this->mesh_v_dim_ == 3);
             assert(this->mesh_.facets.nb() > 0);
         }
 

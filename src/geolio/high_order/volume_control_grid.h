@@ -20,6 +20,7 @@ namespace geolio
         VolumeControlGrid(const GEO::Mesh& mesh, const GEO::index_t order)
             : ControlGrid<DIM>(mesh, order)
         {
+            assert(this->mesh_v_dim_ == 3);
             assert(this->mesh_.cells.nb() > 0);
         }
 
