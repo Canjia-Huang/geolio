@@ -257,9 +257,10 @@ namespace geolio
         std::vector<double>& dBv,
         std::vector<double>& dBw
         ) const {
-        assert(f < this->mesh_.facets.nb());
-        assert(uv.x >= 0 && uv.x <= 1);
-        assert(uv.y >= 0 && uv.y <= 1);
+        assert(c < this->mesh_.cells.nb());
+        assert(uvw.x >= 0 && uvw.x <= 1);
+        assert(uvw.y >= 0 && uvw.y <= 1);
+        assert(uvw.z >= 0 && uvw.z <= 1);
         assert(this->control_nodes_quantities_.is_bound());
         const auto phys_dim = this->control_node_quantities_dimension();
 
