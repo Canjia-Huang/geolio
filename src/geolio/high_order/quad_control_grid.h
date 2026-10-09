@@ -2,8 +2,8 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/4.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef HOSM_QUAD_CONTROL_GRID_H
-#define HOSM_QUAD_CONTROL_GRID_H
+#ifndef GEOLIO_QUAD_CONTROL_GRID_H
+#define GEOLIO_QUAD_CONTROL_GRID_H
 #include <geolio/common/pair_hash.h>
 #include "basis_functions.h"
 #include "surf_control_grid.h"
@@ -879,8 +879,8 @@ namespace geolio
             }
 
             /* == Create grid elements ================================================================================= */
-            this->control_nodes_.vertices.clear();
-            GEO::index_t new_v = this->control_nodes_.vertices.create_vertices(
+            this->control_nodes_mesh_.vertices.clear();
+            GEO::index_t new_v = this->control_nodes_mesh_.vertices.create_vertices(
                                 this->mesh_.vertices.nb() + // vertices
                                 quad_edges_control_points.size() * this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_ + // edges
                                 this->mesh_.facets.nb() * this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_ // facets
@@ -889,7 +889,7 @@ namespace geolio
 
             /* == For vertices == */
             for (const auto& v : this->mesh_.vertices)
-                this->control_node(new_v++) = this->mesh_.vertices.template point<DIM>(v);
+                std::copy_n(this->control_node_ptr(new_v++), this->mesh_v_dim_, this->mesh_.vertices.point_ptr(v));
 
             /* == For edges == */
             for (auto& [edge, control_vertices] : quad_edges_control_points) {
@@ -932,6 +932,11 @@ namespace geolio
             }
 
             assert(new_v == this->control_nodes_nb());
+
+            /* Initialize other dimension */
+            const GEO::index_t diff_dim = DIM - this->mesh_v_dim_;
+            for (const auto& nd : this->control_nodes_mesh_)
+                std::fill_n(this->control_node_ptr(nd)+this->mesh_v_dim_, diff_dim, 0.0);
 
             /* == Create regular index ================================================================================= */
             this->element_control_nodes_.assign(this->CONTROL_POINTS_NB_PER_FACET_ * this->mesh_.facets.nb(), GEO::NO_VERTEX);
@@ -989,4 +994,4 @@ namespace geolio
     };
 }
 
-#endif //HOSM_QUAD_CONTROL_GRID_H
+#endif //GEOLIO_QUAD_CONTROL_GRID_H

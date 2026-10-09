@@ -22,6 +22,7 @@ namespace geolio
         ControlGrid(const GEO::Mesh& mesh, const GEO::index_t order)
             : attribute_id_(generate_random_string(22)),
             mesh_(mesh),
+            mesh_v_dim_(mesh.vertices.dimension()),
             order_(order),
             CONTROL_POINTS_NB_PER_EDGE_(order+1),
             CONTROL_POINTS_NB_PER_FACET_((order+1)*(order+1)),
@@ -30,11 +31,10 @@ namespace geolio
             INTERNAL_CONTROL_POINTS_NB_PER_FACET_((order-1)*(order-1)),
             INTERNAL_CONTROL_POINTS_NB_PER_CELL_((order-1)*(order-1)*(order-1))
         {
-            assert(mesh_.vertices.dimension() == DIM);
             assert(order_ > 0);
 
             initialize_node_positions_1D();
-            control_nodes_.vertices.set_dimension(DIM);
+            control_nodes_mesh_.vertices.set_dimension(DIM);
         }
 
         /**
@@ -115,7 +115,7 @@ namespace geolio
          * @brief Get the total number of control nodes.
          * @return Number of vertices stored in the control-node mesh.
          */
-        [[nodiscard]] GEO::index_t control_nodes_nb() const { return control_nodes_.vertices.nb(); }
+        [[nodiscard]] GEO::index_t control_nodes_nb() const { return control_nodes_mesh_.vertices.nb(); }
 
         /**
          * @brief Access a mutable control node by global index.
@@ -124,7 +124,7 @@ namespace geolio
          */
         GEO::vecng<DIM, double>& control_node(const GEO::index_t v) {
             assert(v < control_nodes_nb());
-            return control_nodes_.vertices.point<DIM>(v);
+            return control_nodes_mesh_.vertices.point<DIM>(v);
         }
 
         /**
@@ -134,7 +134,7 @@ namespace geolio
          */
         [[nodiscard]] const GEO::vecng<DIM, double>& control_node(const GEO::index_t v) const {
             assert(v < control_nodes_nb());
-            return control_nodes_.vertices.point<DIM>(v);
+            return control_nodes_mesh_.vertices.point<DIM>(v);
         }
 
         /**
@@ -142,7 +142,7 @@ namespace geolio
          * @return Mutable view/proxy over all control-node coordinates.
          */
         const auto& control_nodes() {
-            return control_nodes_.vertices.points<DIM>();
+            return control_nodes_mesh_.vertices.points<DIM>();
         }
 
         /**
@@ -150,7 +150,7 @@ namespace geolio
          * @return Const view/proxy over all control-node coordinates.
          */
         [[nodiscard]] auto control_nodes() const {
-            return control_nodes_.vertices.points<DIM>();
+            return control_nodes_mesh_.vertices.points<DIM>();
         }
 
         /**
@@ -159,13 +159,14 @@ namespace geolio
          * @return Pointer to the first component of the indexed node position.
          */
         double* control_node_ptr(const GEO::index_t v) {
-            return control_nodes_.vertices.point_ptr(v);
+            return control_nodes_mesh_.vertices.point_ptr(v);
         }
 
     protected:
         const std::string attribute_id_; // unique id
 
         const GEO::Mesh& mesh_;
+        const GEO::index_t mesh_v_dim_;
 
         /* ========================================================================================================= */
 
@@ -237,7 +238,7 @@ namespace geolio
          * @brief Build control-node connectivity/geometry for the derived grid type.
          */
         virtual void initialize_control_nodes() = 0;
-        GEO::Mesh control_nodes_;
+        GEO::Mesh control_nodes_mesh_;
         std::vector<GEO::index_t> element_control_nodes_;
     };
 }
