@@ -266,7 +266,8 @@ namespace geolio
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vecng<DIM, double> p(0, 0, 0);
+            GEO::vecng<DIM, double> p;
+            std::fill_n(p.data(), DIM, 0.0);
 
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
