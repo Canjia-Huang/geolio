@@ -298,8 +298,8 @@ namespace geolio
          */
         void compute_untangling_funcgrad(
             const GEO::index_t c,
-            const Eigen::VectorXd& detJ_b_coeffs,
-            const Eigen::MatrixXd& grad_detJ_b_coeffs
+            Eigen::VectorXd& detJ_b_coeffs,
+            Eigen::MatrixXd& grad_detJ_b_coeffs
             ) const {
             Eigen::VectorXd detJ;
             compute_samples_det_J(c, detJ);
