@@ -25,6 +25,11 @@
 #include <utility>
 #include <vector>
 
+namespace
+{
+    constexpr GEO::index_t DIM = 6;
+}
+
 namespace geolio::test
 {
     namespace
@@ -95,9 +100,9 @@ namespace geolio::test
          * @param[in] uv Facet-local parametric point, in [h, 1-h]^2.
          * @return The two tangents.
          */
-        template <typename Grid>
+        template <typename GRID>
         [[nodiscard]] std::pair<GEO::vec3, GEO::vec3> finite_difference_facet_tangents(
-            const Grid& grid,
+            const GRID& grid,
             const GEO::index_t c,
             const GEO::index_t lf,
             const GEO::vec2& uv
@@ -106,8 +111,8 @@ namespace geolio::test
                 return grid.compute_cell_uvw_position(c, project_hex_lf_uv_to_uvw(GEO::vec2(uv.x + du, uv.y + dv), lf));
             };
             return {
-                (position(FINITE_DIFF_STEP, 0.0) - position(-FINITE_DIFF_STEP, 0.0)) / (2.0*FINITE_DIFF_STEP),
-                (position(0.0, FINITE_DIFF_STEP) - position(0.0, -FINITE_DIFF_STEP)) / (2.0*FINITE_DIFF_STEP)
+                GEO::Memory::pointer_as_reference<GEO::vec3>(((position(FINITE_DIFF_STEP, 0.0) - position(-FINITE_DIFF_STEP, 0.0)) / (2.0*FINITE_DIFF_STEP)).data()),
+                GEO::Memory::pointer_as_reference<GEO::vec3>(((position(0.0, FINITE_DIFF_STEP) - position(0.0, -FINITE_DIFF_STEP)) / (2.0*FINITE_DIFF_STEP)).data())
             };
         }
     }
@@ -373,7 +378,7 @@ namespace geolio::test
      */
     class HexControlGridTest : public ::testing::Test {
     protected:
-        using Grid = HexControlGrid;
+        using Grid = HexControlGrid<DIM>;
 
         /* == meshes =========================================================================================== */
 
@@ -398,7 +403,7 @@ namespace geolio::test
          * @param[in] nd Global index of the control node.
          */
         void jiggle_control_node(const GEO::index_t nd) {
-            control_grid->control_node(nd) += random_offset<3>(JITTER_AMPLITUDE);
+            control_grid->control_node(nd) += random_offset<DIM>(JITTER_AMPLITUDE);
         }
 
         /* == evaluations ====================================================================================== */
@@ -424,9 +429,9 @@ namespace geolio::test
 
         /** First-order parametric data of a cell mapping, at one parametric point. */
         struct Derivatives {
-            GEO::vec3 du;
-            GEO::vec3 dv;
-            GEO::vec3 dw;
+            GEO::vecng<DIM, double> du;
+            GEO::vecng<DIM, double> dv;
+            GEO::vecng<DIM, double> dw;
             std::vector<double> Bu;
             std::vector<double> Bv;
             std::vector<double> Bw;
@@ -456,8 +461,8 @@ namespace geolio::test
          * @param[in] c Cell index.
          * @return The average of the eight cell corner control nodes.
          */
-        [[nodiscard]] GEO::vec3 cell_centre(const GEO::index_t c) const {
-            GEO::vec3 centre;
+        [[nodiscard]] GEO::vecng<DIM, double> cell_centre(const GEO::index_t c) const {
+            GEO::vecng<DIM, double> centre;
             for (GEO::index_t lv = 0; lv < HEX_VERTEX_NB; ++lv)
                 centre += control_grid->control_node(control_grid->cell_vertex_nd(c, lv));
             return (1.0/HEX_VERTEX_NB)*centre;
@@ -509,7 +514,10 @@ namespace geolio::test
          */
         void expect_identity_mapping(const GEO::index_t c) const {
             for (const auto& uvw : grid_unit_samples_3d(SAMPLE_RESOLUTION))
-                EXPECT_NEAR(GEO::distance2(control_grid->compute_cell_uvw_position(c, uvw), uvw), 0.0, EXACT_DIST2_TOL);
+                EXPECT_NEAR(GEO::distance2(
+                    GEO::Memory::pointer_as_reference<GEO::vec3>(control_grid->compute_cell_uvw_position(c, uvw).data()),
+                    uvw
+                    ), 0.0, EXACT_DIST2_TOL);
         }
 
         /**
@@ -532,7 +540,10 @@ namespace geolio::test
             const auto& node_positions = control_grid->node_positions_1D();
             const GEO::vec3 uvw(node_positions[i], node_positions[j], node_positions[k]);
 
-            EXPECT_GT(GEO::distance2(control_grid->compute_cell_uvw_position(c, uvw), uvw), 0.0)
+            EXPECT_GT(GEO::distance2(
+                GEO::Memory::pointer_as_reference<GEO::vec3>(control_grid->compute_cell_uvw_position(c, uvw).data()),
+                uvw
+                ), 0.0)
                 << "the jitter of control node (" << i << ", " << j << ", " << k << ") must move the mapping";
         }
 
@@ -575,7 +586,12 @@ namespace geolio::test
                             c, GEO::vec3(u, v, w), Grid::MeasureType::DET_JACOBIAN);
                         EXPECT_NEAR(
                             det_jacobian,
-                            GEO::dot(derivatives.dw, GEO::cross(derivatives.du, derivatives.dv)),
+                            GEO::dot(
+                                GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.dw.data()),
+                                GEO::cross(
+                                    GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.du.data()),
+                                    GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.dv.data())
+                                )),
                             REFERENCE_TOL
                             );
 
@@ -642,25 +658,13 @@ namespace geolio::test
         void save_control_nodes(const std::string_view suffix = "_nodes.geogram") const {
             ASSERT_NE(control_grid, nullptr);
 
-            GEO::Mesh mesh_out;
+            GEO::Mesh mesh_out(DIM);
             GEO::Attribute<GEO::index_t> mesh_out_v_idx(mesh_out.vertices.attributes(), "idx");
 
             mesh_out.vertices.create_vertices(control_grid->control_nodes_nb());
             for (const auto v : mesh_out.vertices) {
-                mesh_out.vertices.point(v) = control_grid->control_node(v);
+                mesh_out.vertices.point<DIM>(v) = control_grid->control_node(v);
                 mesh_out_v_idx[v] = v;
-            }
-
-            if (const auto& v_quantities = control_grid->control_nodes_quantities();
-                v_quantities.is_bound()
-                ) {
-                const auto dim = v_quantities.dimension();
-                GEO::Attribute<double> mesh_out_v_quantities;
-                mesh_out_v_quantities.create_vector_attribute(mesh_out.vertices.attributes(), "quantities", dim);
-                for (GEO::index_t v = 0, v_end = control_grid->control_nodes_nb(); v < v_end; ++v) {
-                    for (GEO::index_t d = 0; d < dim; ++d)
-                        mesh_out_v_quantities[dim*v+d] = v_quantities[dim*v+d];
-                }
             }
 
             EXPECT_TRUE(mesh_out.save(artifact_path(suffix)));
@@ -752,17 +756,18 @@ namespace geolio::test
          * @param[in] lf Local facet index.
          * @return The node positions, sorted along (x, y, z).
          */
-        [[nodiscard]] std::vector<GEO::vec3> facet_control_node_positions(const GEO::index_t c, const GEO::index_t lf) const {
-            std::vector<GEO::vec3> positions;
+        [[nodiscard]] std::vector<GEO::vecng<DIM, double>> facet_control_node_positions(const GEO::index_t c, const GEO::index_t lf) const {
+            std::vector<GEO::vecng<DIM, double>> positions;
             positions.reserve((control_grid->order()+1)*(control_grid->order()+1));
             for (GEO::index_t i = 0, order = control_grid->order(); i <= order; ++i)
                 for (GEO::index_t j = 0; j <= order; ++j)
                     positions.push_back(control_grid->control_node(control_grid->cell_facet_nd(c, lf, i, j)));
 
-            std::ranges::sort(positions, [](const GEO::vec3& p, const GEO::vec3& q) {
-                if (p.x != q.x) return p.x < q.x;
-                if (p.y != q.y) return p.y < q.y;
-                return p.z < q.z;
+            std::ranges::sort(positions, [](const GEO::vecng<DIM, double>& p, const GEO::vecng<DIM, double>& q) {
+                for (GEO::index_t d = 0; d < DIM; ++d) {
+                    if (p[d] != q[d])
+                        return p[d] < q[d];
+                }
             });
             return positions;
         }
@@ -781,20 +786,6 @@ namespace geolio::test
             MeshQualityAttributes quality(mesh_out, false); // no absolute-area measure for hexes
             for (const auto v : mesh_out.vertices)
                 quality.set(v, evaluate_quality(mesh_out_v_cell[v], mesh_out_v_uvw[v]));
-
-            if (const auto& v_quantities = control_grid->control_nodes_quantities();
-                v_quantities.is_bound()
-                ) {
-                const auto dim = v_quantities.dimension();
-                GEO::Attribute<double> mesh_out_v_quantities;
-                mesh_out_v_quantities.create_vector_attribute(mesh_out.vertices.attributes(), "quantities", dim);
-                for (const auto v : mesh_out.vertices) {
-                    control_grid->compute_cell_uvw_quantities(
-                        mesh_out_v_cell[v],
-                        mesh_out_v_uvw[v],
-                        &mesh_out_v_quantities[dim*v]);
-                }
-            }
         }
     };
 
@@ -848,60 +839,6 @@ namespace geolio::test
         save_high_order_mesh_cells();
     }
 
-    TEST_F(SingleHexControlGridTest, quantities) {
-        constexpr GEO::index_t QUANTITY_NB = 6;
-
-        jiggle_control_node(control_grid->cell_edge_nd(CELL, 1, 2));
-        jiggle_control_node(control_grid->cell_facet_nd(CELL, 2, 2, 3));
-
-        control_grid->set_control_node_quantities(QUANTITY_NB);
-        EXPECT_EQ(control_grid->control_node_quantities_dimension(), QUANTITY_NB);
-
-        auto& quantities = control_grid->control_nodes_quantities();
-        ASSERT_TRUE(quantities.is_bound());
-        for (GEO::index_t v = 0, v_end = control_grid->control_nodes_nb(); v < v_end; ++v) {
-            for (GEO::index_t d = 0; d < QUANTITY_NB; ++d)
-                quantities[QUANTITY_NB*v+d] = static_cast<double>(d+1)*GEO::Numeric::random_float32();
-        }
-
-        // At the parametric position of a control node, the interpolation reduces to the nodal value.
-        const auto& node_positions = control_grid->node_positions_1D();
-        for (GEO::index_t i = 0, i_end = control_grid->order(); i <= i_end; ++i) {
-            for (GEO::index_t j = 0, j_end = control_grid->order(); j <= j_end; ++j) {
-                for (GEO::index_t k = 0, k_end = control_grid->order(); k <= k_end; ++k) {
-                    const GEO::vec3 uvw(node_positions[i], node_positions[j], node_positions[k]);
-                    const auto nd = control_grid->cell_nd(CELL, i, j, k);
-
-                    for (GEO::index_t d = 0; d < QUANTITY_NB; ++d) {
-                        SCOPED_TRACE(::testing::Message()
-                            << "control node (" << i << ", " << j << ", " << k << "), component " << d);
-                        EXPECT_NEAR(
-                            control_grid->compute_cell_uvw_quantity(CELL, uvw, d),
-                            quantities[QUANTITY_NB*nd+d],
-                            REFERENCE_TOL
-                            );
-                    }
-                }
-            }
-        }
-
-        // The single-component and all-components evaluation must agree.
-        constexpr GEO::index_t CHECK_RESOLUTION = 3;
-        for (const auto& uvw : grid_unit_samples_3d(CHECK_RESOLUTION)) {
-            std::vector<double> q(QUANTITY_NB);
-            control_grid->compute_cell_uvw_quantities(CELL, uvw, q.data());
-
-            for (GEO::index_t d = 0; d < QUANTITY_NB; ++d) {
-                EXPECT_NEAR(q[d], control_grid->compute_cell_uvw_quantity(CELL, uvw, d), REFERENCE_TOL)
-                    << "uvw = (" << uvw.x << ", " << uvw.y << ", " << uvw.z << "), component " << d;
-            }
-        }
-
-        save_control_nodes();
-        save_high_order_mesh_border();
-        save_high_order_mesh_cells();
-    }
-
     TEST_F(SingleHexControlGridTest, facet_normal) {
         constexpr GEO::index_t POINTS_NB = 100;
         constexpr GEO::index_t LF = 1;
@@ -919,9 +856,10 @@ namespace geolio::test
         GEO::index_t new_e = mesh_out.edges.create_edges(POINTS_NB);
         for (GEO::index_t i = 0; i < POINTS_NB; ++i) {
             const GEO::vec2 uv(GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-            const auto position = control_grid->compute_cell_uvw_position(CELL, project_hex_lf_uv_to_uvw(uv, LF));
+            const auto position_all = control_grid->compute_cell_uvw_position(CELL, project_hex_lf_uv_to_uvw(uv, LF));
             const auto normal = control_grid->compute_cell_facet_uv_normal(CELL, LF, uv);
 
+            const auto position = GEO::Memory::pointer_as_reference<GEO::vec3>(position_all.data());
             mesh_out.vertices.point(new_v) = position;
             mesh_out.vertices.point(new_v+1) = position + ARROW_LENGTH*normal;
             mesh_out.edges.set_vertex(new_e, 0, new_v);
@@ -948,7 +886,10 @@ namespace geolio::test
                     EXPECT_NEAR(GEO::dot(GEO::normalize(normal), GEO::normalize(tv)), 0.0, NORMAL_ORTHOGONALITY_TOL);
 
                     const auto position = control_grid->compute_cell_uvw_position(CELL, project_hex_lf_uv_to_uvw(uv, lf));
-                    EXPECT_GT(GEO::dot(GEO::normalize(normal), GEO::normalize(position - centre)), 0.0);
+                    EXPECT_GT(GEO::dot(
+                        GEO::normalize(GEO::Memory::pointer_as_reference<GEO::vec3>(normal.data())),
+                        GEO::normalize(GEO::Memory::pointer_as_reference<GEO::vec3>((position - centre).data()
+                            ))), 0.0);
                 }
             }
         }
@@ -974,12 +915,13 @@ namespace geolio::test
         GEO::index_t new_e = mesh_out.edges.create_edges(3*POINTS_NB);
         for (const auto& uvw : grid_unit_samples_3d(RESOLUTION)) {
             const auto derivatives = evaluate_derivatives(CELL, uvw);
-            const auto position = control_grid->compute_cell_uvw_position(CELL, uvw);
+            const auto position_all = control_grid->compute_cell_uvw_position(CELL, uvw);
 
+            const auto position = GEO::Memory::pointer_as_reference<GEO::vec3>(position_all.data());
             mesh_out.vertices.point(new_v) = position;
-            mesh_out.vertices.point(new_v+1) = position + ARROW_LENGTH*derivatives.du;
-            mesh_out.vertices.point(new_v+2) = position + ARROW_LENGTH*derivatives.dv;
-            mesh_out.vertices.point(new_v+3) = position + ARROW_LENGTH*derivatives.dw;
+            mesh_out.vertices.point(new_v+1) = position + ARROW_LENGTH*GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.du.data());
+            mesh_out.vertices.point(new_v+2) = position + ARROW_LENGTH*GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.dv.data());
+            mesh_out.vertices.point(new_v+3) = position + ARROW_LENGTH*GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.dw.data());
             mesh_out.edges.set_vertex(new_e, 0, new_v);
             mesh_out.edges.set_vertex(new_e, 1, new_v+1);
             mesh_out.edges.set_vertex(new_e+1, 0, new_v);

@@ -12,7 +12,7 @@ namespace geolio::test
 {
     class HighOrderHexMeshIO : public ::testing::Test {
     protected:
-        void same_as(const GEO::Mesh& other_mesh, const std::unique_ptr<HexControlGrid>& other_control_grid) {
+        void same_as(const GEO::Mesh& other_mesh, const std::unique_ptr<HexControlGrid<3>>& other_control_grid) {
             ASSERT_FALSE(control_grid == nullptr);
             ASSERT_FALSE(other_control_grid == nullptr);
 
@@ -43,7 +43,7 @@ namespace geolio::test
         }
 
         GEO::Mesh mesh;
-        std::unique_ptr<HexControlGrid> control_grid;
+        std::unique_ptr<HexControlGrid<3>> control_grid;
     };
 
     class SingleHexCHighOrderHexMeshIO : public HighOrderHexMeshIO {
@@ -61,7 +61,7 @@ namespace geolio::test
             mesh.cells.create_hex(0, 1, 2, 3, 4, 5, 6, 7);
 
             constexpr GEO::index_t order = 5;
-            control_grid = std::make_unique<HexControlGrid>(mesh, order);
+            control_grid = std::make_unique<HexControlGrid<3>>(mesh, order);
         }
     };
 
@@ -79,7 +79,7 @@ namespace geolio::test
 
         /* Load */
         GEO::Mesh loaded_mesh;
-        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid<3>> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
         this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
@@ -98,7 +98,7 @@ namespace geolio::test
 
         /* Load */
         GEO::Mesh loaded_mesh;
-        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid<3>> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
         this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
@@ -124,7 +124,7 @@ namespace geolio::test
             mesh.cells.connect();
 
             constexpr GEO::index_t order = 6;
-            control_grid = std::make_unique<HexControlGrid>(mesh, order);
+            control_grid = std::make_unique<HexControlGrid<3>>(mesh, order);
         }
     };
 
@@ -142,7 +142,7 @@ namespace geolio::test
 
         /* Load */
         GEO::Mesh loaded_mesh;
-        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid<3>> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
         this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }
@@ -161,7 +161,7 @@ namespace geolio::test
 
         /* Load */
         GEO::Mesh loaded_mesh;
-        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid<3>> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_mesh, loaded_control_grid_ptr));
         this->same_as(loaded_mesh, loaded_control_grid_ptr);
     }

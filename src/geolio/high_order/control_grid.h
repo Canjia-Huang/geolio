@@ -22,6 +22,7 @@ namespace geolio
         ControlGrid(const GEO::Mesh& mesh, const GEO::index_t order)
             : attribute_id_(generate_random_string(22)),
             mesh_(mesh),
+            mesh_v_dim_(mesh.vertices.dimension()),
             order_(order),
             CONTROL_POINTS_NB_PER_EDGE_(order+1),
             CONTROL_POINTS_NB_PER_FACET_((order+1)*(order+1)),
@@ -30,62 +31,17 @@ namespace geolio
             INTERNAL_CONTROL_POINTS_NB_PER_FACET_((order-1)*(order-1)),
             INTERNAL_CONTROL_POINTS_NB_PER_CELL_((order-1)*(order-1)*(order-1))
         {
-            assert(mesh_.vertices.dimension() == DIM);
+            assert(mesh_v_dim_ == 2 || mesh_v_dim_ == 3);
             assert(order_ > 0);
 
             initialize_node_positions_1D();
-            control_nodes_.vertices.set_dimension(DIM);
+            control_nodes_mesh_.vertices.set_dimension(DIM);
         }
 
         /**
          * @brief Virtual destructor.
          */
         virtual ~ControlGrid() = default;
-
-        /**
-         * @brief Create or update the control-node quantity attribute.
-         *
-         * When @p dim is zero, the existing quantity attribute is removed.
-         * For positive dimensions, a vector attribute with the requested
-         * component count is created or recreated on the control-node mesh if
-         * it does not exist or its dimension differs from @p dim.
-         * @param[in] dim Number of quantity components stored per control node.
-         *                Use 0 to disable and destroy the attribute.
-         */
-        void set_control_node_quantities(const GEO::index_t dim) {
-            if (dim == 0) {
-                if (control_nodes_quantities_.is_bound())
-                    control_nodes_quantities_.destroy();
-            }
-            else {
-                if (!control_nodes_quantities_.is_bound() ||
-                    control_nodes_quantities_.dimension() != dim
-                    ) { // need to re-create
-                    if (control_nodes_quantities_.is_bound())
-                       control_nodes_quantities_.destroy();
-                    control_nodes_quantities_.create_vector_attribute(
-                       control_nodes_.vertices.attributes(),
-                       attribute_id_+":quantities",
-                       dim);
-                }
-            }
-        }
-
-        /**
-         * @brief Access the mutable control-node quantity attribute.
-         */
-        auto& control_nodes_quantities() { return control_nodes_quantities_; }
-
-        /**
-         * @brief Query the dimension of the control-node quantity attribute.
-         *
-         * Returns 0 when no quantity attribute is currently bound.
-         * @return Number of scalar components per control node in the quantity
-         *         attribute, or 0 if the attribute is not created.
-         */
-        auto control_node_quantities_dimension() const {
-            return control_nodes_quantities_.is_bound() ? control_nodes_quantities_.dimension() : 0;
-        }
 
         /**
          * @brief Access the reference mesh.
@@ -160,7 +116,7 @@ namespace geolio
          * @brief Get the total number of control nodes.
          * @return Number of vertices stored in the control-node mesh.
          */
-        [[nodiscard]] GEO::index_t control_nodes_nb() const { return control_nodes_.vertices.nb(); }
+        [[nodiscard]] GEO::index_t control_nodes_nb() const { return control_nodes_mesh_.vertices.nb(); }
 
         /**
          * @brief Access a mutable control node by global index.
@@ -169,7 +125,7 @@ namespace geolio
          */
         GEO::vecng<DIM, double>& control_node(const GEO::index_t v) {
             assert(v < control_nodes_nb());
-            return control_nodes_.vertices.point<DIM>(v);
+            return control_nodes_mesh_.vertices.point<DIM>(v);
         }
 
         /**
@@ -179,7 +135,7 @@ namespace geolio
          */
         [[nodiscard]] const GEO::vecng<DIM, double>& control_node(const GEO::index_t v) const {
             assert(v < control_nodes_nb());
-            return control_nodes_.vertices.point<DIM>(v);
+            return control_nodes_mesh_.vertices.point<DIM>(v);
         }
 
         /**
@@ -187,7 +143,7 @@ namespace geolio
          * @return Mutable view/proxy over all control-node coordinates.
          */
         const auto& control_nodes() {
-            return control_nodes_.vertices.points<DIM>();
+            return control_nodes_mesh_.vertices.points<DIM>();
         }
 
         /**
@@ -195,7 +151,7 @@ namespace geolio
          * @return Const view/proxy over all control-node coordinates.
          */
         [[nodiscard]] auto control_nodes() const {
-            return control_nodes_.vertices.points<DIM>();
+            return control_nodes_mesh_.vertices.points<DIM>();
         }
 
         /**
@@ -204,13 +160,23 @@ namespace geolio
          * @return Pointer to the first component of the indexed node position.
          */
         double* control_node_ptr(const GEO::index_t v) {
-            return control_nodes_.vertices.point_ptr(v);
+            return control_nodes_mesh_.vertices.point_ptr(v);
+        }
+
+        /**
+         * @brief Access the coordinates of one control node through a const pointer.
+         * @param[in] v Control-node index.
+         * @return Pointer to the first coordinate component of the indexed node position.
+         */
+        const double* control_node_ptr(const GEO::index_t v) const {
+            return control_nodes_mesh_.vertices.point_ptr(v);
         }
 
     protected:
         const std::string attribute_id_; // unique id
 
         const GEO::Mesh& mesh_;
+        const GEO::index_t mesh_v_dim_;
 
         /* ========================================================================================================= */
 
@@ -248,7 +214,7 @@ namespace geolio
 
         /* ========================================================================================================= */
 
-        BasisFunctionType basis_function_type_ = BasisFunctionType::LAGRANGE;
+        const BasisFunctionType basis_function_type_ = BasisFunctionType::LAGRANGE;
 
         /* ========================================================================================================= */
 
@@ -282,8 +248,16 @@ namespace geolio
          * @brief Build control-node connectivity/geometry for the derived grid type.
          */
         virtual void initialize_control_nodes() = 0;
-        GEO::Mesh control_nodes_;
-        GEO::Attribute<double> control_nodes_quantities_; // [dim*nd+i] -> node's ith quantities
+
+        /**
+         * @brief Initialize control-node coordinates in dimensions not provided by the mesh.
+         */
+        void initialize_control_node_quantities() {
+            const GEO::index_t diff_dim = DIM - mesh_v_dim_;
+            for (const auto& nd : control_nodes_mesh_.vertices)
+                std::fill_n(control_node_ptr(nd)+mesh_v_dim_, diff_dim, 0.0);
+        }
+        GEO::Mesh control_nodes_mesh_;
         std::vector<GEO::index_t> element_control_nodes_;
     };
 }

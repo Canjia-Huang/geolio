@@ -12,7 +12,6 @@
 #include <geolio/high_order/minimum_jacobian_determinant.h>
 #include <gtest/gtest.h>
 #include "control_grid_test_utils.h"
-
 #include <algorithm>
 #include <limits>
 #include <memory>
@@ -202,6 +201,8 @@ namespace geolio::test
      */
     class HexMinimumJacobianDeterminantTest : public ::testing::Test {
     protected:
+        using Grid = HexControlGrid<3>;
+
         void SetUp() override {
             mesh.vertices.create_vertices(12);
             mesh.vertices.point(0) = GEO::vec3(0, 0, 0);
@@ -221,26 +222,26 @@ namespace geolio::test
             mesh.cells.connect();
 
             constexpr GEO::index_t ORDER = 4;
-            control_grid = std::make_unique<HexControlGrid>(mesh, ORDER);
+            control_grid = std::make_unique<Grid>(mesh, ORDER);
             control_grid->control_node(control_grid->cell_nd(0, 2, 3, 1)) += GEO::vec3(-0.2, -0.4, 0.1);
 
-            mjd = std::make_unique<MinimumJacobianDeterminant<HexControlGrid>>(*control_grid);
+            mjd = std::make_unique<MinimumJacobianDeterminant<Grid>>(*control_grid);
         }
 
         /** @return The determinant of cell @p c at one parametric point. */
         [[nodiscard]] double det_jacobian(const GEO::index_t c, const GEO::vec3& uvw) const {
-            return control_grid->compute_cell_uvw_measure(c, uvw, HexControlGrid::MeasureType::DET_JACOBIAN);
+            return control_grid->compute_cell_uvw_measure(c, uvw, Grid::MeasureType::DET_JACOBIAN);
         }
 
         GEO::Mesh mesh;
-        std::unique_ptr<HexControlGrid> control_grid;
-        std::unique_ptr<MinimumJacobianDeterminant<HexControlGrid>> mjd;
+        std::unique_ptr<Grid> control_grid;
+        std::unique_ptr<MinimumJacobianDeterminant<Grid>> mjd;
     };
 
     TEST_F(HexMinimumJacobianDeterminantTest, finds_inverted_cell) {
-        expect_analysis_consistent<HexControlGrid, GEO::vec3>(*mjd, 0, true,
+        expect_analysis_consistent<Grid, GEO::vec3>(*mjd, 0, true,
             [this](const GEO::vec3& uvw) { return det_jacobian(0, uvw); }, "c0");
-        expect_analysis_consistent<HexControlGrid, GEO::vec3>(*mjd, 1, false,
+        expect_analysis_consistent<Grid, GEO::vec3>(*mjd, 1, false,
             [this](const GEO::vec3& uvw) { return det_jacobian(1, uvw); }, "c1");
     }
 

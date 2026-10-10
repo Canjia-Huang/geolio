@@ -92,7 +92,7 @@ namespace geolio::test
         template <GEO::index_t DIM>
         [[nodiscard]] GEO::vecng<DIM, double> bulge_offset(const double amplitude) {
             GEO::vecng<DIM, double> offset;
-            if constexpr (DIM == 3)
+            if constexpr (DIM >= 3)
                 offset[2] = amplitude;
             else
                 offset[1] = amplitude;
@@ -250,11 +250,12 @@ namespace geolio::test
      * @brief Common helpers of the QuadControlGrid tests.
      * @tparam DIM Physical dimension of the reference mesh, 2 or 3.
      */
-    template <GEO::index_t DIM>
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
     class QuadControlGridTest : public ::testing::Test {
+        static_assert(MESH_DIM == 2 || MESH_DIM == 3);
     protected:
+        static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
         using Grid = QuadControlGrid<DIM>;
-        using Vec = GEO::vecng<DIM, double>;
 
         /* == meshes =========================================================================================== */
 
@@ -265,10 +266,10 @@ namespace geolio::test
          * @param[in] planar_positions One position per vertex.
          */
         void create_vertices(const std::span<const GEO::vec2> planar_positions) {
-            mesh.vertices.set_dimension(DIM);
+            mesh.vertices.set_dimension(MESH_DIM);
             mesh.vertices.create_vertices(static_cast<GEO::index_t>(planar_positions.size()));
             for (GEO::index_t v = 0; v < planar_positions.size(); ++v) {
-                if constexpr (DIM == 2)
+                if constexpr (MESH_DIM == 2)
                     mesh.vertices.point<2>(v) = planar_positions[v];
                 else
                     mesh.vertices.point<3>(v) = GEO::vec3(planar_positions[v].x, planar_positions[v].y, 0.0);
@@ -285,14 +286,11 @@ namespace geolio::test
          * guaranteed to have moved.
          *
          * @param[in] nd Global index of the control node.
-         * @param[in] out_of_plane_bias Signed displacement along z (ignored when DIM == 2).
          */
-        void jiggle_control_node(const GEO::index_t nd, const double out_of_plane_bias = 0.0) {
+        void jiggle_control_node(const GEO::index_t nd) {
             auto& p = control_grid->control_node(nd);
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += JITTER_AMPLITUDE*GEO::Numeric::random_float32();
-            if constexpr (DIM == 3)
-                p[2] += out_of_plane_bias;
         }
 
         /* == evaluations ====================================================================================== */
@@ -315,8 +313,8 @@ namespace geolio::test
 
         /** First-order parametric data of a facet mapping, at one parametric point. */
         struct Derivatives {
-            Vec du;
-            Vec dv;
+            GEO::vecng<DIM, double> du;
+            GEO::vecng<DIM, double> dv;
             std::vector<double> Bu;
             std::vector<double> Bv;
             std::vector<double> dBu;
@@ -383,7 +381,7 @@ namespace geolio::test
          */
         void expect_identity_mapping(const GEO::index_t f) const {
             for (const auto& uv : grid_unit_samples_2d(SAMPLE_RESOLUTION)) {
-                Vec reference;
+                GEO::vecng<DIM, double> reference;
                 reference[0] = uv.x;
                 reference[1] = uv.y;
                 EXPECT_NEAR(GEO::distance2(control_grid->compute_facet_uv_position(f, uv), reference), 0.0, EXACT_DIST2_TOL);
@@ -404,7 +402,7 @@ namespace geolio::test
             const auto& node_positions = control_grid->node_positions_1D();
             const GEO::vec2 uv(node_positions[i], node_positions[j]);
 
-            Vec reference;
+            GEO::vecng<DIM, double> reference;
             reference[0] = uv.x;
             reference[1] = uv.y;
 
@@ -432,11 +430,11 @@ namespace geolio::test
                     const double v = static_cast<double>(j)/RESOLUTION;
                     const auto derivatives = evaluate_derivatives(f, GEO::vec2(u, v));
 
-                    const Vec du_fd = (
+                    const GEO::vecng<DIM, double> du_fd = (
                         control_grid->compute_facet_uv_position(f, GEO::vec2(u + FINITE_DIFF_STEP, v)) -
                         control_grid->compute_facet_uv_position(f, GEO::vec2(u - FINITE_DIFF_STEP, v))
                         ) / (2.0*FINITE_DIFF_STEP);
-                    const Vec dv_fd = (
+                    const GEO::vecng<DIM, double> dv_fd = (
                         control_grid->compute_facet_uv_position(f, GEO::vec2(u, v + FINITE_DIFF_STEP)) -
                         control_grid->compute_facet_uv_position(f, GEO::vec2(u, v - FINITE_DIFF_STEP))
                         ) / (2.0*FINITE_DIFF_STEP);
@@ -470,17 +468,17 @@ namespace geolio::test
                 mesh_out_v_idx[v] = v;
             }
 
-            if (const auto& v_quantities = control_grid->control_nodes_quantities();
-                v_quantities.is_bound()
-                ) {
-                const auto dim = v_quantities.dimension();
-                GEO::Attribute<double> mesh_out_v_quantities;
-                mesh_out_v_quantities.create_vector_attribute(mesh_out.vertices.attributes(), "quantities", dim);
-                for (GEO::index_t v = 0, v_end = control_grid->control_nodes_nb(); v < v_end; ++v) {
-                    for (GEO::index_t d = 0; d < dim; ++d)
-                        mesh_out_v_quantities[dim*v+d] = v_quantities[dim*v+d];
-                }
-            }
+            // if (const auto& v_quantities = control_grid->control_nodes_quantities();
+            //     v_quantities.is_bound()
+            //     ) {
+            //     const auto dim = v_quantities.dimension();
+            //     GEO::Attribute<double> mesh_out_v_quantities;
+            //     mesh_out_v_quantities.create_vector_attribute(mesh_out.vertices.attributes(), "quantities", dim);
+            //     for (GEO::index_t v = 0, v_end = control_grid->control_nodes_nb(); v < v_end; ++v) {
+            //         for (GEO::index_t d = 0; d < dim; ++d)
+            //             mesh_out_v_quantities[dim*v+d] = v_quantities[dim*v+d];
+            //     }
+            // }
 
             EXPECT_TRUE(mesh_out.save(artifact_path(suffix)));
         }
@@ -497,7 +495,7 @@ namespace geolio::test
         void save_high_order_mesh_facets(const std::string_view suffix = "_facets.geogram") const {
             ASSERT_NE(control_grid, nullptr);
 
-            GEO::Mesh mesh_out(DIM);
+            GEO::Mesh mesh_out;
             GEO::Attribute<GEO::index_t> mesh_out_v_facet(mesh_out.vertices.attributes(), "facet");
             GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
             GEO::Attribute<GEO::index_t> mesh_out_f_facet(mesh_out.facets.attributes(), "facet");
@@ -510,20 +508,6 @@ namespace geolio::test
                 &mesh_out_f_facet);
 
             evaluate_vertices_quality(mesh_out, mesh_out_v_facet, mesh_out_v_uv);
-
-            if (const auto& v_quantities = control_grid->control_nodes_quantities();
-                v_quantities.is_bound()
-                ) {
-                const auto dim = v_quantities.dimension();
-                GEO::Attribute<double> mesh_out_v_quantities;
-                mesh_out_v_quantities.create_vector_attribute(mesh_out.vertices.attributes(), "quantities", dim);
-                for (const auto v : mesh_out.vertices) {
-                    control_grid->compute_facet_uv_quantities(
-                        mesh_out_v_facet[v],
-                        mesh_out_v_uv[v],
-                        &mesh_out_v_quantities[dim*v]);
-                }
-            }
 
             EXPECT_TRUE(mesh_out.save(artifact_path(suffix)));
         }
@@ -556,9 +540,10 @@ namespace geolio::test
      * @tparam DimType Wrapper carrying the physical dimension, as in DimTypes.
      */
     template <typename DimType>
-    class SingleQuadControlGridTest : public QuadControlGridTest<DimType::value> {
+    class SingleQuadControlGridTest : public QuadControlGridTest<DimType::value, 2> {
     protected:
-        static constexpr GEO::index_t DIM = DimType::value;
+        static constexpr GEO::index_t MESH_DIM = DimType::value;
+        static constexpr GEO::index_t DIM = MESH_DIM+2;
         static constexpr GEO::index_t ORDER = 4;
 
         void SetUp() override {
@@ -602,62 +587,12 @@ namespace geolio::test
     }
 
     TYPED_TEST(SingleQuadControlGridTest, random) {
-        this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 1), +0.2);
-        this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 3), -0.2);
+        this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 1));
+        this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 3));
 
         this->expect_mapping_interpolates_control_nodes(FACET);
         this->expect_mapping_moved_at_node(FACET, 1, 1);
         this->expect_quality_invariants_over_grid(FACET, SAMPLE_RESOLUTION);
-
-        this->save_control_nodes();
-        this->save_high_order_mesh_facets();
-    }
-
-    TYPED_TEST(SingleQuadControlGridTest, quantities) {
-        constexpr GEO::index_t QUANTITY_NB = 4;
-
-        this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 1), +0.2);
-        this->jiggle_control_node(this->control_grid->facet_nd(FACET, 1, 3), -0.2);
-
-        this->control_grid->set_control_node_quantities(QUANTITY_NB);
-        EXPECT_EQ(this->control_grid->control_node_quantities_dimension(), QUANTITY_NB);
-
-        auto& quantities = this->control_grid->control_nodes_quantities();
-        ASSERT_TRUE(quantities.is_bound());
-        for (GEO::index_t v = 0, v_end = this->control_grid->control_nodes_nb(); v < v_end; ++v) {
-            for (GEO::index_t d = 0; d < QUANTITY_NB; ++d)
-                quantities[QUANTITY_NB*v+d] = static_cast<double>(d+1)*GEO::Numeric::random_float32();
-        }
-
-        // At the parametric position of a control node, the interpolation reduces to the nodal value.
-        const auto& node_positions = this->control_grid->node_positions_1D();
-        for (GEO::index_t i = 0, i_end = this->control_grid->order(); i <= i_end; ++i) {
-            for (GEO::index_t j = 0, j_end = this->control_grid->order(); j <= j_end; ++j) {
-                const GEO::vec2 uv(node_positions[i], node_positions[j]);
-                const auto nd = this->control_grid->facet_nd(FACET, i, j);
-
-                for (GEO::index_t d = 0; d < QUANTITY_NB; ++d) {
-                    SCOPED_TRACE(::testing::Message() << "control node (" << i << ", " << j << "), component " << d);
-                    EXPECT_NEAR(
-                        this->control_grid->compute_facet_uv_quantity(FACET, uv, d),
-                        quantities[QUANTITY_NB*nd+d],
-                        REFERENCE_TOL
-                        );
-                }
-            }
-        }
-
-        // The single-component and all-components evaluation must agree.
-        constexpr GEO::index_t CHECK_RESOLUTION = 5;
-        for (const auto& uv : grid_unit_samples_2d(CHECK_RESOLUTION)) {
-            std::vector<double> q(QUANTITY_NB);
-            this->control_grid->compute_facet_uv_quantities(FACET, uv, q.data());
-
-            for (GEO::index_t d = 0; d < QUANTITY_NB; ++d) {
-                EXPECT_NEAR(q[d], this->control_grid->compute_facet_uv_quantity(FACET, uv, d), REFERENCE_TOL)
-                    << parametric_context("uv", uv) << ", component " << d;
-            }
-        }
 
         this->save_control_nodes();
         this->save_high_order_mesh_facets();
@@ -668,8 +603,9 @@ namespace geolio::test
             GTEST_SKIP() << "facet normals are only defined for DIM == 3, but DIM == " << TypeParam::value;
         }
         else {
-            this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 3, 0), +0.2);
-            this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 1, 2), -0.2);
+            this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 3, 0));
+            this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 1, 2));
+            this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 1, 3));
 
             constexpr GEO::index_t POINTS_NB = 100;
             constexpr double ARROW_LENGTH = 0.2;
@@ -679,13 +615,15 @@ namespace geolio::test
             GEO::index_t new_e = mesh_out.edges.create_edges(POINTS_NB);
             for (GEO::index_t i = 0; i < POINTS_NB; ++i) {
                 const GEO::vec2 uv(GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-                const auto position = this->control_grid->compute_facet_uv_position(FACET, uv);
+                const auto position_all = this->control_grid->compute_facet_uv_position(FACET, uv);
                 const auto normal = this->control_grid->compute_facet_uv_normal(FACET, uv);
 
                 // The facet normal is the reversed cross product of the two tangents ...
                 const auto derivatives = this->evaluate_derivatives(FACET, uv);
                 EXPECT_NEAR(
-                    GEO::distance2(normal, -GEO::cross(derivatives.du, derivatives.dv)),
+                    GEO::distance2(normal, -GEO::cross(
+                        GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.du.data()),
+                        GEO::Memory::pointer_as_reference<GEO::vec3>(derivatives.dv.data()))),
                     0.0,
                     EXACT_DIST2_TOL
                     );
@@ -694,6 +632,7 @@ namespace geolio::test
                 EXPECT_LT(GEO::dot(GEO::normalize(normal), this->control_grid->compute_facet_reference_normal(FACET)), 0.0)
                     << parametric_context("uv", uv);
 
+                const auto position = GEO::Memory::pointer_as_reference<GEO::vec3>(position_all.data());
                 mesh_out.vertices.point(new_v) = position;
                 mesh_out.vertices.point(new_v+1) = position + ARROW_LENGTH*normal;
                 mesh_out.edges.set_vertex(new_e, 0, new_v);
@@ -709,8 +648,8 @@ namespace geolio::test
     }
 
     TYPED_TEST(SingleQuadControlGridTest, dudv) {
-        this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 1, 0), +0.2);
-        this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 3, 2), -0.2);
+        this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 1, 0));
+        this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 3, 2));
 
         this->expect_derivatives_match_finite_differences(FACET);
 
@@ -725,11 +664,12 @@ namespace geolio::test
         GEO::index_t new_e = mesh_out.edges.create_edges(2*POINTS_NB);
         for (const auto& uv : grid_unit_samples_2d(RESOLUTION)) {
             const auto derivatives = this->evaluate_derivatives(FACET, uv);
-            const auto position = this->control_grid->compute_facet_uv_position(FACET, uv);
+            const auto position_all = this->control_grid->compute_facet_uv_position(FACET, uv);
 
+            const auto position = GEO::Memory::pointer_as_reference<GEO::vecng<TypeParam::value, double>>(position_all.data());
             mesh_out.vertices.point<TypeParam::value>(new_v) = position;
-            mesh_out.vertices.point<TypeParam::value>(new_v+1) = position + ARROW_LENGTH*derivatives.du;
-            mesh_out.vertices.point<TypeParam::value>(new_v+2) = position + ARROW_LENGTH*derivatives.dv;
+            mesh_out.vertices.point<TypeParam::value>(new_v+1) = position + ARROW_LENGTH * GEO::Memory::pointer_as_reference<GEO::vecng<TypeParam::value, double>>(derivatives.du.data());
+            mesh_out.vertices.point<TypeParam::value>(new_v+2) = position + ARROW_LENGTH * GEO::Memory::pointer_as_reference<GEO::vecng<TypeParam::value, double>>(derivatives.dv.data());
             mesh_out.edges.set_vertex(new_e, 0, new_v);
             mesh_out.edges.set_vertex(new_e, 1, new_v+1);
             mesh_out.edges.set_vertex(new_e+1, 0, new_v);
@@ -746,7 +686,7 @@ namespace geolio::test
     }
 
     TYPED_TEST(SingleQuadControlGridTest, measure_not_inverse) {
-        constexpr GEO::index_t DIM = TypeParam::value;
+        constexpr GEO::index_t DIM = TypeParam::value+2;
 
         // Ridge over the interior control-node lines. Whatever the amplitude, such a profile keeps
         // the orientation of the mapping, hence detJ stays strictly positive (it is exactly 1 for
@@ -768,7 +708,7 @@ namespace geolio::test
     }
 
     TYPED_TEST(SingleQuadControlGridTest, measure_inverse) {
-        constexpr GEO::index_t DIM = TypeParam::value;
+        constexpr GEO::index_t DIM = TypeParam::value+2;
 
         // Push the u = 0.25 and u = 0.75 lines apart and bulge the facet: the control net folds
         // over itself, so the mapping is inverted on part of the facet.
@@ -833,9 +773,9 @@ namespace geolio::test
      * @tparam DimType Wrapper carrying the physical dimension, as in DimTypes.
      */
     template <typename DimType>
-    class TwoQuadControlGridTest : public QuadControlGridTest<DimType::value> {
+    class TwoQuadControlGridTest : public QuadControlGridTest<DimType::value, 3> {
     protected:
-        static constexpr GEO::index_t DIM = DimType::value;
+        static constexpr GEO::index_t DIM = DimType::value+3;
         static constexpr GEO::index_t ORDER = 5;
 
         void SetUp() override {
@@ -873,9 +813,9 @@ namespace geolio::test
     }
 
     TYPED_TEST(TwoQuadControlGridTest, random) {
-        this->jiggle_control_node(this->control_grid->facet_edge_nd(0, 1, 3), +0.2);
-        this->jiggle_control_node(this->control_grid->facet_nd(0, 2, 2), -0.2);
-        this->jiggle_control_node(this->control_grid->facet_nd(1, 1, 4), +0.2);
+        this->jiggle_control_node(this->control_grid->facet_edge_nd(0, 1, 3));
+        this->jiggle_control_node(this->control_grid->facet_nd(0, 2, 2));
+        this->jiggle_control_node(this->control_grid->facet_nd(1, 1, 4));
 
         this->expect_mapping_interpolates_control_nodes(0);
         this->expect_mapping_interpolates_control_nodes(1);

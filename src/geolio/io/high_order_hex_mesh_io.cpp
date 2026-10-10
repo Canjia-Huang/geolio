@@ -513,10 +513,11 @@ namespace geolio
         return true;
     }
 
+    template <GEO::index_t DIM>
     bool high_order_hex_mesh_load(
         const std::string& filepath,
         GEO::Mesh& mesh,
-        std::unique_ptr<HexControlGrid>& control_grid_ptr
+        std::unique_ptr<HexControlGrid<DIM>>& control_grid_ptr
         ) {
         mesh.clear();
         mesh.vertices.set_dimension(3);
@@ -637,7 +638,7 @@ namespace geolio
                     std::vector<GEO::index_t> gmsh_nodes_order;
                     generate_msh_nodes_order(order, gmsh_nodes_order);
 
-                    control_grid_ptr = std::make_unique<HexControlGrid>(mesh, order);
+                    control_grid_ptr = std::make_unique<HexControlGrid<DIM>>(mesh, order);
                     for (const auto& c : mesh.cells) {
                         for (GEO::index_t i = 0; i < element_nodes_nb; ++i) {
                             const auto nd = control_grid_ptr->cell_nd(c, i);
@@ -658,8 +659,13 @@ namespace geolio
         return true;
     }
 
+    template bool high_order_hex_mesh_load<3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<HexControlGrid<3>>& control_grid_ptr);
+    template bool high_order_hex_mesh_load<4>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<HexControlGrid<4>>& control_grid_ptr);
+    template bool high_order_hex_mesh_load<5>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<HexControlGrid<5>>& control_grid_ptr);
+
+    template <GEO::index_t DIM>
     static bool high_order_hex_mesh_save_2_2(
-        const HexControlGrid& control_grid,
+        const HexControlGrid<DIM>& control_grid,
         std::ofstream& out
         ) {
         /* == Mesh format ========================================================================================== */
@@ -716,8 +722,9 @@ namespace geolio
         return true;
     }
 
+    template <GEO::index_t DIM>
     static bool high_order_hex_mesh_save_4_1(
-        const HexControlGrid& control_grid,
+        const HexControlGrid<DIM>& control_grid,
         std::ofstream& out
         ) {
         /* == Mesh format ========================================================================================== */
@@ -819,8 +826,9 @@ namespace geolio
         return true;
     }
 
+    template <GEO::index_t DIM>
     bool high_order_hex_mesh_save(
-        const HexControlGrid& control_grid,
+        const HexControlGrid<DIM>& control_grid,
         const std::string& filepath,
         const std::string& version_number
         ) {
@@ -841,4 +849,8 @@ namespace geolio
         LOG::ERROR("Unsupported version number `{}`", version_number);
         return false;
     }
+
+    template bool high_order_hex_mesh_save<3>(const HexControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_hex_mesh_save<4>(const HexControlGrid<4>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_hex_mesh_save<5>(const HexControlGrid<5>& control_grid, const std::string& filepath, const std::string& version_number);
 }
