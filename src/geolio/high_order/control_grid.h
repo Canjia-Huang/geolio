@@ -15,14 +15,13 @@ namespace geolio
     class ControlGrid {
     public:
         /**
-         * @brief Construct a control grid from a reference mesh and polynomial order.
-         * @param[in] mesh Input mesh used as topology/geometry reference.
+         * @brief Construct a control grid with the specified mesh vertex dimension and polynomial order.
+         * @param[in] mesh_v_dimension Dimension of each mesh vertex.
          * @param[in] order Polynomial order of the high-order representation.
          */
-        ControlGrid(const GEO::Mesh& mesh, const GEO::index_t order)
+        ControlGrid(const GEO::index_t mesh_v_dimension, const GEO::index_t order)
             : attribute_id_(generate_random_string(22)),
-            mesh_(mesh),
-            mesh_v_dim_(mesh.vertices.dimension()),
+            mesh_v_dim_(mesh_v_dimension),
             order_(order),
             CONTROL_POINTS_NB_PER_EDGE_(order+1),
             CONTROL_POINTS_NB_PER_FACET_((order+1)*(order+1)),
@@ -47,7 +46,7 @@ namespace geolio
          * @brief Access the reference mesh.
          * @return Const reference to the underlying mesh.
          */
-        const auto& mesh() const { return mesh_; }
+        const auto& mesh() const { return control_nodes_mesh_; }
 
         /**
          * @brief Get the polynomial order.
@@ -175,7 +174,6 @@ namespace geolio
     protected:
         const std::string attribute_id_; // unique id
 
-        const GEO::Mesh& mesh_;
         const GEO::index_t mesh_v_dim_;
 
         /* ========================================================================================================= */
@@ -247,7 +245,7 @@ namespace geolio
         /**
          * @brief Build control-node connectivity/geometry for the derived grid type.
          */
-        virtual void initialize_control_nodes() = 0;
+        virtual void initialize_control_nodes(const GEO::Mesh& mesh) = 0;
 
         /**
          * @brief Initialize control-node coordinates in dimensions not provided by the mesh.

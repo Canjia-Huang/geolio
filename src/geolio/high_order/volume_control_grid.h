@@ -14,14 +14,12 @@ namespace geolio
     public:
         /**
          * @brief Construct a volume control grid.
-         * @param[in] mesh Input volume mesh.
          * @param[in] order Polynomial order of the high-order volume representation.
          */
-        VolumeControlGrid(const GEO::Mesh& mesh, const GEO::index_t order)
-            : ControlGrid<DIM>(mesh, order)
+        explicit VolumeControlGrid(const GEO::index_t order)
+            : ControlGrid<DIM>(3, order)
         {
             assert(this->mesh_v_dim_ == 3);
-            assert(this->mesh_.cells.nb() > 0);
         }
 
         /**
@@ -30,7 +28,7 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_CELL
          */
         [[nodiscard]] GEO::index_t cell_vertex_lnd(const GEO::index_t lv) const {
-            assert(lv < this->mesh_.cells.nb_vertices(0));
+            assert(lv < this->control_nodes_mesh_.cells.nb_vertices(0));
             return this->ELEMENT_VERTEX_CONTROL_POINTS_BEGIN_IDX_[lv];
         }
 
@@ -41,7 +39,7 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_CELL
          */
         [[nodiscard]] GEO::index_t cell_edge_lnd(const GEO::index_t le, const GEO::index_t lv) const {
-            assert(le < this->mesh_.cells.nb_edges(0));
+            assert(le < this->control_nodes_mesh_.cells.nb_edges(0));
             assert(lv < this->CONTROL_POINTS_NB_PER_EDGE_);
             return this->ELEMENT_EDGE_CONTROL_POINTS_BEGIN_IDX_[le] + lv*this->ELEMENT_EDGE_CONTROL_POINTS_NEXT_IDX_STEP_[le];
         }
@@ -53,7 +51,7 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_CELL
          */
         [[nodiscard]] GEO::index_t cell_edge_inner_lnd(const GEO::index_t le, const GEO::index_t lv) const {
-            assert(le < this->mesh_.cells.nb_edges(0));
+            assert(le < this->control_nodes_mesh_.cells.nb_edges(0));
             assert(lv < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_);
             return this->ELEMENT_EDGE_INTERNAL_CONTROL_POINTS_BEGIN_IDX_[le] + lv*this->ELEMENT_EDGE_INTERNAL_CONTROL_POINTS_NEXT_IDX_STEP_[le];
         }
@@ -66,7 +64,7 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_CELL
          */
         [[nodiscard]] GEO::index_t cell_facet_lnd(const GEO::index_t lf, const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(lf < this->mesh_.cells.nb_facets(0));
+            assert(lf < this->control_nodes_mesh_.cells.nb_facets(0));
             assert(lv0 < this->CONTROL_POINTS_NB_PER_EDGE_);
             assert(lv1 < this->CONTROL_POINTS_NB_PER_EDGE_);
             return this->ELEMENT_FACET_CONTROL_POINTS_BEGIN_IDX_[lf] + lv0*this->ELEMENT_FACET_CONTROL_POINTS_NEXT_IDX_STEP0_[lf] + lv1*this->ELEMENT_FACET_CONTROL_POINTS_NEXT_IDX_STEP1_[lf];
@@ -80,7 +78,7 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_CELL
          */
         [[nodiscard]] GEO::index_t cell_facet_inner_lnd(const GEO::index_t lf, const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(lf < this->mesh_.cells.nb_facets(0));
+            assert(lf < this->control_nodes_mesh_.cells.nb_facets(0));
             assert(lv0 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_);
             assert(lv1 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_);
             return this->ELEMENT_FACET_INTERNAL_CONTROL_POINTS_BEGIN_IDX_[lf] + lv0*this->ELEMENT_FACET_INTERNAL_CONTROL_POINTS_NEXT_IDX_STEP0_[lf] + lv1*this->ELEMENT_FACET_INTERNAL_CONTROL_POINTS_NEXT_IDX_STEP1_[lf];
@@ -121,7 +119,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_vertex_nd(const GEO::index_t c, const GEO::index_t lv) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + cell_vertex_lnd(lv)];
         }
 
@@ -133,7 +131,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_edge_nd(const GEO::index_t c, const GEO::index_t le, const GEO::index_t lv) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + cell_edge_lnd(le, lv)];
         }
 
@@ -145,7 +143,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_edge_inner_nd(const GEO::index_t c, const GEO::index_t le, const GEO::index_t lv) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + cell_edge_inner_lnd(le, lv)];
         }
 
@@ -158,7 +156,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_facet_nd(const GEO::index_t c, const GEO::index_t lf, const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + cell_facet_lnd(lf, lv0, lv1)];
         }
 
@@ -171,7 +169,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_facet_inner_nd(const GEO::index_t c, const GEO::index_t lf, const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + cell_facet_inner_lnd(lf, lv0, lv1)];
         }
 
@@ -182,7 +180,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_nd(const GEO::index_t c, const GEO::index_t lv) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             assert(lv < this->CONTROL_POINTS_NB_PER_CELL_);
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + lv];
         }
@@ -196,7 +194,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_nd(const GEO::index_t c, const GEO::index_t lv0, const GEO::index_t lv1, const GEO::index_t lv2) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + cell_lnd(lv0, lv1, lv2)];
         }
 
@@ -209,7 +207,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t cell_inner_nd(const GEO::index_t c, const GEO::index_t lv0, const GEO::index_t lv1, const GEO::index_t lv2) const {
-            assert(c < this->mesh_.cells.nb());
+            assert(c < this->control_nodes_mesh_.cells.nb());
             return this->element_control_nodes_[c*this->CONTROL_POINTS_NB_PER_CELL_ + cell_inner_lnd(lv0, lv1, lv2)];
         }
     };
