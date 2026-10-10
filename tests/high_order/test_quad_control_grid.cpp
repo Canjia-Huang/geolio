@@ -255,7 +255,7 @@ namespace geolio::test
         static_assert(MESH_DIM == 2 || MESH_DIM == 3);
     protected:
         static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
-        using Grid = QuadControlGrid<DIM>;
+        using Grid = QuadControlGrid<MESH_DIM, QUANTITIES_DIM>;
 
         /* == meshes =========================================================================================== */
 
@@ -543,14 +543,15 @@ namespace geolio::test
     class SingleQuadControlGridTest : public QuadControlGridTest<DimType::value, 2> {
     protected:
         static constexpr GEO::index_t MESH_DIM = DimType::value;
-        static constexpr GEO::index_t DIM = MESH_DIM+2;
+        static constexpr GEO::index_t QUANTITIES_DIM = 2;
+        static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
         static constexpr GEO::index_t ORDER = 4;
 
         void SetUp() override {
             this->create_vertices(UNIT_QUAD_CORNERS);
             this->mesh.facets.create_quad(0, 1, 2, 3);
 
-            this->control_grid = std::make_unique<QuadControlGrid<DIM>>(this->mesh, ORDER);
+            this->control_grid = std::make_unique<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>(this->mesh, ORDER);
         }
 
         /**
@@ -775,7 +776,9 @@ namespace geolio::test
     template <typename DimType>
     class TwoQuadControlGridTest : public QuadControlGridTest<DimType::value, 3> {
     protected:
-        static constexpr GEO::index_t DIM = DimType::value+3;
+        static constexpr GEO::index_t MESH_DIM = DimType::value;
+        static constexpr GEO::index_t QUANTITIES_DIM = 3;
+        static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
         static constexpr GEO::index_t ORDER = 5;
 
         void SetUp() override {
@@ -784,7 +787,7 @@ namespace geolio::test
             this->mesh.facets.create_quad(5, 2, 1, 4);
             this->mesh.facets.connect();
 
-            this->control_grid = std::make_unique<QuadControlGrid<DIM>>(this->mesh, ORDER);
+            this->control_grid = std::make_unique<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>(this->mesh, ORDER);
         }
     };
 

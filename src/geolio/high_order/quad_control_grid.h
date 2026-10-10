@@ -84,8 +84,10 @@ namespace geolio
         return uv;
     }
 
-    template<GEO::index_t DIM>
-    class QuadControlGrid : public SurfaceControlGrid<DIM> {
+    template<GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM = 0>
+    class QuadControlGrid : public SurfaceControlGrid<MESH_DIM+QUANTITIES_DIM> {
+        static_assert(MESH_DIM == 2 || MESH_DIM == 3);
+        static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
     public:
         QuadControlGrid(
             const GEO::Mesh& mesh,
@@ -669,7 +671,13 @@ namespace geolio
 
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
 
-            mesh_out.vertices.set_dimension(DIM);
+            mesh_out.vertices.set_dimension(MESH_DIM);
+            GEO::Attribute<double> mesh_out_v_quantities;
+            if constexpr (QUANTITIES_DIM > 0)
+                mesh_out_v_quantities.create_vector_attribute(
+                    mesh_out.vertices.attributes(),
+                    this->attribute_id_+":quantities",
+                    QUANTITIES_DIM);
             GEO::index_t new_v = mesh_out.vertices.create_vertices(this->control_nodes_mesh_.facets.nb() * (resolution+1) * (resolution+1));
             GEO::index_t new_f = mesh_out.facets.create_quads(this->control_nodes_mesh_.facets.nb() * resolution * resolution);
             for (const auto& f : this->control_nodes_mesh_.facets) {
@@ -692,7 +700,10 @@ namespace geolio
 
                         const GEO::vec2 uv(u, v);
 
-                        mesh_out.vertices.point<DIM>(new_v) = compute_facet_uv_position(f, uv);
+                        const auto& p = compute_facet_uv_position(f, uv);
+                        mesh_out.vertices.point<MESH_DIM>(new_v) = GEO::Memory::pointer_as_reference<GEO::vecng<MESH_DIM, double>>(p.data());
+                        if constexpr (QUANTITIES_DIM > 0)
+                            std::copy_n(&p[MESH_DIM], QUANTITIES_DIM, &mesh_out_v_quantities[QUANTITIES_DIM*new_v]);
 
                         if (mesh_out_v_facet != nullptr)
                             (*mesh_out_v_facet)[new_v] = f;
@@ -927,14 +938,14 @@ namespace geolio
     template <typename T>
     struct isQuadControlGrid : std::false_type {};
 
-    template <GEO::index_t DIM>
-    struct isQuadControlGrid<QuadControlGrid<DIM>> : std::true_type {};
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
+    struct isQuadControlGrid<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>> : std::true_type {};
 
     template <typename T>
-    struct QuadControlGridDim;
+    struct QuadControlGridMeshDim;
 
-    template <GEO::index_t DIM>
-    struct QuadControlGridDim<QuadControlGrid<DIM>> : std::integral_constant<GEO::index_t, DIM> {};
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
+    struct QuadControlGridMeshDim<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>> : std::integral_constant<GEO::index_t, MESH_DIM> {};
 }
 
 #endif //GEOLIO_QUAD_CONTROL_GRID_H

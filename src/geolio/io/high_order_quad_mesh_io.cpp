@@ -126,7 +126,6 @@ namespace
 
 namespace geolio
 {
-    template<GEO::index_t DIM>
     static bool high_order_quad_mesh_load_2_2(
         LineInput& in,
         GEO::index_t& order,
@@ -256,7 +255,6 @@ namespace geolio
         return true;
     }
 
-    template<GEO::index_t DIM>
     static bool high_order_quad_mesh_load_4_1(
         LineInput& in,
         GEO::index_t& order,
@@ -410,14 +408,14 @@ namespace geolio
         return true;
     }
 
-    template<GEO::index_t DIM>
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
     bool high_order_quad_mesh_load(
         const std::string& filepath,
         GEO::Mesh& mesh,
-        std::unique_ptr<QuadControlGrid<DIM>>& control_grid_ptr
+        std::unique_ptr<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>& control_grid_ptr
         ) {
         mesh.clear();
-        mesh.vertices.set_dimension(DIM);
+        mesh.vertices.set_dimension(MESH_DIM);
 
         if (const auto ext = get_extension(filepath);
             ext != "msh")
@@ -467,13 +465,13 @@ namespace geolio
                 std::vector<double> nodes;
                 std::vector<GEO::index_t> elements;
                 if (version_number == "2.2") {
-                    if (!high_order_quad_mesh_load_2_2<DIM>(in, order, nodes, elements)) {
+                    if (!high_order_quad_mesh_load_2_2(in, order, nodes, elements)) {
                         LOG::ERROR("Load msh 2.2 failed!");
                         return false;
                     }
                 }
                 else if (version_number == "4.1") {
-                    if (!high_order_quad_mesh_load_4_1<DIM>(in, order, nodes, elements)) {
+                    if (!high_order_quad_mesh_load_4_1(in, order, nodes, elements)) {
                         LOG::ERROR("Load msh 4.1 failed!");
                         return false;
                     }
@@ -515,8 +513,8 @@ namespace geolio
                         if (const auto& v = node_to_vertex[nd];
                             v != GEO::NO_VERTEX
                             ) {
-                            auto& p = mesh.vertices.point<DIM>(v);
-                            for (GEO::index_t d = 0; d < DIM; ++d)
+                            auto& p = mesh.vertices.point<MESH_DIM>(v);
+                            for (GEO::index_t d = 0; d < MESH_DIM; ++d)
                                 p[d] = nodes[nd*3+d];
                         }
                     }
@@ -535,13 +533,13 @@ namespace geolio
                     std::vector<GEO::index_t> gmsh_nodes_order;
                     generate_msh_nodes_order(order, gmsh_nodes_order);
 
-                    control_grid_ptr = std::make_unique<QuadControlGrid<DIM>>(mesh, order);
+                    control_grid_ptr = std::make_unique<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>(mesh, order);
                     for (const auto& f : mesh.facets) {
                         for (GEO::index_t i = 0; i < element_nodes_nb; ++i) {
                             const auto nd = control_grid_ptr->facet_nd(f, i);
                             const auto gmsh_nd = elements[f*element_nodes_nb+gmsh_nodes_order[i]];
                             auto& p = control_grid_ptr->control_node(nd);
-                            for (GEO::index_t d = 0; d < DIM; ++d)
+                            for (GEO::index_t d = 0; d < MESH_DIM; ++d)
                                 p[d] = nodes[3*gmsh_nd+d];
                         }
                     }
@@ -556,23 +554,18 @@ namespace geolio
         return true;
     }
 
-    template bool high_order_quad_mesh_load<2>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<4>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<4>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<5>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<5>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<6>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<6>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<2, 0>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 0>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<2, 1>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 1>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<2, 2>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 2>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<2, 3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 3>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<3, 0>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 0>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<3, 1>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 1>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<3, 2>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 2>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<3, 3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 3>>& control_grid_ptr);
 
-    /**
-     * @brief Writes a high-order quadrilateral mesh in Gmsh 2.2 format.
-     *
-     * @tparam DIM The spatial dimension of the control grid.
-     * @param control_grid The control grid to export.
-     * @param out The output stream for the mesh file.
-     * @return True if the mesh is written successfully; otherwise, false.
-     */
-    template<GEO::index_t DIM>
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
     static bool high_order_quad_mesh_save_2_2(
-        const QuadControlGrid<DIM>& control_grid,
+        const QuadControlGrid<MESH_DIM, QUANTITIES_DIM>& control_grid,
         std::ofstream& out
         ) {
         /* == Mesh format ========================================================================================== */
@@ -589,9 +582,9 @@ namespace geolio
             for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
                 const auto& p = control_grid.control_node(nd);
                 out << nd+1 << " ";
-                for (GEO::index_t d = 0; d < DIM; ++d)
+                for (GEO::index_t d = 0; d < MESH_DIM; ++d)
                     out << p[d] << " ";
-                if constexpr (DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
+                if constexpr (MESH_DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
                     out << "0";
                 out << "\n";
             }
@@ -631,9 +624,9 @@ namespace geolio
         return true;
     }
 
-    template<GEO::index_t DIM>
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
     static bool high_order_quad_mesh_save_4_1(
-        const QuadControlGrid<DIM>& control_grid,
+        const QuadControlGrid<MESH_DIM, QUANTITIES_DIM>& control_grid,
         std::ofstream& out
         ) {
         /* == Mesh format ========================================================================================== */
@@ -655,16 +648,18 @@ namespace geolio
             std::vector<double> xyz_max{-std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(), -std::numeric_limits<double>::max()};
             for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
                 const auto& p = control_grid.control_node(nd);
-                for (GEO::index_t d = 0; d < DIM; ++d) {
+                for (GEO::index_t d = 0; d < MESH_DIM; ++d) {
                     xyz_min[d] = std::min(xyz_min[d], p[d]);
                     xyz_max[d] = std::max(xyz_max[d], p[d]);
                 }
             }
             out << ENTITIES_TAG << " ";
-            if constexpr (DIM == 2)
+            if constexpr (MESH_DIM == 2)
                 out << xyz_min[0] << " " << xyz_min[1] << " " << 0 << " " << xyz_max[0] << " " << xyz_max[1] << " " << 0 << " ";
-            else if constexpr (DIM == 3)
+            else if constexpr (MESH_DIM == 3)
                 out << xyz_min[0] << " " << xyz_min[1] << " " << xyz_min[2] << " " << xyz_max[0] << " " << xyz_max[1] << " " << xyz_max[2] << " ";
+            else
+                static_assert(false);
             out << PHYSICAL_GROUP_NUMBER << " "
                 << PHYSICAL_GROUP_TAD << " "
                 << BOUNDARY_CURVES_NUMBER << "\n";
@@ -690,9 +685,9 @@ namespace geolio
                 out << nd+1 << "\n";
             for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
                 const auto& p = control_grid.control_node(nd);
-                for (GEO::index_t d = 0; d < DIM; ++d)
+                for (GEO::index_t d = 0; d < MESH_DIM; ++d)
                     out << p[d] << " ";
-                if constexpr (DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
+                if constexpr (MESH_DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
                     out << "0";
                 out << "\n";
             }
@@ -740,9 +735,9 @@ namespace geolio
         return true;
     }
 
-    template<GEO::index_t DIM>
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
     bool high_order_quad_mesh_save(
-        const QuadControlGrid<DIM>& control_grid,
+        const QuadControlGrid<MESH_DIM, QUANTITIES_DIM>& control_grid,
         const std::string& filepath,
         const std::string& version_number
         ) {
@@ -764,9 +759,12 @@ namespace geolio
         return false;
     }
 
-    template bool high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<4>(const QuadControlGrid<4>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<5>(const QuadControlGrid<5>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<6>(const QuadControlGrid<6>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<2, 0>(const QuadControlGrid<2, 0>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<2, 1>(const QuadControlGrid<2, 1>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<2, 2>(const QuadControlGrid<2, 2>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<2, 3>(const QuadControlGrid<2, 3>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<3, 0>(const QuadControlGrid<3, 0>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<3, 1>(const QuadControlGrid<3, 1>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<3, 2>(const QuadControlGrid<3, 2>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<3, 3>(const QuadControlGrid<3, 3>& control_grid, const std::string& filepath, const std::string& version_number);
 }

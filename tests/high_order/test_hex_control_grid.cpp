@@ -27,7 +27,8 @@
 
 namespace
 {
-    constexpr GEO::index_t DIM = 6;
+    constexpr GEO::index_t QUANTITIES_DIM = 3;
+    constexpr GEO::index_t DIM = 3+QUANTITIES_DIM;
 }
 
 namespace geolio::test
@@ -378,7 +379,7 @@ namespace geolio::test
      */
     class HexControlGridTest : public ::testing::Test {
     protected:
-        using Grid = HexControlGrid<DIM>;
+        using Grid = HexControlGrid<3, QUANTITIES_DIM>;
 
         /* == meshes =========================================================================================== */
 

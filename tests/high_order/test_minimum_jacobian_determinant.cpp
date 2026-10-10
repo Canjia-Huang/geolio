@@ -258,14 +258,14 @@ namespace geolio::test
     template <typename DimType>
     class QuadMinimumJacobianDeterminantTest : public ::testing::Test {
     protected:
-        static constexpr GEO::index_t DIM = DimType::value;
+        static constexpr GEO::index_t MESH_DIM = DimType::value;
         static constexpr GEO::index_t ORDER = 5;
         static constexpr GEO::index_t DISCRETIZATION_RESOLUTION = 20;
 
         void SetUp() override {
-            mesh.vertices.set_dimension(DIM);
+            mesh.vertices.set_dimension(MESH_DIM);
             mesh.vertices.create_vertices(6);
-            if constexpr (DIM == 2) {
+            if constexpr (MESH_DIM == 2) {
                 mesh.vertices.template point<2>(0) = GEO::vec2(0, 0);
                 mesh.vertices.template point<2>(1) = GEO::vec2(1, 0);
                 mesh.vertices.template point<2>(2) = GEO::vec2(1, 1);
@@ -285,28 +285,28 @@ namespace geolio::test
             mesh.facets.create_quad(5, 2, 1, 4);
             mesh.facets.connect();
 
-            control_grid = std::make_unique<QuadControlGrid<DIM>>(mesh, ORDER);
-            if constexpr (DIM == 2)
+            control_grid = std::make_unique<QuadControlGrid<MESH_DIM>>(mesh, ORDER);
+            if constexpr (MESH_DIM == 2)
                 control_grid->control_node(control_grid->facet_inner_nd(1, 3, 2)) += GEO::vec2(-0.4, 0.1);
             else
                 control_grid->control_node(control_grid->facet_inner_nd(1, 3, 2)) += GEO::vec3(0.2, -0.4, 0.1);
 
-            mjd = std::make_unique<MinimumJacobianDeterminant<QuadControlGrid<DIM>>>(*control_grid);
+            mjd = std::make_unique<MinimumJacobianDeterminant<QuadControlGrid<MESH_DIM>>>(*control_grid);
         }
 
         /** @return The determinant of facet @p f at one parametric point. */
         [[nodiscard]] double det_jacobian(const GEO::index_t f, const GEO::vec2& uv) const {
-            return control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN);
+            return control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<MESH_DIM>::MeasureType::DET_JACOBIAN);
         }
 
         /** @return The quality measures of facet @p f at one parametric point. */
         [[nodiscard]] Quality evaluate_quality(const GEO::index_t f, const GEO::vec2& uv) const {
             return {
-                .det_jacobian = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<DIM>::MeasureType::DET_JACOBIAN),
-                .absolute_sq_area = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<DIM>::MeasureType::ABSOLUTE_SQ_AREA),
-                .scaled_jacobian = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<DIM>::MeasureType::SCALED_JACOBIAN),
-                .inverse_mean_ratio = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<DIM>::MeasureType::INVERSE_MEAN_RATIO),
-                .MIPS = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<DIM>::MeasureType::MIPS)
+                .det_jacobian = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<MESH_DIM>::MeasureType::DET_JACOBIAN),
+                .absolute_sq_area = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<MESH_DIM>::MeasureType::ABSOLUTE_SQ_AREA),
+                .scaled_jacobian = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<MESH_DIM>::MeasureType::SCALED_JACOBIAN),
+                .inverse_mean_ratio = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<MESH_DIM>::MeasureType::INVERSE_MEAN_RATIO),
+                .MIPS = control_grid->compute_facet_uv_measure(f, uv, QuadControlGrid<MESH_DIM>::MeasureType::MIPS)
             };
         }
 
@@ -315,7 +315,7 @@ namespace geolio::test
          * @param[in] suffix Suffix of the artifact file name.
          */
         void save_high_order_mesh_facets(const std::string_view suffix = "_ho_mesh.geogram") const {
-            GEO::Mesh mesh_out(DIM);
+            GEO::Mesh mesh_out(MESH_DIM);
             GEO::Attribute<GEO::index_t> mesh_out_v_facet(mesh_out.vertices.attributes(), "facet");
             GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
 
@@ -333,8 +333,8 @@ namespace geolio::test
         }
 
         GEO::Mesh mesh;
-        std::unique_ptr<QuadControlGrid<DIM>> control_grid;
-        std::unique_ptr<MinimumJacobianDeterminant<QuadControlGrid<DIM>>> mjd;
+        std::unique_ptr<QuadControlGrid<MESH_DIM>> control_grid;
+        std::unique_ptr<MinimumJacobianDeterminant<QuadControlGrid<MESH_DIM>>> mjd;
     };
 
     TYPED_TEST_SUITE(QuadMinimumJacobianDeterminantTest, DimTypes);

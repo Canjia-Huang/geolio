@@ -85,7 +85,7 @@ namespace geolio
          * so the analyzer reports zero-area or degenerate facets rather than orientation reversals.
          * This interface is available only when `CONTROL_GRID` is `QuadControlGrid<3>`.
          */
-        void use_absolute_area() requires (std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) { use_absolute_area_ = true; };
+        void use_absolute_area() requires (isQuadControlGrid<CONTROL_GRID>::value && QuadControlGridMeshDim<CONTROL_GRID>::value == 3) { use_absolute_area_ = true; };
 
         /**
          * Represents an axis-aligned sub-block in the parametric (u,v,w) domain together with interval
@@ -104,7 +104,7 @@ namespace geolio
                 C = _C;
                 min_c = _C.minCoeff();
                 max_c = _C.maxCoeff();
-                if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> || std::is_same_v<CONTROL_GRID, QuadControlGrid<3>>) {
+                if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
                     min_w = 0;
                     max_w = 0;
                 }
@@ -672,7 +672,7 @@ namespace geolio
             Eigen::MatrixXd& grad_det_J
             ) const {
             if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
-                constexpr GEO::index_t DIM = std::is_same_v<CONTROL_GRID, QuadControlGrid<2>> ? 2 : 3;
+                constexpr GEO::index_t DIM = isQuadControlGrid<CONTROL_GRID>::value ? 2 : 3;
 
                 const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_facet();
                 grad_det_J = Eigen::MatrixXd::Zero(N2_, DIM*CONTROL_POINTS_NB);

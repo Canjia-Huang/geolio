@@ -160,8 +160,10 @@ namespace geolio
         return uvw;
     }
 
-    template <GEO::index_t DIM>
-    class HexControlGrid : public VolumeControlGrid<DIM> {
+    template<GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM = 0>
+    class HexControlGrid : public VolumeControlGrid<MESH_DIM+QUANTITIES_DIM> {
+        static_assert(MESH_DIM == 3);
+        static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
     public:
         /**
          * @brief Construct a hexahedral high-order control grid.
@@ -1265,14 +1267,8 @@ namespace geolio
     template <typename T>
     struct isHexControlGrid : std::false_type {};
 
-    template <GEO::index_t DIM>
-    struct isHexControlGrid<HexControlGrid<DIM>> : std::true_type {};
-
-    template <typename T>
-    struct HexControlGridDim;
-
-    template <GEO::index_t DIM>
-    struct HexControlGridDim<HexControlGrid<DIM>> : std::integral_constant<GEO::index_t, DIM> {};
+    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
+    struct isHexControlGrid<HexControlGrid<MESH_DIM, QUANTITIES_DIM>> : std::true_type {};
 }
 
 #endif //GEOLIO_HEX_CONTROL_GRID_H
