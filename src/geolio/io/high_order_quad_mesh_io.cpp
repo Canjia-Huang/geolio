@@ -558,6 +558,9 @@ namespace geolio
 
     template bool high_order_quad_mesh_load<2>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2>>& control_grid_ptr);
     template bool high_order_quad_mesh_load<3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<4>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<4>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<5>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<5>>& control_grid_ptr);
+    template bool high_order_quad_mesh_load<6>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<6>>& control_grid_ptr);
 
     /**
      * @brief Writes a high-order quadrilateral mesh in Gmsh 2.2 format.
@@ -763,4 +766,7 @@ namespace geolio
 
     template bool high_order_quad_mesh_save<2>(const QuadControlGrid<2>& control_grid, const std::string& filepath, const std::string& version_number);
     template bool high_order_quad_mesh_save<3>(const QuadControlGrid<3>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<4>(const QuadControlGrid<4>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<5>(const QuadControlGrid<5>& control_grid, const std::string& filepath, const std::string& version_number);
+    template bool high_order_quad_mesh_save<6>(const QuadControlGrid<6>& control_grid, const std::string& filepath, const std::string& version_number);
 }
