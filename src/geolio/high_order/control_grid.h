@@ -258,7 +258,7 @@ namespace geolio
                 std::fill_n(control_node_ptr(nd)+mesh_v_dim_, diff_dim, 0.0);
         }
         GEO::Mesh control_nodes_mesh_;
-        std::vector<GEO::index_t> element_control_nodes_;
+        GEO::Attribute<GEO::index_t> element_control_nodes_; // size == elements nb, dim == nodes nb per element
     };
 }
 

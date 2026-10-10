@@ -965,7 +965,7 @@ namespace geolio
         void initialize_control_nodes() override {
             assert(this->node_positions_1D_.size() == this->order_+1);
 
-            /* == Get all shared edges and facets ====================================================================== */
+            /* == Get all shared edges and facets ================================================================== */
             GEO::index_t hex_facets_nb = 0;
             std::unordered_map<std::pair<GEO::index_t, GEO::index_t>, std::vector<GEO::index_t>, PairHash> hex_edges_control_points; /* (ev0, ev1), ev0 < ev1 -> control vertices from ev0 -> ev1 */
             {
@@ -1004,7 +1004,7 @@ namespace geolio
 
             // LOG::DEBUG("found {} facets and {} edges in the hex mesh", hex_facets_nb, hex_edges_control_points.size());
 
-            /* == Create grid elements ================================================================================= */
+            /* == Create grid vertices ============================================================================= */
             this->control_nodes_mesh_.vertices.clear();
             GEO::index_t new_v = this->control_nodes_mesh_.vertices.create_vertices(
                                 this->mesh_.vertices.nb() + // vertices
@@ -1157,11 +1157,23 @@ namespace geolio
 
             assert(new_v == this->control_nodes_nb());
 
+            /* == Create grid cells ================================================================================ */
+            this->control_nodes_mesh_.cells.create_hexes(this->mesh_.cells.nb());
+            for (const auto& c : this->mesh_.cells) {
+                for (GEO::index_t lv = 0; lv < 8; ++lv)
+                    this->control_nodes_mesh_.cells.set_vertex(c, lv, this->mesh_.cells.vertex(c, lv));
+            }
+            this->control_nodes_mesh_.cells.connect();
+
             /* Initialize other dimension */
             this->initialize_control_node_quantities();
 
             /* == Create regular index ================================================================================= */
-            this->element_control_nodes_.assign(this->CONTROL_POINTS_NB_PER_CELL_ * this->mesh_.cells.nb(), GEO::NO_VERTEX);
+            this->element_control_nodes_.create_vector_attribute(
+                this->control_nodes_mesh_.cells.attributes(),
+                "control_nodes",
+                this->CONTROL_POINTS_NB_PER_CELL_);
+            this->element_control_nodes_.fill(GEO::NO_INDEX);
             /* [(order+1)^3 * c + lv] -> hex cell c's control vertex lv
                 For a hex (0, 1, 2, 3, 4, 5, 6, 7),
 
