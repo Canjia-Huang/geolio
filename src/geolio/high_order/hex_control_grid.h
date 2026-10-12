@@ -175,6 +175,7 @@ namespace geolio
             GEO::index_t order
             ) : VolumeControlGrid<DIM>(order)
         {
+            assert(mesh.vertices.dimension() == MESH_DIM);
             assert(mesh.cells.nb() > 0);
             assert(std::all_of(
                 mesh.cells.cell_type_ptr(0),

@@ -94,6 +94,7 @@ namespace geolio
             GEO::index_t order
             ): SurfaceControlGrid<DIM>(mesh.vertices.dimension(), order)
         {
+            assert(mesh.vertices.dimension() == MESH_DIM);
             assert(mesh.facets.nb() > 0);
             assert([&]() {
                 for (const auto& f : mesh.facets) {
