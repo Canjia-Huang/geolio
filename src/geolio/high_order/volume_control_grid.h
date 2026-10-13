@@ -8,16 +8,15 @@
 
 namespace geolio
 {
-    template <GEO::index_t DIM>
-    class VolumeControlGrid : public ControlGrid<DIM> {
-    static_assert(DIM >= 3);
+    class VolumeControlGrid : public ControlGrid {
     public:
         /**
          * @brief Construct a volume control grid.
+         * @param[in] mesh_v_dimension Dimension of each mesh vertex (2 or 3).
          * @param[in] order Polynomial order of the high-order volume representation.
          */
-        explicit VolumeControlGrid(const GEO::index_t order)
-            : ControlGrid<DIM>(3, order)
+        explicit VolumeControlGrid(const GEO::index_t mesh_v_dimension, const GEO::index_t order)
+            : ControlGrid(mesh_v_dimension, order)
         {
             assert(this->mesh_v_dim_ == 3);
         }

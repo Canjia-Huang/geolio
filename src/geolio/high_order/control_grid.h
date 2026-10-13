@@ -11,7 +11,6 @@
 
 namespace geolio
 {
-    template<GEO::index_t DIM>
     class ControlGrid {
     public:
         /**
@@ -34,7 +33,7 @@ namespace geolio
             assert(order_ > 0);
 
             initialize_node_positions_1D();
-            control_nodes_mesh_.vertices.set_dimension(DIM);
+            control_nodes_mesh_.vertices.set_dimension(mesh_v_dimension);
         }
 
         /**
@@ -122,7 +121,9 @@ namespace geolio
          * @param[in] v Control-node index.
          * @return Mutable reference to the control-node position.
          */
+        template<GEO::index_t DIM>
         GEO::vecng<DIM, double>& control_node(const GEO::index_t v) {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             assert(v < control_nodes_nb());
             return control_nodes_mesh_.vertices.point<DIM>(v);
         }
@@ -132,7 +133,9 @@ namespace geolio
          * @param[in] v Control-node index.
          * @return Const reference to the control-node position.
          */
+        template<GEO::index_t DIM>
         [[nodiscard]] const GEO::vecng<DIM, double>& control_node(const GEO::index_t v) const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             assert(v < control_nodes_nb());
             return control_nodes_mesh_.vertices.point<DIM>(v);
         }
@@ -141,7 +144,9 @@ namespace geolio
          * @brief Access the mutable contiguous control-node coordinate array.
          * @return Mutable view/proxy over all control-node coordinates.
          */
+        template<GEO::index_t DIM>
         const auto& control_nodes() {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             return control_nodes_mesh_.vertices.points<DIM>();
         }
 
@@ -149,7 +154,9 @@ namespace geolio
          * @brief Access the const contiguous control-node coordinate array.
          * @return Const view/proxy over all control-node coordinates.
          */
+        template<GEO::index_t DIM>
         [[nodiscard]] auto control_nodes() const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             return control_nodes_mesh_.vertices.points<DIM>();
         }
 
@@ -247,14 +254,6 @@ namespace geolio
          */
         virtual void initialize_control_nodes(const GEO::Mesh& mesh) = 0;
 
-        /**
-         * @brief Initialize control-node coordinates in dimensions not provided by the mesh.
-         */
-        void initialize_control_node_quantities() {
-            const GEO::index_t diff_dim = DIM - mesh_v_dim_;
-            for (const auto& nd : control_nodes_mesh_.vertices)
-                std::fill_n(control_node_ptr(nd)+mesh_v_dim_, diff_dim, 0.0);
-        }
         GEO::Mesh control_nodes_mesh_;
         GEO::Attribute<GEO::index_t> element_control_nodes_; // size == elements nb, dim == nodes nb per element
     };

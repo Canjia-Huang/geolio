@@ -160,10 +160,7 @@ namespace geolio
         return uvw;
     }
 
-    template<GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM = 0>
-    class HexControlGrid : public VolumeControlGrid<MESH_DIM+QUANTITIES_DIM> {
-        static_assert(MESH_DIM == 3);
-        static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
+    class HexControlGrid : public VolumeControlGrid {
     public:
         /**
          * @brief Construct a hexahedral high-order control grid.
@@ -172,10 +169,9 @@ namespace geolio
          */
         HexControlGrid(
             const GEO::Mesh& mesh,
-            GEO::index_t order
-            ) : VolumeControlGrid<DIM>(order)
+            const GEO::index_t order
+            ) : VolumeControlGrid(mesh.vertices.dimension(), order)
         {
-            assert(mesh.vertices.dimension() == MESH_DIM);
             assert(mesh.cells.nb() > 0);
             assert(std::all_of(
                 mesh.cells.cell_type_ptr(0),
@@ -204,10 +200,12 @@ namespace geolio
          *       function uses the control-point coordinates currently stored in
          *       `grid_` to compute the mapped position.
          */
+        template<GEO::index_t DIM>
         [[nodiscard]] GEO::vecng<DIM, double> compute_cell_uvw_position(
             const GEO::index_t c,
             const GEO::vec3& uvw
             ) const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             assert(c < this->control_nodes_mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
@@ -228,7 +226,7 @@ namespace geolio
                     const double basis_uv = Bu[i] * Bv[j];
                     for (GEO::index_t k = 0; k <= this->order_; ++k) {
                         const double lag_basis = basis_uv * Bw[k];
-                        p += lag_basis * this->control_node(this->cell_nd(c, i, j, k));
+                        p += lag_basis * this->control_node<DIM>(this->cell_nd(c, i, j, k));
                     }
                 }
             }
@@ -257,11 +255,13 @@ namespace geolio
          * @note The function does not take ownership of `control_nodes_position` and
          *       treats it as read-only. Caller must ensure the buffer is valid.
          */
+        template<GEO::index_t DIM>
         [[nodiscard]] GEO::vecng<DIM, double> compute_cell_uvw_position(
             const GEO::index_t c,
             const GEO::vec3& uvw,
             const double* cur_control_nodes_ptr
             ) const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             assert(c < this->control_nodes_mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
@@ -361,6 +361,7 @@ namespace geolio
          * @param[out] dBv Output buffer that receives the 1D basis derivatives in the v direction.
          * @param[out] dBw Output buffer that receives the 1D basis derivatives in the w direction.
          */
+        template<GEO::index_t DIM>
         void compute_cell_uvw_dudvdw(
             const GEO::index_t c,
             const GEO::vec3& uvw,
@@ -374,6 +375,7 @@ namespace geolio
             std::vector<double>& dBv,
             std::vector<double>& dBw
             ) const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             assert(c < this->control_nodes_mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
@@ -405,9 +407,9 @@ namespace geolio
                         const double lag_basis_duvw = dBu[i] * basis_vw;
                         const double lag_basis_udvw = Bu[i] * basis_dvw;
                         const double lag_basis_uvdw = Bu[i] * basis_vdw;
-                        du += lag_basis_duvw * this->control_node(this->cell_nd(c, i, j, k));
-                        dv += lag_basis_udvw * this->control_node(this->cell_nd(c, i, j, k));
-                        dw += lag_basis_uvdw * this->control_node(this->cell_nd(c, i, j, k));
+                        du += lag_basis_duvw * this->control_node<DIM>(this->cell_nd(c, i, j, k));
+                        dv += lag_basis_udvw * this->control_node<DIM>(this->cell_nd(c, i, j, k));
+                        dw += lag_basis_uvdw * this->control_node<DIM>(this->cell_nd(c, i, j, k));
                     }
                 }
             }
@@ -426,11 +428,13 @@ namespace geolio
          *               - columns 0, 1, 2 correspond to u, v, w derivatives
          *               - rows 0, 1, 2 correspond to x, y, z physical coordinates
          */
+        template<GEO::index_t DIM>
         void compute_cell_uvw_Jacobian(
             const GEO::index_t c,
             const GEO::vec3& uvw,
             Eigen::Matrix3d& J
             ) const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             assert(c < this->control_nodes_mesh_.cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
@@ -480,13 +484,10 @@ namespace geolio
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vecng<DIM, double> du_all, dv_all, dw_all;
+            GEO::vec3 du, dv, dw;
             std::vector<double> Bu, Bv, Bw, dBu, dBv, dBw;
-            compute_cell_uvw_dudvdw(c, uvw, du_all, dv_all, dw_all, Bu, Bv, Bw, dBu, dBv, dBw);
+            compute_cell_uvw_dudvdw(c, uvw, du, dv, dw, Bu, Bv, Bw, dBu, dBv, dBw);
 
-            const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
-            const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
-            const GEO::vec3 dw = GEO::Memory::pointer_as_reference<GEO::vec3>(dw_all.data());
             const double det_J = GEO::dot(dw, GEO::cross(du,dv));
             switch (quality_type) {
                 case MeasureType::DET_JACOBIAN: {
@@ -532,13 +533,10 @@ namespace geolio
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vecng<DIM, double> du_all, dv_all, dw_all;
+            GEO::vec3 du, dv, dw;
             std::vector<double> Bu, Bv, Bw, dBu, dBv, dBw;
-            compute_cell_uvw_dudvdw(c, uvw, du_all, dv_all, dw_all, Bu, Bv, Bw, dBu, dBv, dBw);
+            compute_cell_uvw_dudvdw(c, uvw, du, dv, dw, Bu, Bv, Bw, dBu, dBv, dBw);
 
-            const GEO::vec3 du = GEO::Memory::pointer_as_reference<GEO::vec3>(du_all.data());
-            const GEO::vec3 dv = GEO::Memory::pointer_as_reference<GEO::vec3>(dv_all.data());
-            const GEO::vec3 dw = GEO::Memory::pointer_as_reference<GEO::vec3>(dw_all.data());
             const GEO::vec3 cross_dvdw = GEO::cross(dv, dw);
             const GEO::vec3 cross_dwdu = GEO::cross(dw, du);
             const GEO::vec3 cross_dudv = GEO::cross(du, dv);
@@ -644,13 +642,15 @@ namespace geolio
          * @param[out] mesh_out_f_cell Optional face attribute storing the source cell index
          *                             for each generated output facet.
          */
+        template<GEO::index_t DIM>
         void append_discretized_high_order_cells_border(
             GEO::Mesh& mesh_out,
-            GEO::index_t resolution = 10,
+            const GEO::index_t resolution = 10,
             GEO::Attribute<GEO::index_t>* mesh_out_v_cell = nullptr,
             GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_f_cell = nullptr
             ) const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             if (mesh_out_v_cell != nullptr) {
                 assert(mesh_out_v_cell->is_bound());
                 assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
@@ -666,6 +666,7 @@ namespace geolio
 
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
 
+            mesh_out.vertices.set_dimension(DIM);
             GEO::index_t new_v = mesh_out.vertices.create_vertices(6*this->control_nodes_mesh_.cells.nb() * (resolution+1) * (resolution+1));
             GEO::index_t new_f = mesh_out.facets.create_quads(6*this->control_nodes_mesh_.cells.nb() * resolution * resolution);
             for (const auto& c : this->control_nodes_mesh_.cells) {
@@ -689,8 +690,7 @@ namespace geolio
 
                             const GEO::vec3 uvw = project_hex_lf_uv_to_uvw(GEO::vec2(u,v), lf);
 
-                            const auto& p = compute_cell_uvw_position(c, uvw);
-                            std::copy_n(p.data(), this->mesh_v_dim_, mesh_out.vertices.point_ptr(new_v));
+                            mesh_out.vertices.point<DIM>(new_v) = compute_cell_uvw_position<DIM>(c, uvw);
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;
@@ -754,13 +754,15 @@ namespace geolio
          * @param[out] mesh_out_c_cell Optional cell attribute storing the source cell index
          *                             for each generated output volume element.
          */
+        template<GEO::index_t DIM>
         void append_discretized_high_order_cells(
             GEO::Mesh& mesh_out,
-            GEO::index_t resolution = 10,
+            const GEO::index_t resolution = 10,
             GEO::Attribute<GEO::index_t>* mesh_out_v_cell = nullptr,
             GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_c_cell = nullptr
             ) const {
+            assert(DIM <= control_nodes_mesh_.vertices.dimension());
             if (mesh_out_v_cell != nullptr) {
                 assert(mesh_out_v_cell->is_bound());
                 assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
@@ -791,7 +793,7 @@ namespace geolio
                             const double w = static_cast<double>(k)/resolution;
                             const GEO::vec3 uvw(u, v, w);
 
-                            mesh_out.vertices.point<DIM>(new_v) = compute_cell_uvw_position(c, uvw);
+                            mesh_out.vertices.point<DIM>(new_v) = compute_cell_uvw_position<DIM>(c, uvw);
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;
@@ -966,6 +968,7 @@ namespace geolio
          * @brief Build global control-node coordinates and cell-to-control-node connectivity.
          */
         void initialize_control_nodes(const GEO::Mesh& mesh) override {
+            assert(control_nodes_mesh_.vertices.dimension() == 3);
             assert(this->node_positions_1D_.size() == this->order_+1);
 
             /* == Get all shared edges and facets ================================================================== */
@@ -1023,12 +1026,11 @@ namespace geolio
 
             /* == For edges == */
             for (auto& [edge, control_vertices] : hex_edges_control_points) {
-                GEO::vecng<DIM, double> ep0, ep1;
-                std::copy_n(mesh.vertices.point_ptr(edge.first), this->mesh_v_dim_, ep0.data());
-                std::copy_n(mesh.vertices.point_ptr(edge.second), this->mesh_v_dim_, ep1.data());
+                const auto ep0 = mesh.vertices.point(edge.first);
+                const auto ep1 = mesh.vertices.point(edge.second);
                 for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                     const double r = this->node_positions_1D_[i+1];
-                    this->control_node(new_v) = (1-r)*ep0 + r*ep1;
+                    this->control_node<3>(new_v) = (1-r)*ep0 + r*ep1;
                     control_vertices[i] = new_v;
                     ++new_v;
                 }
@@ -1049,11 +1051,10 @@ namespace geolio
                     const auto& lf_v1 = mesh.cells.facet_vertex(c, lf, 1);
                     const auto& lf_v2 = mesh.cells.facet_vertex(c, lf, 2);
                     const auto& lf_v3 = mesh.cells.facet_vertex(c, lf, 3);
-                    GEO::vecng<DIM, double> lf_p0, lf_p1, lf_p2, lf_p3;
-                    std::copy_n(mesh.vertices.point_ptr(lf_v0), this->mesh_v_dim_, lf_p0.data());
-                    std::copy_n(mesh.vertices.point_ptr(lf_v1), this->mesh_v_dim_, lf_p1.data());
-                    std::copy_n(mesh.vertices.point_ptr(lf_v2), this->mesh_v_dim_, lf_p2.data());
-                    std::copy_n(mesh.vertices.point_ptr(lf_v3), this->mesh_v_dim_, lf_p3.data());
+                    const auto lf_p0 = mesh.vertices.point(lf_v0);
+                    const auto lf_p1 = mesh.vertices.point(lf_v1);
+                    const auto lf_p2 = mesh.vertices.point(lf_v2);
+                    const auto lf_p3 = mesh.vertices.point(lf_v3);
 
                     auto& lf_control_points = hex_facets_control_points[8*c+lf];
                     lf_control_points.reserve(this->INTERNAL_CONTROL_POINTS_NB_PER_FACET_);
@@ -1063,7 +1064,7 @@ namespace geolio
                         for (GEO::index_t j = 0; j < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++j) {
                             const double rj = this->node_positions_1D_[j+1];
 
-                            this->control_node(new_v) = (1-ri)*(1-rj)*lf_p0
+                            this->control_node<3>(new_v) = (1-ri)*(1-rj)*lf_p0
                                                 + ri*(1-rj)*lf_p3
                                                 + (1-ri)*rj*lf_p1
                                                 + ri*rj*lf_p2;
@@ -1128,22 +1129,22 @@ namespace geolio
                 c_control_points.reserve(this->INTERNAL_CONTROL_POINTS_NB_PER_CELL_);
 
                 assert(mesh.cells.nb_vertices(c) == 8);
-                GEO::vecng<DIM, double> c_p0, c_p1, c_p2, c_p3, c_p4, c_p5, c_p6, c_p7;
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 0)), this->mesh_v_dim_, c_p0.data());
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 1)), this->mesh_v_dim_, c_p1.data());
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 2)), this->mesh_v_dim_, c_p2.data());
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 3)), this->mesh_v_dim_, c_p3.data());
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 4)), this->mesh_v_dim_, c_p4.data());
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 5)), this->mesh_v_dim_, c_p5.data());
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 6)), this->mesh_v_dim_, c_p6.data());
-                std::copy_n(mesh.vertices.point_ptr(mesh.cells.vertex(c, 7)), this->mesh_v_dim_, c_p7.data());
+                const auto c_p0 = mesh.cells.point(c, 0);
+                const auto c_p1 = mesh.cells.point(c, 1);
+                const auto c_p2 = mesh.cells.point(c, 2);
+                const auto c_p3 = mesh.cells.point(c, 3);
+                const auto c_p4 = mesh.cells.point(c, 4);
+                const auto c_p5 = mesh.cells.point(c, 5);
+                const auto c_p6 = mesh.cells.point(c, 6);
+                const auto c_p7 = mesh.cells.point(c, 7);
+
                 for (GEO::index_t k = 0; k < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++k) {
                     const double rk = this->node_positions_1D_[k+1];
                     for (GEO::index_t j = 0; j < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++j) {
                         const double rj = this->node_positions_1D_[j+1];
                         for (GEO::index_t i = 0; i < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; ++i) {
                             const double ri = this->node_positions_1D_[i+1];
-                            this->control_node(new_v) = (1-ri)*(1-rj)*(1-rk)*c_p0
+                            this->control_node<3>(new_v) = (1-ri)*(1-rj)*(1-rk)*c_p0
                                                     + ri*(1-rj)*(1-rk)*c_p1
                                                     + (1-ri)*rj*(1-rk)*c_p2
                                                     + ri*rj*(1-rk)*c_p3
@@ -1167,9 +1168,6 @@ namespace geolio
                     this->control_nodes_mesh_.cells.set_vertex(c, lv, mesh.cells.vertex(c, lv));
             }
             this->control_nodes_mesh_.cells.connect();
-
-            /* Initialize other dimension */
-            this->initialize_control_node_quantities();
 
             /* == Create regular index ================================================================================= */
             this->element_control_nodes_.create_vector_attribute(
@@ -1263,12 +1261,6 @@ namespace geolio
             }
         }
     };
-
-    template <typename T>
-    struct isHexControlGrid : std::false_type {};
-
-    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
-    struct isHexControlGrid<HexControlGrid<MESH_DIM, QUANTITIES_DIM>> : std::true_type {};
 }
 
 #endif //GEOLIO_HEX_CONTROL_GRID_H

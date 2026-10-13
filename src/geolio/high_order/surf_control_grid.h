@@ -8,9 +8,7 @@
 
 namespace geolio
 {
-    template <GEO::index_t DIM>
-    class SurfaceControlGrid : public ControlGrid<DIM> {
-    static_assert(DIM >= 2);
+    class SurfaceControlGrid : public ControlGrid {
     public:
         /**
          * @brief Construct a surface control grid.
@@ -18,7 +16,7 @@ namespace geolio
          * @param[in] order Polynomial order of the high-order surface representation.
          */
         SurfaceControlGrid(const GEO::index_t mesh_v_dimension, const GEO::index_t order)
-            : ControlGrid<DIM>(mesh_v_dimension, order)
+            : ControlGrid(mesh_v_dimension, order)
         {
             assert(this->mesh_v_dim_ == 2 || this->mesh_v_dim_ == 3);
         }
