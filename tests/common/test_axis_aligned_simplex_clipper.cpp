@@ -34,6 +34,47 @@ namespace
         }
     };
 
+    /**
+     * Triangles whose edge `(v0, v2)` lies *exactly* in the plane `y == -1`, while the whole
+     * triangle is in the closed negative half space of that plane (its third vertex is at
+     * `y == -2`): the clip does not cut them at all, yet that edge is a border edge of the
+     * partition and must be reported through `facet_cut_plane()`.
+     * @note This is the configuration a block cutting optimization meets as soon as a knife
+     *  lands exactly on a line of the parameter triangulation of the clipped mesh.
+     */
+    const std::array<GEO::vec2, 3> TRI_VERTICES_EDGE_IN_CUT_PLANE_2D = {
+        {
+            GEO::vec2(0, -1),
+            GEO::vec2(0.5, -2),
+            GEO::vec2(1, -1)
+        }
+    };
+
+    const std::array<GEO::vec3, 3> TRI_VERTICES_EDGE_IN_CUT_PLANE_3D = {
+        {
+            GEO::vec3(0, -1, 0.5),
+            GEO::vec3(0.5, -2, -0.25),
+            GEO::vec3(1, -1, 0.75)
+        }
+    };
+
+    /**
+     * Tetrahedra with the facet `(v0, v1, v2)` lying *exactly* in the plane `z == 0`, while the
+     * whole tetrahedron is in the closed negative half space of that plane (its fourth vertex
+     * is at `z == -1`): the clip does not cut them at all, yet that facet is a border facet of
+     * the partition and must be reported through `facet_cut_plane()`.
+     * @note This is the configuration a block cutting optimization meets as soon as a knife
+     *  lands exactly on a facet of the clipped mesh.
+     */
+    const std::array<GEO::vec3, 4> TET_VERTICES_FACET_IN_CUT_PLANE = {
+        {
+            GEO::vec3(0, 0, 0),
+            GEO::vec3(1, 0, 0),
+            GEO::vec3(0, 0, -1),
+            GEO::vec3(0, 1, 0)
+        }
+    };
+
     const std::array<std::array<GEO::index_t, 4>, 12> TET_VERTICES_ORDER = {
         {
             {0, 1, 2, 3}, {0, 3, 1, 2}, {0, 2, 3, 1},
@@ -197,6 +238,53 @@ namespace geolio::test
         }
 
         /**
+         * Checks the converse of `check_cut_plane_conformance()`: a facet of a non-degenerate
+         * tetrahedron whose three vertices lie *exactly* in one of the cut planes must be
+         * reported through `facet_cut_plane()`.
+         * @note This is what a caller accumulating a measure along the cut planes (for
+         *  instance the cross sectional area of a block cutting energy gradient) relies on: a
+         *  cut plane may coincide with a facet of the clipped mesh, in which case the cells on
+         *  its negative side are not cut at all, and yet that facet is a border facet of the
+         *  partition. It used to be left unreported, which silently dropped its whole area.
+         * @note The flag may name an anterior, coincident cut plane (an entry is only set when
+         *  it is empty), hence "one of the cut planes" and not "the last one".
+         * @note Exactly degenerate cells are skipped: they repeat the same facet several times
+         *  (see `check_degenerate_cells_are_exact()`), and callers must drop them anyway (see
+         *  the class documentation).
+         */
+        void check_cut_plane_completeness() const {
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            const auto& facet_cut_plane = clipper->facet_cut_plane();
+            EXPECT_EQ(coords.size()%4, 0);
+            EXPECT_EQ(facet_cut_plane.size(), coords.size());
+
+            for (GEO::index_t c = 0, c_end = coords.size()/4; c < c_end; ++c) {
+                if (GEO::PCK::orient_3d(coords[4*c], coords[4*c+1], coords[4*c+2], coords[4*c+3]) == GEO::ZERO)
+                    continue;
+
+                for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                    /* entry `lv` describes the facet opposite the vertex `lv` */
+                    bool lies_in_a_cut_plane = false;
+                    for (const auto& [d, t] : cut_planes) {
+                        bool facet_in_plane = true;
+                        for (GEO::index_t lv2 = 0; lv2 < 4 && facet_in_plane; ++lv2) {
+                            if (lv2 != lv)
+                                facet_in_plane = (coords[4*c+lv2][d] == t);
+                        }
+                        if (facet_in_plane)
+                            lies_in_a_cut_plane = true;
+                    }
+
+                    if (lies_in_a_cut_plane)
+                        EXPECT_NE(facet_cut_plane[4*c+lv], GEO::NO_INDEX)
+                            << "cell " << c << ", facet opposite vertex " << lv
+                            << " lies exactly in a cut plane but is not reported";
+                }
+            }
+        }
+
+        /**
          * Checks that the degenerate cells are *exactly* degenerate, i.e. that they have
          * repeated vertices: this is what allows a caller to identify them exactly instead of
          * comparing a computed volume against a threshold.
@@ -290,6 +378,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -306,6 +395,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -322,6 +412,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -338,6 +429,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -354,6 +446,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -370,6 +463,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -387,6 +481,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -407,6 +502,7 @@ namespace geolio::test
             check_signed_volume();
             check_barycentric_coords();
             check_partitions();
+            check_cut_plane_completeness();
             output(i);
         }
     }
@@ -555,6 +651,51 @@ namespace geolio::test
             }
         }
 
+        /**
+         * Checks the converse of `check_cut_plane_conformance()`: an edge of a
+         * non-degenerate triangle whose two vertices lie *exactly* in one of the cut planes
+         * must be reported through `facet_cut_plane()`.
+         * @note This is what a caller accumulating a measure along the cut planes (for
+         *  instance the boundary term of a block cutting energy gradient) relies on: a cut
+         *  plane may coincide with an edge of the clipped mesh, in which case the cells on
+         *  its negative side are not cut at all, and yet their edge lying in the plane is a
+         *  border edge of the partition. It used to be left unreported, which silently
+         *  dropped a whole boundary segment.
+         * @note The flag may name an anterior, coincident cut plane (an entry is only set
+         *  when it is empty), hence "one of the cut planes" and not "the last one".
+         * @note Exactly degenerate triangles are skipped: they repeat the same edge several
+         *  times (see `check_degenerate_cells_are_exact()`), and callers must drop them
+         *  anyway (see the class documentation).
+         */
+        void check_cut_plane_completeness() const {
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            const auto& facet_cut_plane = clipper->facet_cut_plane();
+            EXPECT_EQ(coords.size()%3, 0);
+            EXPECT_EQ(facet_cut_plane.size(), coords.size());
+
+            for (GEO::index_t f = 0, f_end = coords.size()/3; f < f_end; ++f) {
+                if (is_exactly_degenerate(coords[3*f], coords[3*f+1], coords[3*f+2]))
+                    continue;
+
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    const auto& p0 = coords[3*f+lv];
+                    const auto& p1 = coords[3*f+(lv+1)%3];
+
+                    bool lies_in_a_cut_plane = false;
+                    for (const auto& [d, t] : cut_planes) {
+                        if (p0[d] == t && p1[d] == t)
+                            lies_in_a_cut_plane = true;
+                    }
+
+                    if (lies_in_a_cut_plane)
+                        EXPECT_NE(facet_cut_plane[3*f+lv], GEO::NO_INDEX)
+                            << "triangle " << f << ", edge " << lv
+                            << " lies exactly in a cut plane but is not reported";
+                }
+            }
+        }
+
         /** @return true if the triangle `(p0, p1, p2)` has an exactly zero area. */
         static bool is_exactly_degenerate(
             const GEO::vecng<DIM, double>& p0,
@@ -685,6 +826,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->check_cut_plane_completeness();
             this->output(i);
         }
     }
@@ -706,6 +848,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->check_cut_plane_completeness();
             this->output(i);
         }
     }
@@ -727,6 +870,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->check_cut_plane_completeness();
             this->output(i);
         }
     }
@@ -750,6 +894,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->check_cut_plane_completeness();
             this->output(i);
         }
     }
@@ -771,6 +916,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->check_cut_plane_completeness();
             this->output(i);
         }
     }
@@ -793,6 +939,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->check_cut_plane_completeness();
             this->output(i);
         }
     }
@@ -824,6 +971,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_partitions();
+            this->check_cut_plane_completeness();
             this->output(i);
         }
     }
@@ -848,6 +996,7 @@ namespace geolio::test
             check_barycentric_coords();
             check_partitions();
             check_cut_plane_conformance();
+            check_cut_plane_completeness();
             check_degenerate_cells_are_exact();
         }
     }
@@ -858,6 +1007,53 @@ namespace geolio::test
      * it), so no cell straddles it anymore, and the cells that the second cut generates are
      * exactly degenerate (zero volume) instead of being slivers carrying a wrong partition.
      */
+    /**
+     * A cut plane that coincides *exactly* with a facet of the tetrahedron, the whole
+     * tetrahedron lying in the closed negative half space of that plane: the clip does not cut
+     * the tetrahedron, and yet that facet is a border facet of the partition and must be
+     * reported through `facet_cut_plane()`.
+     * @note This is the configuration a block cutting optimization meets as soon as a knife
+     *  lands exactly on a facet of the clipped mesh: the cross sectional terms of its gradient
+     *  are accumulated from `facet_cut_plane()`, so a missing entry silently dropped a whole
+     *  facet, and the assembled gradient no longer belonged to the energy the line search
+     *  minimizes.
+     */
+    TEST_F(AxisAlignedTetClipperTest, cut_plane_coinciding_with_a_facet_of_the_negative_side) {
+        for (GEO::index_t i = 0; i < TET_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TET_VERTICES_ORDER[i];
+            init(
+                TET_VERTICES_FACET_IN_CUT_PLANE[lvs[0]], TET_VERTICES_FACET_IN_CUT_PLANE[lvs[1]],
+                TET_VERTICES_FACET_IN_CUT_PLANE[lvs[2]], TET_VERTICES_FACET_IN_CUT_PLANE[lvs[3]]);
+
+            /* `TET_VERTICES_FACET_IN_CUT_PLANE` has three vertices with z == 0 and its fourth
+               vertex at z == -1: the plane z == 0 contains a whole facet and cuts nothing. */
+            cut_planes.emplace_back(2, 0.0);
+            clip();
+
+            /* Nothing is cut: the tetrahedron is left untouched, on the closed negative side
+               (bit 0 of its partition is clear), and exactly its facet lying in the plane is
+               reported. */
+            ASSERT_FALSE(clipper == nullptr);
+            const auto& coords = clipper->coords();
+            ASSERT_EQ(coords.size(), 4);
+            EXPECT_EQ(clipper->partitions()[0], 0);
+
+            GEO::index_t reported_nb = 0;
+            for (GEO::index_t lv = 0; lv < 4; ++lv)
+                if (clipper->facet_cut_plane()[lv] != GEO::NO_INDEX)
+                    ++reported_nb;
+            EXPECT_EQ(reported_nb, 1);
+
+            check_volume_computation();
+            check_signed_volume();
+            check_barycentric_coords();
+            check_partitions();
+            check_cut_plane_conformance();
+            check_cut_plane_completeness();
+            check_degenerate_cells_are_exact();
+        }
+    }
+
     TEST_F(AxisAlignedTetClipperTest, duplicate_cut_plane_is_a_no_op) {
         for (GEO::index_t i = 0; i < TET_VERTICES_ORDER.size(); ++i) {
             const auto& lvs = TET_VERTICES_ORDER[i];
@@ -867,6 +1063,7 @@ namespace geolio::test
             clipper->clip(1, 0.5);
             check_signed_volume();
             check_cut_plane_conformance();
+            check_cut_plane_completeness();
 
             const auto cells_nb = clipper->coords().size()/4;
             double volume_before = 0;
@@ -897,6 +1094,7 @@ namespace geolio::test
             check_barycentric_coords();
             check_partitions();
             check_cut_plane_conformance();
+            check_cut_plane_completeness();
             check_degenerate_cells_are_exact();
         }
     }
@@ -925,6 +1123,7 @@ namespace geolio::test
                 check_barycentric_coords();
                 check_partitions();
                 check_cut_plane_conformance();
+            check_cut_plane_completeness();
                 check_degenerate_cells_are_exact();
             }
         }
@@ -954,6 +1153,7 @@ namespace geolio::test
                 check_barycentric_coords();
                 check_partitions();
                 check_cut_plane_conformance();
+            check_cut_plane_completeness();
             }
         }
     }
@@ -986,8 +1186,64 @@ namespace geolio::test
                 this->check_barycentric_coords();
                 this->check_partitions();
                 this->check_cut_plane_conformance();
+                this->check_cut_plane_completeness();
                 this->check_degenerate_cells_are_exact();
             }
+        }
+    }
+
+    /**
+     * A cut plane that coincides *exactly* with an edge of the input triangle, the whole
+     * triangle lying in the closed negative half space of that plane: the clip does not cut
+     * the triangle, and yet the edge lying in the plane is a border edge of the partition and
+     * must be reported through `facet_cut_plane()`.
+     * @note This is the configuration a block cutting optimization meets as soon as a knife
+     *  lands exactly on a line of the parameter triangulation of the mesh being clipped: the
+     *  boundary terms of its gradient are accumulated from `facet_cut_plane()`, so a missing
+     *  entry silently dropped a whole boundary segment and the assembled gradient stopped
+     *  belonging to the energy the line search minimizes (opposite sign in practice, hence a
+     *  line search that fails at the very first iteration).
+     */
+    TYPED_TEST(AxisAlignedTriClipperDimTest, cut_plane_coinciding_with_an_edge_of_the_negative_side) {
+        constexpr GEO::index_t DIM = TypeParam::value;
+
+        for (GEO::index_t i = 0; i < TRI_VERTICES_ORDER.size(); ++i) {
+            const auto& lvs = TRI_VERTICES_ORDER[i];
+            if constexpr (DIM == 2)
+                this->init(
+                    TRI_VERTICES_EDGE_IN_CUT_PLANE_2D[lvs[0]],
+                    TRI_VERTICES_EDGE_IN_CUT_PLANE_2D[lvs[1]],
+                    TRI_VERTICES_EDGE_IN_CUT_PLANE_2D[lvs[2]]);
+            else
+                this->init(
+                    TRI_VERTICES_EDGE_IN_CUT_PLANE_3D[lvs[0]],
+                    TRI_VERTICES_EDGE_IN_CUT_PLANE_3D[lvs[1]],
+                    TRI_VERTICES_EDGE_IN_CUT_PLANE_3D[lvs[2]]);
+
+            this->cut_planes.emplace_back(1, -1.0);
+            this->clip();
+
+            /* Nothing is cut: the triangle is left untouched, on the closed negative side
+               (bit 0 of its partition is clear), and exactly its edge lying in the plane is
+               reported. */
+            const auto& coords = this->clipper->coords();
+            ASSERT_EQ(coords.size(), 3);
+            EXPECT_EQ(this->clipper->partitions()[0], 0);
+
+            GEO::index_t reported_nb = 0;
+            for (GEO::index_t lv = 0; lv < 3; ++lv)
+                if (this->clipper->facet_cut_plane()[lv] != GEO::NO_INDEX)
+                    ++reported_nb;
+            EXPECT_EQ(reported_nb, 1);
+
+            this->check_area_computation();
+            this->check_signed_area();
+            this->check_barycentric_coords();
+            this->check_partitions();
+            this->check_cut_plane_conformance();
+            this->check_cut_plane_completeness();
+            this->check_degenerate_cells_are_exact();
+            this->output(i);
         }
     }
 
@@ -1005,6 +1261,7 @@ namespace geolio::test
             this->clipper->clip(1, -0.5);
             this->check_signed_area();
             this->check_cut_plane_conformance();
+            this->check_cut_plane_completeness();
 
             const auto cells_nb = this->clipper->coords().size()/3;
             double area_before = 0;
@@ -1034,6 +1291,7 @@ namespace geolio::test
             this->check_signed_area();
             this->check_barycentric_coords();
             this->check_cut_plane_conformance();
+            this->check_cut_plane_completeness();
             this->check_degenerate_cells_are_exact();
             /* @note `check_partitions()` is not called here: the triangles generated by the
                second cut lie *exactly* in a plane and inherit the partition of their parent,
