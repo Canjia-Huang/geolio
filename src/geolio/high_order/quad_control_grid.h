@@ -677,7 +677,7 @@ namespace geolio
             }
 
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
-            const GEO::index_t QUANTITIES_DIM = control_nodes.dimension()-mesh_v_dim_;
+            const GEO::index_t QUANTITIES_DIM = DIM-mesh_v_dim_;
 
             mesh_out.vertices.set_dimension(mesh_v_dim_);
             GEO::Attribute<double> mesh_out_v_quantities;
@@ -686,6 +686,7 @@ namespace geolio
                     mesh_out.vertices.attributes(),
                     this->attribute_id_+":quantities",
                     QUANTITIES_DIM);
+
             GEO::index_t new_v = mesh_out.vertices.create_vertices(this->control_nodes.mesh().facets.nb() * (resolution+1) * (resolution+1));
             GEO::index_t new_f = mesh_out.facets.create_quads(this->control_nodes.mesh().facets.nb() * resolution * resolution);
             for (const auto& f : this->control_nodes.mesh().facets) {
@@ -710,6 +711,7 @@ namespace geolio
 
                         const auto& p = compute_facet_uv_position<DIM>(f, uv);
                         std::copy_n(p.data(), mesh_v_dim_, mesh_out.vertices.point_ptr(new_v));
+
                         if (QUANTITIES_DIM > 0)
                             std::copy_n(&p[mesh_v_dim_], QUANTITIES_DIM, &mesh_out_v_quantities[QUANTITIES_DIM*new_v]);
 

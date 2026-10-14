@@ -540,6 +540,7 @@ namespace geolio::test
             this->mesh.facets.create_quad(0, 1, 2, 3);
 
             this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
+            this->control_grid->control_nodes.set_dimension(DIM);
         }
 
         /**
@@ -594,12 +595,12 @@ namespace geolio::test
         else {
             this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 3, 0));
             this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 1, 2));
-            this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 1, 3));
+            this->jiggle_control_node(this->control_grid->facet_edge_nd(FACET, 2, 2));
 
             constexpr GEO::index_t POINTS_NB = 100;
             constexpr double ARROW_LENGTH = 0.2;
 
-            GEO::Mesh mesh_out(TypeParam::value);
+            GEO::Mesh mesh_out(3);
             GEO::index_t new_v = mesh_out.vertices.create_vertices(2*POINTS_NB);
             GEO::index_t new_e = mesh_out.edges.create_edges(POINTS_NB);
             for (GEO::index_t i = 0; i < POINTS_NB; ++i) {

@@ -802,6 +802,7 @@ namespace geolio::test
             mesh.cells.create_hex(0, 1, 2, 3, 4, 5, 6, 7);
 
             control_grid = std::make_unique<Grid>(mesh, ORDER);
+            this->control_grid->control_nodes.set_dimension(DIM);
         }
     };
 
