@@ -8,11 +8,23 @@
 #include <spdlog/details/os.h>
 
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace geolio::LOG {
     namespace detail {
         namespace {
+            /**
+             * @brief The levels that a SPDLOG_LEVEL specification asks for.
+             */
+            struct LevelSpec {
+                /** The level of each named logger; `off` silences that logger. */
+                std::unordered_map<std::string, spdlog::level::level_enum> named;
+
+                /** The level of the loggers that no entry names, when the spec has one. */
+                std::optional<spdlog::level::level_enum> global;
+            };
+
             /**
              * @brief Lowercases a level name, as spdlog does before parsing it.
              * @param[in,out] str The string to lowercase in place.
@@ -40,41 +52,46 @@ namespace geolio::LOG {
             }
 
             /**
-             * @brief Extracts the `name = level` entries of a SPDLOG_LEVEL spec.
-             * @details The spec has the same shape as the one spdlog reads, e.g.
-             *          `"off,demo.worker=debug"`: a bare value is the global level,
-             *          and every `name = level` entry is the level of one logger.
-             *          The global part is left to spdlog itself; only the per-name
-             *          entries are returned here, because spdlog applies those to
-             *          the loggers that already exist while this registry has to
-             *          keep them for the categories that are created later on.
+             * @brief Parses a SPDLOG_LEVEL specification.
+             * @details spdlog reads the same specification, but only applies it to
+             *          the loggers of its own registry; the categories of a module
+             *          whose registry is a different one -- which is the case of a
+             *          shared geolio library whose spdlog is header-only -- keep the
+             *          result here instead. The shape is the one spdlog documents: a
+             *          comma separated list whose bare value is the global level and
+             *          whose `name = level` entries are the level of one logger, e.g.
+             *          `"off,frame_field=debug"`. An unrecognized level name is
+             *          ignored, exactly as spdlog does.
              * @param[in] spec The value of the environment variable.
-             * @return The level of each named logger; unrecognized level names are
-             *         ignored, exactly as spdlog does.
+             * @return The levels that the specification asks for.
              */
-            std::unordered_map<std::string, spdlog::level::level_enum> ParseCategoryLevels(const std::string &spec) {
-                std::unordered_map<std::string, spdlog::level::level_enum> levels;
+            LevelSpec ParseLevelSpec(const std::string &spec) {
+                LevelSpec levels;
                 std::size_t begin = 0;
                 while (begin <= spec.size()) {
                     const auto comma = spec.find(',', begin);
                     const auto entry = Trim(spec.substr(begin, comma - begin));
                     begin = comma == std::string::npos ? spec.size() + 1 : comma + 1;
+                    if (entry.empty()) {
+                        continue;
+                    }
 
                     const auto equal = entry.find('=');
-                    if (equal == std::string::npos) {
+                    const auto name = equal == std::string::npos ? std::string{} : Trim(entry.substr(0, equal));
+                    auto level_name = Trim(entry.substr(equal == std::string::npos ? 0 : equal + 1));
+                    ToLower(level_name);
+                    // An unknown level name is reported as `off` by spdlog, and so is
+                    // the literal "off": only the latter is a level to keep.
+                    const auto level = spdlog::level::from_str(level_name);
+                    if (level == spdlog::level::off && level_name != "off") {
                         continue;
                     }
 
-                    const auto name = Trim(entry.substr(0, equal));
-                    auto level_name = Trim(entry.substr(equal + 1));
-                    ToLower(level_name);
-                    const auto level = spdlog::level::from_str(level_name);
-                    // An unknown level name is reported as `off` by spdlog, and so
-                    // is the literal "off": only the latter is a level to keep.
-                    if (name.empty() || (level == spdlog::level::off && level_name != "off")) {
-                        continue;
+                    if (name.empty()) {
+                        levels.global = level;
+                    } else {
+                        levels.named[name] = level;
                     }
-                    levels[name] = level;
                 }
                 return levels;
             }
@@ -82,11 +99,16 @@ namespace geolio::LOG {
             /**
              * @brief The categories of the running process, by name.
              * @details Deliberately defined in this translation unit rather than in
-             *          the header: the registry is then shared by the geolio library,
-             *          the applications and the tests, so a category switched off or
-             *          retuned from one of them is observed by all of them. A
-             *          header-only registry would instead be duplicated in every
+             *          the header: the state of a category is then shared by the
+             *          geolio library, the applications and the tests, so a category
+             *          switched off or retuned from one of them is observed by all of
+             *          them. A header-only state would instead be duplicated in every
              *          shared object on platforms without symbol interposition.
+             *
+             *          The spdlog logger of a category comes from the module that
+             *          opens it (see AdoptCategoryLogger() and GetOrCreateCategory()
+             *          in the header), since the spdlog registries themselves are not
+             *          shared on those platforms.
              */
             class CategoryRegistry {
             public:
@@ -102,9 +124,14 @@ namespace geolio::LOG {
                 /**
                  * @brief Returns the state of one category, creating it on first use.
                  * @param[in] name The category name.
+                 * @param[in] existing A logger of that name that the calling module
+                 *            already has, or nullptr to create one from @p prototype.
+                 * @param[in] prototype The default logger of the calling module.
                  * @return The shared state of that category; never null.
                  */
-                std::shared_ptr<CategoryState> GetOrCreate(const std::string &name) {
+                std::shared_ptr<CategoryState> GetOrCreate(const std::string &name,
+                                                          std::shared_ptr<spdlog::logger> existing,
+                                                          const std::shared_ptr<spdlog::logger> &prototype) {
                     std::lock_guard<std::mutex> lock(_mutex);
                     if (const auto it = _states.find(name); it != _states.end()) {
                         return it->second;
@@ -112,7 +139,13 @@ namespace geolio::LOG {
 
                     auto state = std::make_shared<CategoryState>();
                     state->name = name;
-                    state->logger = MakeLogger(name);
+                    // A clone of the default logger of the calling module: same sinks,
+                    // same formatter, same flush policy, same starting level. Cloning
+                    // is what keeps a category of the application configured like the
+                    // rest of the application, including where the spdlog registry of
+                    // the library is not the one of the application.
+                    state->logger = existing != nullptr ? std::move(existing) : prototype->clone(name);
+                    ApplyLevel(_levels, *state);
                     _states.emplace(name, state);
                     return state;
                 }
@@ -143,47 +176,37 @@ namespace geolio::LOG {
                 }
 
                 /**
-                 * @brief Replaces the level of every named logger of the spec.
-                 * @param[in] levels The level of each named logger of the spec.
+                 * @brief Remembers the levels of a spec, and applies them to the
+                 *        categories that already exist.
+                 * @details spdlog applies the same specification to the loggers of
+                 *          its own registry, which does not contain the categories of
+                 *          another module when the registries are split, so this
+                 *          registry applies them to its categories as well.
+                 * @param[in] spec The levels of the specification that was read.
                  */
-                void SetLevels(std::unordered_map<std::string, spdlog::level::level_enum> levels) {
+                void SetLevels(LevelSpec spec) {
                     std::lock_guard<std::mutex> lock(_mutex);
-                    _levels = std::move(levels);
+                    for (auto &[name, state]: _states) {
+                        ApplyLevel(spec, *state);
+                    }
+                    _levels = std::move(spec);
                 }
 
             private:
                 /**
-                 * @brief Creates the spdlog logger backing a new category.
-                 * @details A logger that already carries that name is reused as is,
-                 *          so a category is exactly an spdlog logger: spdlog::get()
-                 *          finds it, and a level given to it before the first log
-                 *          call is respected. A new logger is a clone of the default
-                 *          logger, hence it starts with the sinks, the formatter, the
-                 *          level and the flush policy of the application, and it is
-                 *          registered so that spdlog::set_level(), spdlog::set_pattern()
-                 *          and spdlog::apply_all() keep acting on it. The clone is
-                 *          registered directly, without spdlog::initialize_logger():
-                 *          that one would reset the shared sinks to the pattern of
-                 *          the registry, silently reformatting the output of the
-                 *          default logger, and would drop a level that was set on the
-                 *          default logger itself instead of globally.
-                 * @param[in] name The category name.
-                 * @return The logger of that category; never null.
+                 * @brief Gives one category the level that a spec has for it.
+                 * @details Mirrors the choice spdlog makes for a new logger: the
+                 *          entry that names the category wins, then the global entry,
+                 *          and a category that neither names keeps the level it has.
+                 * @param[in] spec The specification to read the level from.
+                 * @param[in,out] state The state of the category to retune.
                  */
-                std::shared_ptr<spdlog::logger> MakeLogger(const std::string &name) {
-                    if (auto logger = spdlog::get(name)) {
-                        return logger;
+                static void ApplyLevel(const LevelSpec &spec, CategoryState &state) {
+                    if (const auto it = spec.named.find(state.name); it != spec.named.end()) {
+                        state.logger->set_level(it->second);
+                    } else if (spec.global.has_value()) {
+                        state.logger->set_level(*spec.global);
                     }
-
-                    auto logger = spdlog::default_logger()->clone(name);
-                    spdlog::register_logger(logger);
-
-                    // A named entry of SPDLOG_LEVEL outranks the inherited level,
-                    // including for a category that is only created later on.
-                    if (const auto it = _levels.find(name); it != _levels.end()) {
-                        logger->set_level(it->second);
-                    }
-                    return logger;
                 }
 
                 /** Guards _states and _levels, which the log calls read. */
@@ -192,13 +215,15 @@ namespace geolio::LOG {
                 /** The state of every category mentioned so far, by name. */
                 std::unordered_map<std::string, std::shared_ptr<CategoryState>> _states;
 
-                /** The level of each named logger of the last SPDLOG_LEVEL spec. */
-                std::unordered_map<std::string, spdlog::level::level_enum> _levels;
+                /** The levels of the last SPDLOG_LEVEL specification that was read. */
+                LevelSpec _levels;
             };
         } // namespace
 
-        std::shared_ptr<CategoryState> GetOrCreateCategory(const std::string &name) {
-            return CategoryRegistry::Instance().GetOrCreate(name);
+        std::shared_ptr<CategoryState> GetOrCreateCategory(const std::string &name,
+                                                           std::shared_ptr<spdlog::logger> existing,
+                                                           const std::shared_ptr<spdlog::logger> &prototype) {
+            return CategoryRegistry::Instance().GetOrCreate(name, std::move(existing), prototype);
         }
 
         std::shared_ptr<CategoryState> FindCategory(const std::string &name) {
@@ -211,15 +236,16 @@ namespace geolio::LOG {
 
         void LoadEnvironmentLevels(const char *variable) {
             // spdlog applies the global level of the spec, and the per-name levels
-            // of the loggers that already exist; the per-name levels are kept here
-            // as well, for the categories created after this call. An unset or
-            // empty variable forgets the levels that were remembered from an
-            // earlier spec, so that reading the environment twice is idempotent.
+            // of the loggers that already exist; the whole spec is kept here as well,
+            // both for the categories of another registry and for the ones that are
+            // created after this call. An unset or empty variable forgets the levels
+            // that were remembered from an earlier spec, so that reading the
+            // environment twice is idempotent.
             const auto spec = spdlog::details::os::getenv(variable);
             if (!spec.empty()) {
                 spdlog::cfg::load_env_levels(variable);
             }
-            CategoryRegistry::Instance().SetLevels(ParseCategoryLevels(spec));
+            CategoryRegistry::Instance().SetLevels(ParseLevelSpec(spec));
         }
     } // namespace detail
 } // namespace LOG

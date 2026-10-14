@@ -106,15 +106,54 @@ namespace geolio::LOG {
 
         /**
          * @brief Returns the state of the given category, creating it on first use.
-         * @details Defined in log.cpp on purpose: a single registry then serves the
+         * @details Defined in log.cpp on purpose: a single state then serves the
          *          geolio library, the applications and the tests, whereas a
-         *          header-only registry would be duplicated in every shared object
-         *          on platforms without symbol interposition, so that a category
+         *          header-only state would be duplicated in every shared object on
+         *          platforms without symbol interposition, so that a category
          *          disabled from one module would keep logging in another one.
+         *
+         *          The spdlog logger it holds, on the contrary, belongs to the spdlog
+         *          registry of the module that opens the category first; it comes
+         *          from the caller, through @p existing or @p prototype, which is
+         *          what keeps a category of the application configured like the rest
+         *          of the application even where the registries are not merged.
          * @param[in] name The category name.
+         * @param[in] existing A logger of that name that the calling module already
+         *            has, or nullptr to create one from @p prototype.
+         * @param[in] prototype The default logger of the calling module, cloned to
+         *            create the logger of a category that does not exist yet.
          * @return The shared state of that category; never null.
          */
-        std::shared_ptr<CategoryState> GetOrCreateCategory(const std::string &name);
+        std::shared_ptr<CategoryState> GetOrCreateCategory(const std::string &name,
+                                                           std::shared_ptr<spdlog::logger> existing,
+                                                           const std::shared_ptr<spdlog::logger> &prototype);
+
+        /**
+         * @brief Makes the logger of a category known to the spdlog registry of the
+         *        module this function is compiled into.
+         * @details Deliberately inline, so that it runs in the calling module. spdlog
+         *          is header-only here, so when geolio is a shared library the library
+         *          and the application each hold their own spdlog registry on the
+         *          platforms that do not merge those symbols -- Windows, typically.
+         *          A category that the application opens must then be registered in
+         *          the registry of the application, otherwise its logger is missing
+         *          from spdlog::get(name), does not follow spdlog::set_level() and
+         *          spdlog::set_pattern(), and does not write to the sinks of the
+         *          application. Where the registries are merged already, the lookup
+         *          below finds the logger and nothing else happens.
+         * @param[in] state The state of the category to adopt.
+         */
+        inline void AdoptCategoryLogger(const std::shared_ptr<CategoryState> &state) {
+            if (spdlog::get(state->name) != nullptr) {
+                return;
+            }
+            try {
+                spdlog::register_logger(state->logger);
+            } catch (const spdlog::spdlog_ex &) {
+                // Another thread registered a logger of that name in between, and the
+                // registry of this module now knows one: that is all this needs.
+            }
+        }
 
         /**
          * @brief Returns the state of the given category without creating it.
@@ -131,8 +170,8 @@ namespace geolio::LOG {
 
         /**
          * @brief Applies the level specification found in an environment variable.
-         * @details Also defined in log.cpp so that the parsed levels are stored in
-         *          the same spdlog registry that creates the category loggers.
+         * @details Also defined in log.cpp, where the levels are kept for the
+         *          categories that are created only after this call.
          * @param[in] variable The environment variable to read.
          */
         void LoadEnvironmentLevels(const char *variable);
@@ -192,23 +231,30 @@ namespace geolio::LOG {
      * @note Prefer the function-local static accessor shown above over an inline
      *       static member: the underlying logger is then created on first use, so
      *       it inherits a default logger (sinks, pattern) installed at startup.
+     * @note Open a category through LOG::Category, or through one of the LOG:: tags,
+     *       rather than by looking its name up with spdlog::get() alone: geolio being
+     *       a shared library and spdlog header-only, the library and the application
+     *       can each have their own spdlog registry (on Windows, and wherever those
+     *       symbols are not merged), and it is LOG::Category that keeps both sides
+     *       working on the same logger.
      */
     class Category {
     public:
         /**
          * @brief Opens the category with the given name, creating it on first use.
-         * @details The underlying spdlog logger is created once per process, as an
-         *          spdlog logger of that name cloned from the default logger, and is
-         *          registered so that spdlog::get(name) finds it afterwards. It
-         *          therefore starts with the sinks, the pattern, the level and the
-         *          flush policy the application has at that moment, and it follows
-         *          every later spdlog::set_level(), spdlog::set_pattern() and
-         *          spdlog::apply_all() call. A logger of that name that already
-         *          exists is reused as is.
+         * @details The logger of the category is created once per process, from the
+         *          default logger of the module that opens the category first -- the
+         *          application, in the intended usage -- so it starts with the sinks,
+         *          the pattern, the level and the flush policy of that module, and it
+         *          follows every later spdlog::set_level(), spdlog::set_pattern() and
+         *          spdlog::apply_all() call of that module. A logger of that name that
+         *          the module already has is reused as is.
          * @param[in] name The category name, used as the spdlog logger name.
          */
-        explicit Category(const std::string_view name)
-                : _state(detail::GetOrCreateCategory(std::string{name})) {
+        explicit Category(const std::string_view name) {
+            const std::string key{name};
+            _state = detail::GetOrCreateCategory(key, spdlog::get(key), spdlog::default_logger());
+            detail::AdoptCategoryLogger(_state);
         }
 
         /**

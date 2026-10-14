@@ -493,4 +493,45 @@ namespace geolio::test
         // it rather than an empty one.
         EXPECT_FALSE(Contains("[]"));
     }
+
+    /**
+     * Test 11: the logger of a category is built from what its opener hands over --
+     * the logger of that name that the opening module already has, or a clone of the
+     * default logger of that module -- and never from a default logger that the
+     * registry looks up on its own. That is what keeps the category of an
+     * application configured like the application when geolio is a shared library
+     * whose spdlog registry is not the one of the application, as on Windows.
+     *
+     * White box on purpose: through the public API the prototype is always the
+     * default logger of the caller, and a single process cannot tell it apart from
+     * the one the library would have looked up on its own.
+     */
+    TEST(LogCategoryTest, CategoryLoggerIsBuiltFromWhatTheCallerHandsOver) {
+        ClearCapture();
+        const auto sink = std::make_shared<spdlog::sinks::ostream_sink_mt>(CaptureStream());
+
+        // A category that does not exist yet is a clone of the prototype, with its
+        // sinks, its flush policy and its level.
+        const auto prototype = std::make_shared<spdlog::logger>("prototype", sink);
+        prototype->set_level(spdlog::level::critical);
+        prototype->flush_on(spdlog::level::debug);
+        prototype->set_pattern("%n|%l|%v");
+
+        const auto state = LOG::detail::GetOrCreateCategory("test.log.prototype", nullptr, prototype);
+        EXPECT_EQ(state->logger->name(), "test.log.prototype");
+        EXPECT_EQ(state->logger->level(), spdlog::level::critical);
+        EXPECT_EQ(state->logger->flush_level(), spdlog::level::debug);
+        EXPECT_EQ(state->logger->sinks(), prototype->sinks());
+
+        // A logger of that name that the module already has is adopted as is.
+        const auto own = std::make_shared<spdlog::logger>("test.log.own", sink);
+        const auto own_state = LOG::detail::GetOrCreateCategory("test.log.own", own, prototype);
+        EXPECT_EQ(own_state->logger, own);
+
+        // And a category that already exists keeps the logger it was created with,
+        // whatever another module hands over later on.
+        const auto again = LOG::detail::GetOrCreateCategory("test.log.prototype", own, own);
+        EXPECT_EQ(again->logger, state->logger);
+        EXPECT_NE(again->logger, own);
+    }
 } // namespace geolio::test
