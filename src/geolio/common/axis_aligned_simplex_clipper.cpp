@@ -265,6 +265,28 @@ namespace geolio
             }
         }
 
+        /* == Report the border facets lying in the plane =================================
+           The branches above only flag the border facets of the cells they generate by
+           cutting, while a border facet lying *exactly* in the plane is always a border facet
+           of the partition: a cut plane may coincide with an edge of the clipped mesh, in
+           which case the cells on its negative side are not cut at all, and when the plane
+           goes through vertices of a cell the section may also collapse onto an edge of an
+           emitted cell that the branch left to GEO::NO_INDEX.
+           Complete the bookkeeping in one pass, so that the property documented by the class
+           -- "a border facet lying exactly in a cut plane is always reported" -- holds for
+           every cell, whatever the branch it comes from.
+           @note An entry is only filled when it is empty: an edge lying in two coincident cut
+           planes keeps naming the first of them, so a flag always stays consistent with the
+           plane it names (see `check_cut_plane_conformance()` in the unit tests). */
+        for (GEO::index_t f = 0; f < this->partitions_.size(); ++f) {
+            for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                if (this->facet_cut_plane_[3*f+lv] != GEO::NO_INDEX)
+                    continue;
+                if (this->coords_[3*f+lv][dim] == t && this->coords_[3*f+(lv+1)%3][dim] == t)
+                    this->facet_cut_plane_[3*f+lv] = this->cut_planes_nb_;
+            }
+        }
+
         ++this->cut_planes_nb_;
         if (this->cut_planes_nb_ > 32)
             LOG::WARN("Cut planes nb == {} > 32, partitions out of uint32_t!", this->cut_planes_nb_);
@@ -737,6 +759,37 @@ namespace geolio
                     facet_cut_plane_[4*c+lv2] = GEO::NO_INDEX;
                     facet_cut_plane_[4*c+lv3] = GEO::NO_INDEX;
                 }
+            }
+        }
+
+        /* == Report the border facets lying in the plane =================================
+           Entry `i` of a cell describes the facet *opposite* its ith vertex (geogram's
+           `MeshCells::facet()` convention), that is the facet spanned by the three other
+           vertices. The branches above only flag the border facets of the cells they generate
+           by cutting, while a border facet lying *exactly* in the plane is always a border
+           facet of the partition: a cut plane may coincide with a facet of the clipped mesh,
+           in which case the cells on its negative side are not cut at all, and when the plane
+           goes through vertices of a cell the section may also collapse onto a facet of an
+           emitted cell that the branch left to GEO::NO_INDEX.
+           Complete the bookkeeping in one pass, so that the property documented by the class
+           -- "a border facet lying exactly in a cut plane is always reported" -- holds for
+           every cell, whatever the branch it comes from.
+           @note An entry is only filled when it is empty: a facet lying in two coincident cut
+           planes keeps naming the first of them, so a flag always stays consistent with the
+           plane it names (see `check_cut_plane_conformance()` in the unit tests). */
+        for (GEO::index_t c = 0; c < partitions_.size(); ++c) {
+            for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                if (facet_cut_plane_[4*c+lv] != GEO::NO_INDEX)
+                    continue;
+
+                bool in_plane = true;
+                for (GEO::index_t lv2 = 0; lv2 < 4 && in_plane; ++lv2) {
+                    if (lv2 != lv)
+                        in_plane = (coords_[4*c+lv2][dim] == t);
+                }
+
+                if (in_plane)
+                    facet_cut_plane_[4*c+lv] = cut_planes_nb_;
             }
         }
 
