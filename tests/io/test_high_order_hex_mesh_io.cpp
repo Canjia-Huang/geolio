@@ -42,6 +42,7 @@ namespace geolio::test
 
             constexpr GEO::index_t order = 5;
             control_grid = std::make_unique<HexControlGrid>(mesh, order);
+            control_grid->control_nodes.set_dimension(DIM);
         }
     };
 
@@ -98,6 +99,7 @@ namespace geolio::test
 
             constexpr GEO::index_t order = 6;
             control_grid = std::make_unique<HexControlGrid>(mesh, order);
+            control_grid->control_nodes.set_dimension(DIM);
         }
     };
 

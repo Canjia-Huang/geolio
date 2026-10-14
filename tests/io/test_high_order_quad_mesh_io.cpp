@@ -41,6 +41,7 @@ namespace geolio::test
             this->mesh.facets.create_quad(0, 1, 2, 3);
 
             this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
+            this->control_grid->control_nodes.set_dimension(HighOrderQuadMeshIO<DimType::value>::DIM);
         }
 
         const GEO::index_t ORDER = 4;
@@ -134,6 +135,7 @@ namespace geolio::test
             this->mesh.facets.connect();
 
             this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
+            this->control_grid->control_nodes.set_dimension(HighOrderQuadMeshIO<DimType::value>::DIM);
         }
 
         const GEO::index_t ORDER = 5;
