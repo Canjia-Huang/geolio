@@ -27,7 +27,7 @@ namespace geolio
      * refined in a best-first order (smallest lower bound first) until each of them can be certified
      * either negative or non-negative, which locates inverted regions without a global minimisation.
      */
-    template<typename CONTROL_GRID>
+    template <typename CONTROL_GRID>
     class MinimumJacobianDeterminant {
         static_assert(std::is_same_v<CONTROL_GRID, QuadControlGrid> || std::is_same_v<CONTROL_GRID, HexControlGrid>);
     public:
@@ -86,7 +86,7 @@ namespace geolio
          * This interface is available only when `CONTROL_GRID` is `QuadControlGrid<3>`.
          */
         void use_absolute_area() requires (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
-            assert(CONTROL_GRID.mesh_vertices_dimension() == 3);
+            assert(control_grid_.mesh_vertices_dimension() == 3);
             use_absolute_area_ = true;
         };
 
@@ -675,7 +675,7 @@ namespace geolio
             Eigen::MatrixXd& grad_det_J
             ) const {
             if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
-                constexpr GEO::index_t DIM = CONTROL_GRID.mesh_vertices_dimension();
+                constexpr GEO::index_t DIM = control_grid_.mesh_vertices_dimension();
                 assert(DIM == 2 || DIM == 3);
 
                 const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_facet();

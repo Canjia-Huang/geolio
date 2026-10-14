@@ -17,7 +17,7 @@ namespace geolio::test
         static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
 
         GEO::Mesh mesh;
-        std::unique_ptr<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>> control_grid;
+        std::unique_ptr<QuadControlGrid> control_grid;
     };
 
     template <typename DimType>
@@ -40,7 +40,7 @@ namespace geolio::test
             }
             this->mesh.facets.create_quad(0, 1, 2, 3);
 
-            this->control_grid = std::make_unique<QuadControlGrid<DimType::value, HighOrderQuadMeshIO<DimType::value>::QUANTITIES_DIM>>(this->mesh, ORDER);
+            this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
         }
 
         const GEO::index_t ORDER = 4;
@@ -51,14 +51,14 @@ namespace geolio::test
     TYPED_TEST(SingleQuadHighOrderQuadMeshIO, version_2_2) {
         constexpr GEO::index_t DIM = TypeParam::value;
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_edge_nd(0, 1, 1));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_edge_nd(0, 1, 1));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
                 p[2] += 0.2;
         }
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(0, 1, 3));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_nd(0, 1, 3));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
@@ -73,23 +73,22 @@ namespace geolio::test
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath.string(), "2.2"));
 
         /* Load */
-        GEO::Mesh loaded_mesh;
-        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
-        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_mesh, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        std::unique_ptr<QuadControlGrid> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_control_grid_ptr));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 
     TYPED_TEST(SingleQuadHighOrderQuadMeshIO, version_4_1) {
         constexpr GEO::index_t DIM = TypeParam::value;
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_edge_nd(0, 1, 1));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_edge_nd(0, 1, 1));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
                 p[2] += 0.2;
         }
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(0, 1, 3));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_nd(0, 1, 3));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
@@ -103,10 +102,9 @@ namespace geolio::test
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath.string(), "4.1"));
 
         /* Load */
-        GEO::Mesh loaded_mesh;
-        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
-        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_mesh, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        std::unique_ptr<QuadControlGrid> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_control_grid_ptr));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 
     template <typename DimType>
@@ -135,7 +133,7 @@ namespace geolio::test
             this->mesh.facets.create_quad(5, 2, 1, 4);
             this->mesh.facets.connect();
 
-            this->control_grid = std::make_unique<QuadControlGrid<DimType::value, HighOrderQuadMeshIO<DimType::value>::QUANTITIES_DIM>>(this->mesh, ORDER);
+            this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
         }
 
         const GEO::index_t ORDER = 5;
@@ -146,21 +144,21 @@ namespace geolio::test
     TYPED_TEST(TwoQuadHighOrderQuadMeshIO, version_2_2) {
         constexpr GEO::index_t DIM = TypeParam::value;
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_edge_nd(0, 1, 3));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_edge_nd(0, 1, 3));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
                 p[2] += 0.2;
         }
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(0, 2, 2));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_nd(0, 2, 2));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
                 p[2] -= 0.2;
         }
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(1, 1, 4));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_nd(1, 1, 4));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
@@ -174,30 +172,29 @@ namespace geolio::test
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath.string(), "2.2"));
 
         /* Load */
-        GEO::Mesh loaded_mesh;
-        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
-        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_mesh, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        std::unique_ptr<QuadControlGrid> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_control_grid_ptr));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 
     TYPED_TEST(TwoQuadHighOrderQuadMeshIO, version_4_1) {
         constexpr GEO::index_t DIM = TypeParam::value;
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_edge_nd(0, 1, 3));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_edge_nd(0, 1, 3));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
                 p[2] += 0.2;
         }
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(0, 2, 2));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_nd(0, 2, 2));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
                 p[2] -= 0.2;
         }
         {
-            auto& p = this->control_grid->control_node(this->control_grid->facet_nd(1, 1, 4));
+            auto& p = this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_nd(1, 1, 4));
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
             if (DIM == 3)
@@ -211,9 +208,8 @@ namespace geolio::test
         EXPECT_TRUE(high_order_quad_mesh_save(*(this->control_grid), filepath.string(), "4.1"));
 
         /* Load */
-        GEO::Mesh loaded_mesh;
-        std::unique_ptr<QuadControlGrid<DIM>> loaded_control_grid_ptr;
-        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_mesh, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        std::unique_ptr<QuadControlGrid> loaded_control_grid_ptr;
+        ASSERT_TRUE(high_order_quad_mesh_load(filepath.string(), loaded_control_grid_ptr));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 }

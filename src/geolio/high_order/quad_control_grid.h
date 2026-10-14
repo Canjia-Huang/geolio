@@ -313,7 +313,6 @@ namespace geolio
          *
          * @param[in] f Facet index (0..mesh_.facets.nb()-1)
          * @return Unit-length reference normal vector in physical space.
-         * @pre DIM == 3
          * @pre f < mesh_.facets.nb()
          */
         [[nodiscard]] GEO::vec3 compute_facet_reference_normal(
@@ -348,13 +347,11 @@ namespace geolio
          *                       - `QualityType::MIPS`: penalizes shear and anisotropic stretching, [1, inf], best: 1
          * @return the requested quality value at the given parameter point
          */
-        template<GEO::index_t DIM>
         [[nodiscard]] double compute_facet_uv_measure(
             const GEO::index_t f,
             const GEO::vec2& uv,
             const MeasureType quality_type
             ) const {
-            assert(DIM <= this->control_nodes.dimension());
             assert(f < this->control_nodes.mesh().facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -425,13 +422,11 @@ namespace geolio
          *                      - `gradient[2*N+0] = d(detJ)/dP_N.x`
          *                      - `gradient[2*N+1] = d(detJ)/dP_N.y`
          */
-        template<GEO::index_t DIM>
         void compute_facet_uv_detJ_gradient(
             const GEO::index_t f,
             const GEO::vec2& uv,
             std::vector<double>& gradient
             ) const {
-            assert(DIM <= this->control_nodes.dimension());
             assert(f < this->control_nodes.mesh().facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -506,13 +501,11 @@ namespace geolio
          *       compute the appropriate analytical gradient for each case using the Lagrange
          *       basis derivatives returned by compute_facet_uv_dudv.
          */
-        template<GEO::index_t DIM>
         void compute_facet_uv_absolute_area_sq_gradient(
             const GEO::index_t f,
             const GEO::vec2& uv,
             std::vector<double>& gradient
             ) const {
-            assert(DIM <= this->control_nodes.dimension());
             assert(f < this->control_nodes.mesh().facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -591,11 +584,9 @@ namespace geolio
          *            facet, in the same order as `quad_mesh_.facets`.
          * @note The caller is responsible for providing storage for all facets.
          */
-        template<GEO::index_t DIM>
         void compute_facets_area(
             std::vector<double>& areas
             ) const {
-            assert(DIM <= this->control_nodes.dimension());
             areas.resize(this->control_nodes.mesh().facets.nb());
 
             /*
@@ -603,13 +594,13 @@ namespace geolio
              * DIM == 3: appro n = p+1 or p+2
              */
             std::vector<std::pair<GEO::vec2, double>> points_and_weights;
-            geolio::get_Gauss_Legendre_quadrature_quad(std::ceil(this->order_ + DIM-2), points_and_weights);
+            geolio::get_Gauss_Legendre_quadrature_quad(std::ceil(this->order_ + mesh_v_dim_-2), points_and_weights);
 
             for (const auto& f : this->control_nodes.mesh().facets) {
                 auto& S = areas[f];
                 S = 0;
                 for (const auto& [uv, w] : points_and_weights)
-                    S += w * std::abs(compute_facet_uv_measure<DIM>(f, uv, QuadControlGrid::MeasureType::DET_JACOBIAN));
+                    S += w * std::abs(compute_facet_uv_measure(f, uv, QuadControlGrid::MeasureType::DET_JACOBIAN));
 
             }
         }

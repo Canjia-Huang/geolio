@@ -738,7 +738,6 @@ namespace geolio
         return true;
     }
 
-    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
     bool high_order_quad_mesh_save(
         const QuadControlGrid& control_grid,
         const std::string& filepath,

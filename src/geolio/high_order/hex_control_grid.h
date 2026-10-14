@@ -428,19 +428,17 @@ namespace geolio
          *               - columns 0, 1, 2 correspond to u, v, w derivatives
          *               - rows 0, 1, 2 correspond to x, y, z physical coordinates
          */
-        template<GEO::index_t DIM>
         void compute_cell_uvw_Jacobian(
             const GEO::index_t c,
             const GEO::vec3& uvw,
             Eigen::Matrix3d& J
             ) const {
-            assert(DIM <= control_nodes.dimension());
             assert(c < this->control_nodes.mesh().cells.nb());
             assert(uvw.x >= 0 && uvw.x <= 1);
             assert(uvw.y >= 0 && uvw.y <= 1);
             assert(uvw.z >= 0 && uvw.z <= 1);
 
-            GEO::vecng<DIM, double> du, dv, dw;
+            GEO::vec3 du, dv, dw;
             std::vector<double> Bu, Bv, Bw, dBu, dBv, dBw;
             compute_cell_uvw_dudvdw(c, uvw, du, dv, dw, Bu, Bv, Bw, dBu, dBv, dBw);
 

@@ -255,7 +255,7 @@ namespace geolio::test
         static_assert(MESH_DIM == 2 || MESH_DIM == 3);
     protected:
         static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
-        using Grid = QuadControlGrid<MESH_DIM, QUANTITIES_DIM>;
+        using Grid = QuadControlGrid;
 
         /* == meshes =========================================================================================== */
 
@@ -288,7 +288,7 @@ namespace geolio::test
          * @param[in] nd Global index of the control node.
          */
         void jiggle_control_node(const GEO::index_t nd) {
-            auto& p = control_grid->control_node(nd);
+            auto& p = control_grid->control_nodes.point<DIM>(nd);
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += JITTER_AMPLITUDE*GEO::Numeric::random_float32();
         }
@@ -367,7 +367,7 @@ namespace geolio::test
                     const GEO::vec2 uv(node_positions[i], node_positions[j]);
                     const auto& nd = control_grid->facet_nd(f, i, j);
                     EXPECT_NEAR(
-                        GEO::distance2(control_grid->compute_facet_uv_position(f, uv), control_grid->control_node(nd)),
+                        GEO::distance2(control_grid->compute_facet_uv_position<DIM>(f, uv), control_grid->control_nodes.point<DIM>(nd)),
                         0.0,
                         EXACT_DIST2_TOL
                         );
@@ -384,7 +384,7 @@ namespace geolio::test
                 GEO::vecng<DIM, double> reference;
                 reference[0] = uv.x;
                 reference[1] = uv.y;
-                EXPECT_NEAR(GEO::distance2(control_grid->compute_facet_uv_position(f, uv), reference), 0.0, EXACT_DIST2_TOL);
+                EXPECT_NEAR(GEO::distance2(control_grid->compute_facet_uv_position<DIM>(f, uv), reference), 0.0, EXACT_DIST2_TOL);
             }
         }
 
@@ -406,7 +406,7 @@ namespace geolio::test
             reference[0] = uv.x;
             reference[1] = uv.y;
 
-            EXPECT_GT(GEO::distance2(control_grid->compute_facet_uv_position(f, uv), reference), 0.0)
+            EXPECT_GT(GEO::distance2(control_grid->compute_facet_uv_position<DIM>(f, uv), reference), 0.0)
                 << "the jitter of control node (" << i << ", " << j << ") must move the mapping";
         }
 
@@ -431,12 +431,12 @@ namespace geolio::test
                     const auto derivatives = evaluate_derivatives(f, GEO::vec2(u, v));
 
                     const GEO::vecng<DIM, double> du_fd = (
-                        control_grid->compute_facet_uv_position(f, GEO::vec2(u + FINITE_DIFF_STEP, v)) -
-                        control_grid->compute_facet_uv_position(f, GEO::vec2(u - FINITE_DIFF_STEP, v))
+                        control_grid->compute_facet_uv_position<DIM>(f, GEO::vec2(u + FINITE_DIFF_STEP, v)) -
+                        control_grid->compute_facet_uv_position<DIM>(f, GEO::vec2(u - FINITE_DIFF_STEP, v))
                         ) / (2.0*FINITE_DIFF_STEP);
                     const GEO::vecng<DIM, double> dv_fd = (
-                        control_grid->compute_facet_uv_position(f, GEO::vec2(u, v + FINITE_DIFF_STEP)) -
-                        control_grid->compute_facet_uv_position(f, GEO::vec2(u, v - FINITE_DIFF_STEP))
+                        control_grid->compute_facet_uv_position<DIM>(f, GEO::vec2(u, v + FINITE_DIFF_STEP)) -
+                        control_grid->compute_facet_uv_position<DIM>(f, GEO::vec2(u, v - FINITE_DIFF_STEP))
                         ) / (2.0*FINITE_DIFF_STEP);
 
                     EXPECT_NEAR(GEO::distance2(derivatives.du, du_fd), 0.0, FINITE_DIFF_DIST2_TOL);
@@ -462,23 +462,11 @@ namespace geolio::test
             GEO::Mesh mesh_out(DIM);
             GEO::Attribute<GEO::index_t> mesh_out_v_idx(mesh_out.vertices.attributes(), "idx");
 
-            mesh_out.vertices.create_vertices(control_grid->control_nodes_nb());
+            mesh_out.vertices.create_vertices(control_grid->control_nodes.nb());
             for (const auto v : mesh_out.vertices) {
-                mesh_out.vertices.point<DIM>(v) = control_grid->control_node(v);
+                mesh_out.vertices.point<DIM>(v) = control_grid->control_nodes.point<DIM>(v);
                 mesh_out_v_idx[v] = v;
             }
-
-            // if (const auto& v_quantities = control_grid->control_nodes_quantities();
-            //     v_quantities.is_bound()
-            //     ) {
-            //     const auto dim = v_quantities.dimension();
-            //     GEO::Attribute<double> mesh_out_v_quantities;
-            //     mesh_out_v_quantities.create_vector_attribute(mesh_out.vertices.attributes(), "quantities", dim);
-            //     for (GEO::index_t v = 0, v_end = control_grid->control_nodes_nb(); v < v_end; ++v) {
-            //         for (GEO::index_t d = 0; d < dim; ++d)
-            //             mesh_out_v_quantities[dim*v+d] = v_quantities[dim*v+d];
-            //     }
-            // }
 
             EXPECT_TRUE(mesh_out.save(artifact_path(suffix)));
         }
@@ -500,7 +488,7 @@ namespace geolio::test
             GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
             GEO::Attribute<GEO::index_t> mesh_out_f_facet(mesh_out.facets.attributes(), "facet");
 
-            control_grid->append_discretized_high_order_facets(
+            control_grid->append_discretized_high_order_facets<DIM>(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
                 &mesh_out_v_facet,
@@ -551,7 +539,7 @@ namespace geolio::test
             this->create_vertices(UNIT_QUAD_CORNERS);
             this->mesh.facets.create_quad(0, 1, 2, 3);
 
-            this->control_grid = std::make_unique<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>(this->mesh, ORDER);
+            this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
         }
 
         /**
@@ -560,8 +548,8 @@ namespace geolio::test
          * @param[in] offset Offset added to each node of the line.
          */
         void offset_line(const GEO::index_t i, const GEO::vecng<DIM, double>& offset) {
-            for (GEO::index_t j = 0; j < this->control_grid->control_nodes_nb_per_edge(); ++j)
-                this->control_grid->control_node(this->control_grid->facet_nd(FACET, i, j)) += offset;
+            for (GEO::index_t j = 0; j < this->control_grid->control_nodes.nb_per_edge(); ++j)
+                this->control_grid->control_nodes.template point<DIM>(this->control_grid->facet_nd(FACET, i, j)) += offset;
         }
     };
 
@@ -616,7 +604,7 @@ namespace geolio::test
             GEO::index_t new_e = mesh_out.edges.create_edges(POINTS_NB);
             for (GEO::index_t i = 0; i < POINTS_NB; ++i) {
                 const GEO::vec2 uv(GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-                const auto position_all = this->control_grid->compute_facet_uv_position(FACET, uv);
+                const auto position_all = this->control_grid->template compute_facet_uv_position<3>(FACET, uv);
                 const auto normal = this->control_grid->compute_facet_uv_normal(FACET, uv);
 
                 // The facet normal is the reversed cross product of the two tangents ...
@@ -643,7 +631,7 @@ namespace geolio::test
                 ++new_e;
             }
 
-            this->control_grid->append_discretized_high_order_facets(mesh_out, BACKGROUND_RESOLUTION);
+            this->control_grid->template append_discretized_high_order_facets<3>(mesh_out, BACKGROUND_RESOLUTION);
             EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
         }
     }
@@ -665,7 +653,7 @@ namespace geolio::test
         GEO::index_t new_e = mesh_out.edges.create_edges(2*POINTS_NB);
         for (const auto& uv : grid_unit_samples_2d(RESOLUTION)) {
             const auto derivatives = this->evaluate_derivatives(FACET, uv);
-            const auto position_all = this->control_grid->compute_facet_uv_position(FACET, uv);
+            const auto position_all = this->control_grid->template compute_facet_uv_position<TypeParam::value>(FACET, uv);
 
             const auto position = GEO::Memory::pointer_as_reference<GEO::vecng<TypeParam::value, double>>(position_all.data());
             mesh_out.vertices.point<TypeParam::value>(new_v) = position;
@@ -682,7 +670,7 @@ namespace geolio::test
             new_e += 2;
         }
 
-        this->control_grid->append_discretized_high_order_facets(mesh_out, BACKGROUND_RESOLUTION);
+        this->control_grid->template append_discretized_high_order_facets<TypeParam::value>(mesh_out, BACKGROUND_RESOLUTION);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
     }
 
@@ -739,8 +727,8 @@ namespace geolio::test
 
     TYPED_TEST(SingleQuadControlGridTest, measure_degenerate) {
         // Collapse two control nodes of the same line onto each other.
-        this->control_grid->control_node(this->control_grid->facet_nd(FACET, 2, 2)) =
-            this->control_grid->control_node(this->control_grid->facet_nd(FACET, 2, 1));
+        this->control_grid->control_nodes.template point<TypeParam::value>(this->control_grid->facet_nd(FACET, 2, 2)) =
+            this->control_grid->control_nodes.template point<TypeParam::value>(this->control_grid->facet_nd(FACET, 2, 1));
 
         this->expect_mapping_interpolates_control_nodes(FACET);
 
@@ -787,7 +775,7 @@ namespace geolio::test
             this->mesh.facets.create_quad(5, 2, 1, 4);
             this->mesh.facets.connect();
 
-            this->control_grid = std::make_unique<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>(this->mesh, ORDER);
+            this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
         }
     };
 
