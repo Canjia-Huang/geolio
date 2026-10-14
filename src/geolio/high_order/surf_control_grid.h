@@ -18,7 +18,7 @@ namespace geolio
         SurfaceControlGrid(const GEO::index_t mesh_v_dimension, const GEO::index_t order)
             : ControlGrid(mesh_v_dimension, order)
         {
-            assert(this->mesh_v_dim_ == 2 || this->mesh_v_dim_ == 3);
+            assert(this->mesh_dimension_ == 2 || this->mesh_dimension_ == 3);
         }
 
         /**

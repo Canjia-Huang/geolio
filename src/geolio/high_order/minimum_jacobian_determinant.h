@@ -41,41 +41,7 @@ namespace geolio
             ): control_grid_(control_grid),
                ORDER_(control_grid.order())
         {
-            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
-                if (use_absolute_area_)
-                    n_ = 4*ORDER_-2;
-                else
-                    n_ = 2*ORDER_-1;
-                N1_ = n_+1;
-                N2_ = N1_*N1_;
-                CORNER_INDICES_.resize(4);
-                CORNER_INDICES_[0] = {0         + 0*N1_      };
-                CORNER_INDICES_[1] = {(N1_-1)   + 0*N1_      };
-                CORNER_INDICES_[2] = {(N1_-1)   + (N1_-1)*N1_};
-                CORNER_INDICES_[3] = {0         + (N1_-1)*N1_};
-            }
-            else {
-                n_ = 3*ORDER_-1;
-                N1_ = n_+1;
-                N2_ = N1_*N1_;
-                N3_ = N1_*N1_*N1_;
-                CORNER_INDICES_.resize(8);
-                CORNER_INDICES_[0] = {0         + 0*N1_         + 0*N2_};
-                CORNER_INDICES_[1] = {(N1_-1)   + 0*N1_         + 0*N2_};
-                CORNER_INDICES_[2] = {0         + (N1_-1)*N1_   + 0*N2_};
-                CORNER_INDICES_[3] = {(N1_-1)   + (N1_-1)*N1_   + 0*N2_};
-                CORNER_INDICES_[4] = {0         + 0*N1_         + (N1_-1)*N2_};
-                CORNER_INDICES_[5] = {(N1_-1)   + 0*N1_         + (N1_-1)*N2_};
-                CORNER_INDICES_[6] = {0         + (N1_-1)*N1_   + (N1_-1)*N2_};
-                CORNER_INDICES_[7] = {(N1_-1)   + (N1_-1)*N1_   + (N1_-1)*N2_};
-            }
-
-            samples_1D_.reserve(N1_);
-            for (GEO::index_t i = 0; i < N1_; ++i)
-                samples_1D_.push_back(static_cast<double>(i)/n_);
-
-            pre_compute_Lagrange_to_Bernstein_matrix();
-            pre_compute_subdivision_matrices();
+            initialize_resolution();
         }
 
         /**
@@ -86,8 +52,11 @@ namespace geolio
          * This interface is available only when `CONTROL_GRID` is `QuadControlGrid<3>`.
          */
         void use_absolute_area() requires (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
-            assert(control_grid_.mesh_vertices_dimension() == 3);
+            assert(control_grid_.mesh_dimension() == 3);
+            if (use_absolute_area_)
+                return;
             use_absolute_area_ = true;
+            initialize_resolution();
         };
 
         /**
@@ -428,6 +397,45 @@ namespace geolio
             return combinations(n, j) * std::pow(u, j) * std::pow(1.0-u, n-j);
         }
 
+        void initialize_resolution(
+            ) {
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
+                if (use_absolute_area_)
+                    n_ = 4*ORDER_-2;
+                else
+                    n_ = 2*ORDER_-1;
+                N1_ = n_+1;
+                N2_ = N1_*N1_;
+                CORNER_INDICES_.resize(4);
+                CORNER_INDICES_[0] = {0         + 0*N1_      };
+                CORNER_INDICES_[1] = {(N1_-1)   + 0*N1_      };
+                CORNER_INDICES_[2] = {(N1_-1)   + (N1_-1)*N1_};
+                CORNER_INDICES_[3] = {0         + (N1_-1)*N1_};
+            }
+            else {
+                n_ = 3*ORDER_-1;
+                N1_ = n_+1;
+                N2_ = N1_*N1_;
+                N3_ = N1_*N1_*N1_;
+                CORNER_INDICES_.resize(8);
+                CORNER_INDICES_[0] = {0         + 0*N1_         + 0*N2_};
+                CORNER_INDICES_[1] = {(N1_-1)   + 0*N1_         + 0*N2_};
+                CORNER_INDICES_[2] = {0         + (N1_-1)*N1_   + 0*N2_};
+                CORNER_INDICES_[3] = {(N1_-1)   + (N1_-1)*N1_   + 0*N2_};
+                CORNER_INDICES_[4] = {0         + 0*N1_         + (N1_-1)*N2_};
+                CORNER_INDICES_[5] = {(N1_-1)   + 0*N1_         + (N1_-1)*N2_};
+                CORNER_INDICES_[6] = {0         + (N1_-1)*N1_   + (N1_-1)*N2_};
+                CORNER_INDICES_[7] = {(N1_-1)   + (N1_-1)*N1_   + (N1_-1)*N2_};
+            }
+
+            samples_1D_.resize(N1_);
+            for (GEO::index_t i = 0; i < N1_; ++i)
+                samples_1D_[i] = static_cast<double>(i)/n_;
+
+            pre_compute_Lagrange_to_Bernstein_matrix();
+            pre_compute_subdivision_matrices();
+        }
+
         /**
          * Compute and cache the tensor-product Lagrange to Bernstein transforms used by the determinant
          * bounding routines: `M_` (inverse of the Bernstein basis evaluated at `samples_1D_`), the
@@ -664,9 +672,6 @@ namespace geolio
          * `ControlGrid`, so the matrix has `DIM * control_points_nb_per_facet()` columns for a facet grid
          * and `3 * control_points_nb_per_cell()` columns for a hexahedral grid.
          *
-         * @note The definition of this member is currently commented out in
-         * minimum_jacobian_determinant.cpp, so calling it does not link.
-         *
          * @param[in] c Index of the control grid cell (hexahedral grid) or facet (quad grid) to evaluate.
          * @param[out] grad_det_J Output matrix of sampled determinant gradients.
          */
@@ -675,10 +680,10 @@ namespace geolio
             Eigen::MatrixXd& grad_det_J
             ) const {
             if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
-                constexpr GEO::index_t DIM = control_grid_.mesh_vertices_dimension();
+                const GEO::index_t DIM = control_grid_.mesh_dimension();
                 assert(DIM == 2 || DIM == 3);
 
-                const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_facet();
+                const GEO::index_t CONTROL_POINTS_NB = control_grid_.control_nodes.nb_per_facet();
                 grad_det_J = Eigen::MatrixXd::Zero(N2_, DIM*CONTROL_POINTS_NB);
                 for (GEO::index_t j = 0; j < N1_; ++j) {
                     for (GEO::index_t i = 0; i < N1_; ++i) {
@@ -697,7 +702,7 @@ namespace geolio
                 }
             }
             else {
-                const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_cell();
+                const GEO::index_t CONTROL_POINTS_NB = control_grid_.control_nodes.nb_per_cell();
                 grad_det_J = Eigen::MatrixXd::Zero(N3_, 3*CONTROL_POINTS_NB);
                 for (GEO::index_t k = 0; k < N1_; ++k) {
                     for (GEO::index_t j = 0; j < N1_; ++j) {

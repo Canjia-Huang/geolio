@@ -218,7 +218,7 @@ namespace geolio
             const GEO::index_t f,
             const GEO::vec2& uv
             ) {
-            assert(this->mesh_v_dim_ == 3);
+            assert(this->mesh_dimension_ == 3);
             assert(f < this->control_nodes.mesh().facets.nb());
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
@@ -318,7 +318,7 @@ namespace geolio
         [[nodiscard]] GEO::vec3 compute_facet_reference_normal(
             const GEO::index_t f
             ) const {
-            assert(this->mesh_v_dim_ == 3);
+            assert(this->mesh_dimension_ == 3);
             assert(f < this->control_nodes.mesh().facets.nb());
             const auto nd0 = this->control_nodes.point<3>(this->facet_vertex_nd(f, 0));
             const auto nd1 = this->control_nodes.point<3>(this->facet_vertex_nd(f, 1));
@@ -358,7 +358,7 @@ namespace geolio
 
             double det_J = 0;
             double du_length, dv_length;
-            if (this->mesh_v_dim_ == 2) {
+            if (this->mesh_dimension_ == 2) {
                 GEO::vec2 du, dv;
                 std::vector<double> Bu, Bv, dBu, dBv;
                 this->compute_facet_uv_dudv(f, uv, du, dv, Bu, Bv, dBu, dBv);
@@ -367,7 +367,7 @@ namespace geolio
                 du_length = du.length();
                 dv_length = dv.length();
             }
-            else if (this->mesh_v_dim_ == 3) {
+            else if (this->mesh_dimension_ == 3) {
                 GEO::vec3 du, dv;
                 std::vector<double> Bu, Bv, dBu, dBv;
                 this->compute_facet_uv_dudv(f, uv, du, dv, Bu, Bv, dBu, dBv);
@@ -431,7 +431,7 @@ namespace geolio
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
 
-            if (this->mesh_v_dim_ == 2) {
+            if (this->mesh_dimension_ == 2) {
                 gradient.resize(2 * this->control_nodes.nb_per_facet());
 
                 GEO::vec2 du, dv;
@@ -451,7 +451,7 @@ namespace geolio
                     }
                 }
             }
-            else if (this->mesh_v_dim_ == 3) { // gradient 0.5 * \Vert cross(du, dv) \Vert^2
+            else if (this->mesh_dimension_ == 3) { // gradient 0.5 * \Vert cross(du, dv) \Vert^2
                 gradient.resize(3 * this->control_nodes.nb_per_facet());
 
                 GEO::vec3 du, dv;
@@ -510,7 +510,7 @@ namespace geolio
             assert(uv.x >= 0 && uv.x <= 1);
             assert(uv.y >= 0 && uv.y <= 1);
 
-            if (this->mesh_v_dim_ == 2) {
+            if (this->mesh_dimension_ == 2) {
                 gradient.resize(2 * this->control_nodes.nb_per_facet());
 
                 GEO::vec2 du, dv;
@@ -537,7 +537,7 @@ namespace geolio
                     }
                 }
             }
-            else if (this->mesh_v_dim_ == 3) {
+            else if (this->mesh_dimension_ == 3) {
                 gradient.resize(3 * this->control_nodes.nb_per_facet());
 
                 GEO::vec3 du, dv;
@@ -594,7 +594,7 @@ namespace geolio
              * DIM == 3: appro n = p+1 or p+2
              */
             std::vector<std::pair<GEO::vec2, double>> points_and_weights;
-            geolio::get_Gauss_Legendre_quadrature_quad(std::ceil(this->order_ + mesh_v_dim_-2), points_and_weights);
+            geolio::get_Gauss_Legendre_quadrature_quad(std::ceil(this->order_ + mesh_dimension_-2), points_and_weights);
 
             for (const auto& f : this->control_nodes.mesh().facets) {
                 auto& S = areas[f];
@@ -677,9 +677,9 @@ namespace geolio
             }
 
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
-            const GEO::index_t QUANTITIES_DIM = DIM-mesh_v_dim_;
+            const GEO::index_t QUANTITIES_DIM = DIM-mesh_dimension_;
 
-            mesh_out.vertices.set_dimension(mesh_v_dim_);
+            mesh_out.vertices.set_dimension(mesh_dimension_);
             GEO::Attribute<double> mesh_out_v_quantities;
             if (QUANTITIES_DIM > 0)
                 mesh_out_v_quantities.create_vector_attribute(
@@ -710,10 +710,10 @@ namespace geolio
                         const GEO::vec2 uv(u, v);
 
                         const auto& p = compute_facet_uv_position<DIM>(f, uv);
-                        std::copy_n(p.data(), mesh_v_dim_, mesh_out.vertices.point_ptr(new_v));
+                        std::copy_n(p.data(), mesh_dimension_, mesh_out.vertices.point_ptr(new_v));
 
                         if (QUANTITIES_DIM > 0)
-                            std::copy_n(&p[mesh_v_dim_], QUANTITIES_DIM, &mesh_out_v_quantities[QUANTITIES_DIM*new_v]);
+                            std::copy_n(&p[mesh_dimension_], QUANTITIES_DIM, &mesh_out_v_quantities[QUANTITIES_DIM*new_v]);
 
                         if (mesh_out_v_facet != nullptr)
                             (*mesh_out_v_facet)[new_v] = f;
@@ -803,7 +803,7 @@ namespace geolio
          * @brief Build global control-node coordinates and cell-to-control-node connectivity.
          */
         void initialize_control_nodes(const GEO::Mesh& mesh) override {
-            assert(control_nodes.dimension() >= mesh_v_dim_);
+            assert(control_nodes.dimension() >= mesh_dimension_);
             assert(this->node_positions_1D_.size() == this->order_+1);
 
             /* == Get all shared edges ============================================================================= */
@@ -830,10 +830,10 @@ namespace geolio
 
             /* == For vertices == */
             for (const auto& v : mesh.vertices)
-                std::copy_n(mesh.vertices.point_ptr(v), this->mesh_v_dim_, this->control_nodes.point_ptr(new_v++));
+                std::copy_n(mesh.vertices.point_ptr(v), this->mesh_dimension_, this->control_nodes.point_ptr(new_v++));
 
             /* == For edges == */
-            if (mesh_v_dim_ == 2) {
+            if (mesh_dimension_ == 2) {
                 for (auto& [edge, control_vertices] : quad_edges_control_points) {
                     const auto ep0 = mesh.vertices.point<2>(edge.first);
                     const auto ep1 = mesh.vertices.point<2>(edge.second);
@@ -846,7 +846,7 @@ namespace geolio
                 }
             }
             else {
-                assert(mesh_v_dim_ == 3);
+                assert(mesh_dimension_ == 3);
                 for (auto& [edge, control_vertices] : quad_edges_control_points) {
                     const auto ep0 = mesh.vertices.point(edge.first);
                     const auto ep1 = mesh.vertices.point(edge.second);
@@ -862,7 +862,7 @@ namespace geolio
             /* == For facets == */
             std::vector<std::vector<GEO::index_t>> quad_facets_control_points(mesh.facets.nb()); /*
                 [f] -> the idx of control points of this facet  */
-            if (mesh_v_dim_ == 2) {
+            if (mesh_dimension_ == 2) {
                 for (const auto& f : mesh.facets) {
                     auto& f_control_points = quad_facets_control_points[f];
                     f_control_points.reserve(this->control_nodes.internal_nb_per_facet());
@@ -889,7 +889,7 @@ namespace geolio
                 }
             }
             else {
-                assert(mesh_v_dim_ == 3);
+                assert(mesh_dimension_ == 3);
                 for (const auto& f : mesh.facets) {
                     auto& f_control_points = quad_facets_control_points[f];
                     f_control_points.reserve(this->control_nodes.internal_nb_per_facet());

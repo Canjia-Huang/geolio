@@ -554,7 +554,7 @@ namespace geolio
         const QuadControlGrid& control_grid,
         std::ofstream& out
         ) {
-        const GEO::index_t mesh_v_dim = control_grid.mesh_vertices_dimension();
+        const GEO::index_t mesh_v_dim = control_grid.mesh_dimension();
         assert(mesh_v_dim == 2 || mesh_v_dim == 3);
 
         /* == Mesh format ========================================================================================== */
@@ -619,7 +619,7 @@ namespace geolio
         const QuadControlGrid& control_grid,
         std::ofstream& out
         ) {
-        const GEO::index_t mesh_v_dim = control_grid.mesh_vertices_dimension();
+        const GEO::index_t mesh_v_dim = control_grid.mesh_dimension();
         assert(mesh_v_dim == 2 || mesh_v_dim == 3);
 
         /* == Mesh format ========================================================================================== */

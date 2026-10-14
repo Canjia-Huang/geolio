@@ -966,7 +966,7 @@ namespace geolio
          * @brief Build global control-node coordinates and cell-to-control-node connectivity.
          */
         void initialize_control_nodes(const GEO::Mesh& mesh) override {
-            assert(control_nodes.dimension() >= mesh_v_dim_);
+            assert(control_nodes.dimension() >= mesh_dimension_);
             assert(this->node_positions_1D_.size() == this->order_+1);
 
             /* == Get all shared edges and facets ================================================================== */
@@ -1020,7 +1020,7 @@ namespace geolio
 
             /* == For vertices == */
             for (const auto& v : mesh.vertices)
-                std::copy_n(mesh.vertices.point_ptr(v), this->mesh_v_dim_, this->control_nodes.point_ptr(new_v++));
+                std::copy_n(mesh.vertices.point_ptr(v), this->mesh_dimension_, this->control_nodes.point_ptr(new_v++));
 
             /* == For edges == */
             for (auto& [edge, control_vertices] : hex_edges_control_points) {

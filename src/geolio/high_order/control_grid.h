@@ -164,7 +164,7 @@ namespace geolio
         ControlGrid(const GEO::index_t mesh_v_dim, const GEO::index_t order)
             : control_nodes(mesh_v_dim, order),
               attribute_id_(generate_random_string(22)),
-              mesh_v_dim_(mesh_v_dim),
+              mesh_dimension_(mesh_v_dim),
               order_(order)
         {
             initialize_node_positions_1D();
@@ -185,7 +185,7 @@ namespace geolio
          * @brief Get the mesh vertex coordinate dimension.
          * @return Mesh vertex dimension.
          */
-        GEO::index_t mesh_vertices_dimension() const { return mesh_v_dim_; }
+        GEO::index_t mesh_dimension() const { return mesh_dimension_; }
 
         enum class BasisFunctionType {
             BEZIER, // not support yet
@@ -231,7 +231,7 @@ namespace geolio
     protected:
         const std::string attribute_id_; // unique id
 
-        const GEO::index_t mesh_v_dim_;
+        const GEO::index_t mesh_dimension_;
         const GEO::index_t order_;
 
         /* ========================================================================================================= */
