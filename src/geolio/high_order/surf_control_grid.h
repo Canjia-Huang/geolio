@@ -134,7 +134,7 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t facet_nd(const GEO::index_t f, const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(f < this->control_nodes.mesh_.facets.nb());
+            assert(f < this->control_nodes.mesh().facets.nb());
             return this->element_control_nodes_[f*this->control_nodes.nb_per_facet() + this->facet_lnd(lv0, lv1)];
         }
 

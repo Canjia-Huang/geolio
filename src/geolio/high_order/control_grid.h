@@ -12,6 +12,7 @@
 namespace geolio
 {
     class QuadControlGrid;
+    class HexControlGrid;
 
     class ControlNodes {
     public:
@@ -97,6 +98,7 @@ namespace geolio
         GEO::Mesh mesh_;
 
         friend class QuadControlGrid;
+        friend class HexControlGrid;
     };
 
     class ControlGrid {
@@ -119,6 +121,10 @@ namespace geolio
          * @brief Virtual destructor.
          */
         virtual ~ControlGrid() = default;
+
+        GEO::index_t order() const { return order_; }
+
+        GEO::index_t mesh_vertices_dimension() const { return mesh_v_dim_; }
 
         enum class BasisFunctionType {
             BEZIER, // not support yet
