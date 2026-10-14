@@ -777,6 +777,7 @@ namespace geolio::test
             this->mesh.facets.connect();
 
             this->control_grid = std::make_unique<QuadControlGrid>(this->mesh, ORDER);
+            this->control_grid->control_nodes.set_dimension(DIM);
         }
     };
 

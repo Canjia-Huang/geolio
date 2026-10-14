@@ -956,6 +956,7 @@ namespace geolio::test
             mesh.cells.connect();
 
             control_grid = std::make_unique<Grid>(mesh, ORDER);
+            control_grid->control_nodes.set_dimension(DIM);
         }
     };
 
