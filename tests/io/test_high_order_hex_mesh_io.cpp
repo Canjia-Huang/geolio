@@ -17,13 +17,13 @@ namespace geolio::test
         static constexpr GEO::index_t DIM = MESH_DIM + QUANTITIES_DIM;
 
         void add_node_random(const GEO::index_t nd) {
-            auto& p = control_grid->control_node(nd);
+            auto& p = control_grid->control_nodes.point<DIM>(nd);
             for (GEO::index_t d = 0; d < DIM; ++d)
                 p[d] += 0.1*GEO::Numeric::random_float32();
         }
 
         GEO::Mesh mesh;
-        std::unique_ptr<HexControlGrid<MESH_DIM, QUANTITIES_DIM>> control_grid;
+        std::unique_ptr<HexControlGrid> control_grid;
     };
 
     class SingleHexCHighOrderHexMeshIO : public HighOrderHexMeshIO {
@@ -41,7 +41,8 @@ namespace geolio::test
             mesh.cells.create_hex(0, 1, 2, 3, 4, 5, 6, 7);
 
             constexpr GEO::index_t order = 5;
-            control_grid = std::make_unique<HexControlGrid<MESH_DIM, QUANTITIES_DIM>>(mesh, order);
+            control_grid = std::make_unique<HexControlGrid>(mesh, order);
+            control_grid->control_nodes.set_dimension(DIM);
         }
     };
 
@@ -55,9 +56,9 @@ namespace geolio::test
         EXPECT_TRUE(high_order_hex_mesh_save(*control_grid, filepath, "2.2"));
 
         /* Load */
-        std::unique_ptr<HexControlGrid<MESH_DIM, QUANTITIES_DIM>> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 
     TEST_F(SingleHexCHighOrderHexMeshIO, version_4_1) {
@@ -71,9 +72,9 @@ namespace geolio::test
 
         /* Load */
         GEO::Mesh loaded_mesh;
-        std::unique_ptr<HexControlGrid<MESH_DIM, QUANTITIES_DIM>> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 
     class TwoHexCHighOrderHexMeshIO : public HighOrderHexMeshIO {
@@ -97,7 +98,8 @@ namespace geolio::test
             mesh.cells.connect();
 
             constexpr GEO::index_t order = 6;
-            control_grid = std::make_unique<HexControlGrid<MESH_DIM, QUANTITIES_DIM>>(mesh, order);
+            control_grid = std::make_unique<HexControlGrid>(mesh, order);
+            control_grid->control_nodes.set_dimension(DIM);
         }
     };
 
@@ -112,9 +114,9 @@ namespace geolio::test
 
         /* Load */
         GEO::Mesh loaded_mesh;
-        std::unique_ptr<HexControlGrid<MESH_DIM, QUANTITIES_DIM>> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 
     TEST_F(TwoHexCHighOrderHexMeshIO, version_4_1) {
@@ -128,8 +130,8 @@ namespace geolio::test
 
         /* Load */
         GEO::Mesh loaded_mesh;
-        std::unique_ptr<HexControlGrid<MESH_DIM, QUANTITIES_DIM>> loaded_control_grid_ptr;
+        std::unique_ptr<HexControlGrid> loaded_control_grid_ptr;
         ASSERT_TRUE(high_order_hex_mesh_load(filepath, loaded_control_grid_ptr));
-        EXPECT_TRUE(loaded_control_grid_ptr->mesh().save(get_current_test_name()+".geogram"));
+        EXPECT_TRUE(loaded_control_grid_ptr->control_nodes.mesh().save(get_current_test_name()+".geogram"));
     }
 }

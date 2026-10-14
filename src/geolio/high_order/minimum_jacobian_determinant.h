@@ -27,9 +27,9 @@ namespace geolio
      * refined in a best-first order (smallest lower bound first) until each of them can be certified
      * either negative or non-negative, which locates inverted regions without a global minimisation.
      */
-    template<typename CONTROL_GRID>
+    template <typename CONTROL_GRID>
     class MinimumJacobianDeterminant {
-        static_assert(isQuadControlGrid<CONTROL_GRID>::value || isHexControlGrid<CONTROL_GRID>::value);
+        static_assert(std::is_same_v<CONTROL_GRID, QuadControlGrid> || std::is_same_v<CONTROL_GRID, HexControlGrid>);
     public:
         /**
          * Create a MinJacobianDet analyzer for the given control grid.
@@ -41,7 +41,7 @@ namespace geolio
             ): control_grid_(control_grid),
                ORDER_(control_grid.order())
         {
-            if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
                 if (use_absolute_area_)
                     n_ = 4*ORDER_-2;
                 else
@@ -85,7 +85,10 @@ namespace geolio
          * so the analyzer reports zero-area or degenerate facets rather than orientation reversals.
          * This interface is available only when `CONTROL_GRID` is `QuadControlGrid<3>`.
          */
-        void use_absolute_area() requires (isQuadControlGrid<CONTROL_GRID>::value && QuadControlGridMeshDim<CONTROL_GRID>::value == 3) { use_absolute_area_ = true; };
+        void use_absolute_area() requires (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
+            assert(control_grid_.mesh_vertices_dimension() == 3);
+            use_absolute_area_ = true;
+        };
 
         /**
          * Represents an axis-aligned sub-block in the parametric (u,v,w) domain together with interval
@@ -104,7 +107,7 @@ namespace geolio
                 C = _C;
                 min_c = _C.minCoeff();
                 max_c = _C.maxCoeff();
-                if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
+                if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
                     min_w = 0;
                     max_w = 0;
                 }
@@ -327,9 +330,9 @@ namespace geolio
             ) const {
             LOG::TRACE("{}({})", __FUNCTION__, blocks.size());
 
-            constexpr GEO::index_t CORNERS_NB = isQuadControlGrid<CONTROL_GRID>::value ? 4 : 8;
+            constexpr GEO::index_t CORNERS_NB = std::is_same_v<CONTROL_GRID, QuadControlGrid> ? 4 : 8;
             assert(CORNER_INDICES_.size() == CORNERS_NB);
-            constexpr GEO::index_t EDGES_NB = isQuadControlGrid<CONTROL_GRID>::value ? 4 : 12;
+            constexpr GEO::index_t EDGES_NB = std::is_same_v<CONTROL_GRID, QuadControlGrid> ? 4 : 12;
 
             GEO::Attribute<double> mesh_out_v_mindetJ(mesh_out.vertices.attributes(), "min_det_J");
             const GEO::index_t new_v = mesh_out.vertices.create_vertices(CORNERS_NB*blocks.size());
@@ -337,7 +340,7 @@ namespace geolio
             for (GEO::index_t i = 0, i_end = blocks.size(); i < i_end; ++i) {
                 const auto& B = blocks[i];
 
-                if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
+                if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
                     mesh_out.vertices.point(new_v+CORNERS_NB*i)     = GEO::vec3(B.min_u, B.min_v, B.min_w);
                     mesh_out.vertices.point(new_v+CORNERS_NB*i+1)   = GEO::vec3(B.max_u, B.min_v, B.min_w);
                     mesh_out.vertices.point(new_v+CORNERS_NB*i+2)   = GEO::vec3(B.max_u, B.max_v, B.min_w);
@@ -366,7 +369,7 @@ namespace geolio
                     mesh_out_v_mindetJ[new_v+CORNERS_NB*i+7]    = B.C[CORNER_INDICES_[7]];
                 }
 
-                if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
+                if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
                     for (GEO::index_t le = 0; le < EDGES_NB; ++le) {
                         mesh_out.edges.set_vertex(new_e+EDGES_NB*i+le, 0, new_v+CORNERS_NB*i+le);
                         mesh_out.edges.set_vertex(new_e+EDGES_NB*i+le, 1, new_v+CORNERS_NB*i+(le+1)%4);
@@ -448,7 +451,7 @@ namespace geolio
 
             /* Only the hexahedral path converts (N3_ x N3_) tensor coefficients, and that matrix
              * grows as N1_^6, so it must not be built for the 2D (quad) instantiations. */
-            if constexpr (isHexControlGrid<CONTROL_GRID>::value)
+            if constexpr (std::is_same_v<CONTROL_GRID, HexControlGrid>)
                 M3D_ = kroneckerProduct(M_, M2D_).eval();
         }
 
@@ -527,7 +530,7 @@ namespace geolio
              * one stacks N1_ such planes along w. Both are stored with u as the fastest index, so a
              * block is viewed as an N1_ x (N1_*PLANE_NB) matrix whose columns carry the remaining
              * (v, w) index. */
-            const GEO::index_t PLANE_NB = isQuadControlGrid<CONTROL_GRID>::value ? 1 : N1_;
+            const GEO::index_t PLANE_NB = std::is_same_v<CONTROL_GRID, QuadControlGrid> ? 1 : N1_;
 
             /* U subdivision */
             auto split_U = [&](const Eigen::MatrixXd& mat) -> std::pair<Eigen::MatrixXd, Eigen::MatrixXd> {
@@ -554,7 +557,7 @@ namespace geolio
              * form the flat index u_bit*2 + v_bit + w_bit*4, which is the order in which the
              * coefficients below are assigned. */
             std::vector<Eigen::VectorXd> sub_coeffs(CORNER_INDICES_.size());
-            if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
                 assert(sub_coeffs.size() == 4);
                 /* Every child is one N1_ x N1_ plane; flattening it column-major keeps u as the
                  * fastest index, which is what split_U / split_V expect on the next subdivision. */
@@ -599,7 +602,7 @@ namespace geolio
             double Block::* const max_bounds[3] = {&Block::max_u, &Block::max_v, &Block::max_w};
             /* A child index is u_bit*2 + v_bit + w_bit*4, so bit 0 carries v and bit 1 carries u. */
             const GEO::index_t axis_of_bit[3] = {1, 0, 2}; // v, u, w
-            const GEO::index_t BIT_NB = isQuadControlGrid<CONTROL_GRID>::value ? 2 : 3;
+            const GEO::index_t BIT_NB = std::is_same_v<CONTROL_GRID, QuadControlGrid> ? 2 : 3;
 
             for (GEO::index_t i = 0; i < sub_blocks.size(); ++i) {
                 for (GEO::index_t b = 0; b < BIT_NB; ++b) {
@@ -625,7 +628,7 @@ namespace geolio
             const GEO::index_t c,
             Eigen::VectorXd& det_J
             ) const {
-            if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
                 det_J = Eigen::VectorXd::Zero(N2_);
 
                 for (GEO::index_t j = 0; j < N1_; ++j) {
@@ -671,8 +674,9 @@ namespace geolio
             const GEO::index_t c,
             Eigen::MatrixXd& grad_det_J
             ) const {
-            if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
-                constexpr GEO::index_t DIM = isQuadControlGrid<CONTROL_GRID>::value ? 2 : 3;
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
+                constexpr GEO::index_t DIM = control_grid_.mesh_vertices_dimension();
+                assert(DIM == 2 || DIM == 3);
 
                 const auto& CONTROL_POINTS_NB = control_grid_.control_nodes_nb_per_facet();
                 grad_det_J = Eigen::MatrixXd::Zero(N2_, DIM*CONTROL_POINTS_NB);
@@ -726,7 +730,7 @@ namespace geolio
             const Eigen::VectorXd& J,
             Eigen::VectorXd& C
             ) const {
-            if constexpr (isQuadControlGrid<CONTROL_GRID>::value)
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>)
                 C = M2D_ * J;
             else
                 C = M3D_ * J;
@@ -746,7 +750,7 @@ namespace geolio
             const Eigen::MatrixXd& J,
             Eigen::MatrixXd& C
             ) const {
-            if constexpr (isQuadControlGrid<CONTROL_GRID>::value)
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>)
                 C = M2D_ * J;
             else
                 C = M3D_ * J;

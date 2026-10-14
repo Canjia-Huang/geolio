@@ -11,30 +11,163 @@
 
 namespace geolio
 {
-    template<GEO::index_t DIM>
+    class QuadControlGrid;
+    class HexControlGrid;
+
+    class ControlNodes {
+    public:
+        /**
+         * @brief Construct a control-node container.
+         * @param[in] dim Dimension of each control point.
+         * @param[in] order Polynomial order determining the number of control points.
+         */
+        ControlNodes(const GEO::index_t dim, const GEO::index_t order)
+            : CONTROL_POINTS_NB_PER_EDGE_(order+1),
+              CONTROL_POINTS_NB_PER_FACET_((order+1)*(order+1)),
+              CONTROL_POINTS_NB_PER_CELL_((order+1)*(order+1)*(order+1)),
+              INTERNAL_CONTROL_POINTS_NB_PER_EDGE_(order-1),
+              INTERNAL_CONTROL_POINTS_NB_PER_FACET_((order-1)*(order-1)),
+              INTERNAL_CONTROL_POINTS_NB_PER_CELL_((order-1)*(order-1)*(order-1))
+        {
+            mesh_.vertices.set_dimension(dim);
+        }
+
+        /** @brief Get the total number of control points on an edge. @return Number of control points per edge. */
+        GEO::index_t nb_per_edge() const { return CONTROL_POINTS_NB_PER_EDGE_; }
+
+        /** @brief Get the total number of control points on a facet. @return Number of control points per facet. */
+        GEO::index_t nb_per_facet() const { return CONTROL_POINTS_NB_PER_FACET_; }
+
+        /** @brief Get the total number of control points in a cell. @return Number of control points per cell. */
+        GEO::index_t nb_per_cell() const { return CONTROL_POINTS_NB_PER_CELL_; }
+
+        /** @brief Get the number of internal control points on an edge. @return Number of internal control points per edge. */
+        GEO::index_t internal_nb_per_edge() const { return INTERNAL_CONTROL_POINTS_NB_PER_EDGE_; }
+
+        /** @brief Get the number of internal control points on a facet. @return Number of internal control points per facet. */
+        GEO::index_t internal_nb_per_facet() const { return INTERNAL_CONTROL_POINTS_NB_PER_FACET_; }
+
+        /** @brief Get the number of internal control points in a cell. @return Number of internal control points per cell. */
+        GEO::index_t internal_nb_per_cell() const { return INTERNAL_CONTROL_POINTS_NB_PER_CELL_; }
+
+        /** @brief Get the total number of stored control points. @return Number of control points. */
+        GEO::index_t nb() const { return mesh_.vertices.nb(); }
+
+        /** @brief Get the dimension of each control point. @return Control-point dimension. */
+        GEO::index_t dimension() const {
+            return mesh_.vertices.dimension();
+        }
+
+        /**
+         * @brief Set the dimension of each control point.
+         * @param[in] dim New control-point dimension.
+         */
+        void set_dimension(const GEO::index_t dim) {
+            mesh_.vertices.set_dimension(dim);
+        }
+
+        /**
+         * @brief Access a control point by index.
+         * @tparam DIM Number of coordinates to access.
+         * @param[in] v Control-point index.
+         * @return Mutable reference to the selected control point.
+         */
+        template<GEO::index_t DIM>
+        GEO::vecng<DIM, double>& point(const GEO::index_t v) {
+            assert(DIM <= mesh_.vertices.dimension());
+            assert(v < nb());
+            return mesh_.vertices.point<DIM>(v);
+        }
+
+        /**
+         * @brief Access a control point by index.
+         * @tparam DIM Number of coordinates to access.
+         * @param[in] v Control-point index.
+         * @return Const reference to the selected control point.
+         */
+        template<GEO::index_t DIM>
+        const GEO::vecng<DIM, double>& point(const GEO::index_t v) const {
+            assert(DIM <= mesh_.vertices.dimension());
+            assert(v < nb());
+            return mesh_.vertices.point<DIM>(v);
+        }
+
+        /**
+         * @brief Access all control points with a fixed coordinate dimension.
+         * @tparam DIM Number of coordinates to access.
+         * @return Mutable point array.
+         */
+        template<GEO::index_t DIM>
+        auto& points() {
+            assert(DIM <= mesh_.vertices.dimension());
+            return mesh_.vertices.points<DIM>();
+        }
+
+        /**
+         * @brief Access all control points with a fixed coordinate dimension.
+         * @tparam DIM Number of coordinates to access.
+         * @return Const point array.
+         */
+        template<GEO::index_t DIM>
+        const auto& points() const {
+            assert(DIM <= mesh_.vertices.dimension());
+            return mesh_.vertices.points<DIM>();
+        }
+
+        /**
+         * @brief Get a mutable pointer to a control point's coordinates.
+         * @param[in] v Control-point index.
+         * @return Pointer to the control point coordinates.
+         */
+        double* point_ptr(const GEO::index_t v) {
+            assert(v < nb());
+            return mesh_.vertices.point_ptr(v);
+        }
+
+        /**
+         * @brief Get a read-only pointer to a control point's coordinates.
+         * @param[in] v Control-point index.
+         * @return Pointer to the control point coordinates.
+         */
+        const double* point_ptr(const GEO::index_t v) const {
+            assert(v < nb());
+            return mesh_.vertices.point_ptr(v);
+        }
+
+        /**
+         * @brief Access the underlying Geogram mesh.
+         * @return Const reference to the mesh storing the control points.
+         */
+        const auto& mesh() const { return mesh_; }
+
+    protected:
+        const GEO::index_t CONTROL_POINTS_NB_PER_EDGE_;
+        const GEO::index_t CONTROL_POINTS_NB_PER_FACET_;
+        const GEO::index_t CONTROL_POINTS_NB_PER_CELL_;
+        const GEO::index_t INTERNAL_CONTROL_POINTS_NB_PER_EDGE_;
+        const GEO::index_t INTERNAL_CONTROL_POINTS_NB_PER_FACET_;
+        const GEO::index_t INTERNAL_CONTROL_POINTS_NB_PER_CELL_;
+
+        GEO::Mesh mesh_;
+
+        friend class QuadControlGrid;
+        friend class HexControlGrid;
+    };
+
     class ControlGrid {
     public:
         /**
          * @brief Construct a control grid with the specified mesh vertex dimension and polynomial order.
-         * @param[in] mesh_v_dimension Dimension of each mesh vertex.
+         * @param[in] mesh_v_dim Dimension of each mesh vertex.
          * @param[in] order Polynomial order of the high-order representation.
          */
-        ControlGrid(const GEO::index_t mesh_v_dimension, const GEO::index_t order)
-            : attribute_id_(generate_random_string(22)),
-            mesh_v_dim_(mesh_v_dimension),
-            order_(order),
-            CONTROL_POINTS_NB_PER_EDGE_(order+1),
-            CONTROL_POINTS_NB_PER_FACET_((order+1)*(order+1)),
-            CONTROL_POINTS_NB_PER_CELL_((order+1)*(order+1)*(order+1)),
-            INTERNAL_CONTROL_POINTS_NB_PER_EDGE_(order-1),
-            INTERNAL_CONTROL_POINTS_NB_PER_FACET_((order-1)*(order-1)),
-            INTERNAL_CONTROL_POINTS_NB_PER_CELL_((order-1)*(order-1)*(order-1))
+        ControlGrid(const GEO::index_t mesh_v_dim, const GEO::index_t order)
+            : control_nodes(mesh_v_dim, order),
+              attribute_id_(generate_random_string(22)),
+              mesh_v_dim_(mesh_v_dim),
+              order_(order)
         {
-            assert(mesh_v_dim_ == 2 || mesh_v_dim_ == 3);
-            assert(order_ > 0);
-
             initialize_node_positions_1D();
-            control_nodes_mesh_.vertices.set_dimension(DIM);
         }
 
         /**
@@ -43,34 +176,16 @@ namespace geolio
         virtual ~ControlGrid() = default;
 
         /**
-         * @brief Access the reference mesh.
-         * @return Const reference to the underlying mesh.
+         * @brief Get the polynomial order of the control grid.
+         * @return Polynomial order.
          */
-        const auto& mesh() const { return control_nodes_mesh_; }
+        GEO::index_t order() const { return order_; }
 
         /**
-         * @brief Get the polynomial order.
-         * @return Polynomial order used by this control grid.
+         * @brief Get the mesh vertex coordinate dimension.
+         * @return Mesh vertex dimension.
          */
-        [[nodiscard]] GEO::index_t order() const { return order_; }
-
-        /**
-         * Get the number of control points per edge.
-         * @return number of control points on each edge of the grid
-         */
-        [[nodiscard]] auto control_nodes_nb_per_edge() const { return CONTROL_POINTS_NB_PER_EDGE_; }
-
-        /**
-         * Get the number of control points per facet.
-         * @return number of control points on each facet of the grid
-         */
-        [[nodiscard]] auto control_nodes_nb_per_facet() const { return CONTROL_POINTS_NB_PER_FACET_; }
-
-        /**
-         * Get the number of control points per cell.
-         * @return number of control points in each cell of the grid
-         */
-        [[nodiscard]] auto control_nodes_nb_per_cell() const { return CONTROL_POINTS_NB_PER_CELL_; }
+        GEO::index_t mesh_vertices_dimension() const { return mesh_v_dim_; }
 
         enum class BasisFunctionType {
             BEZIER, // not support yet
@@ -106,85 +221,21 @@ namespace geolio
         }
 
         /**
-         * Get 1D parametric coordinates of control nodes.
-         * @return const reference to node positions in [0,1]
+         * @brief Get the 1D parametric coordinates of the control nodes.
+         * @return Const reference to node positions in [0, 1].
          */
         [[nodiscard]] const auto& node_positions_1D() const { return node_positions_1D_; }
 
-        /**
-         * @brief Get the total number of control nodes.
-         * @return Number of vertices stored in the control-node mesh.
-         */
-        [[nodiscard]] GEO::index_t control_nodes_nb() const { return control_nodes_mesh_.vertices.nb(); }
-
-        /**
-         * @brief Access a mutable control node by global index.
-         * @param[in] v Control-node index.
-         * @return Mutable reference to the control-node position.
-         */
-        GEO::vecng<DIM, double>& control_node(const GEO::index_t v) {
-            assert(v < control_nodes_nb());
-            return control_nodes_mesh_.vertices.point<DIM>(v);
-        }
-
-        /**
-         * @brief Access a const control node by global index.
-         * @param[in] v Control-node index.
-         * @return Const reference to the control-node position.
-         */
-        [[nodiscard]] const GEO::vecng<DIM, double>& control_node(const GEO::index_t v) const {
-            assert(v < control_nodes_nb());
-            return control_nodes_mesh_.vertices.point<DIM>(v);
-        }
-
-        /**
-         * @brief Access the mutable contiguous control-node coordinate array.
-         * @return Mutable view/proxy over all control-node coordinates.
-         */
-        const auto& control_nodes() {
-            return control_nodes_mesh_.vertices.points<DIM>();
-        }
-
-        /**
-         * @brief Access the const contiguous control-node coordinate array.
-         * @return Const view/proxy over all control-node coordinates.
-         */
-        [[nodiscard]] auto control_nodes() const {
-            return control_nodes_mesh_.vertices.points<DIM>();
-        }
-
-        /**
-         * @brief Get a raw mutable pointer to one control-node coordinate tuple.
-         * @param[in] v Control-node index.
-         * @return Pointer to the first component of the indexed node position.
-         */
-        double* control_node_ptr(const GEO::index_t v) {
-            return control_nodes_mesh_.vertices.point_ptr(v);
-        }
-
-        /**
-         * @brief Access the coordinates of one control node through a const pointer.
-         * @param[in] v Control-node index.
-         * @return Pointer to the first coordinate component of the indexed node position.
-         */
-        const double* control_node_ptr(const GEO::index_t v) const {
-            return control_nodes_mesh_.vertices.point_ptr(v);
-        }
+        ControlNodes control_nodes;
 
     protected:
         const std::string attribute_id_; // unique id
 
         const GEO::index_t mesh_v_dim_;
+        const GEO::index_t order_;
 
         /* ========================================================================================================= */
 
-        const GEO::index_t order_;
-        const GEO::index_t CONTROL_POINTS_NB_PER_EDGE_;
-        const GEO::index_t CONTROL_POINTS_NB_PER_FACET_;
-        const GEO::index_t CONTROL_POINTS_NB_PER_CELL_;
-        const GEO::index_t INTERNAL_CONTROL_POINTS_NB_PER_EDGE_;
-        const GEO::index_t INTERNAL_CONTROL_POINTS_NB_PER_FACET_;
-        const GEO::index_t INTERNAL_CONTROL_POINTS_NB_PER_CELL_;
         /* Local index */
         /**
          * @brief Initialize local indexing/layout rules for volume control nodes.
@@ -244,18 +295,10 @@ namespace geolio
 
         /**
          * @brief Build control-node connectivity/geometry for the derived grid type.
+         * @param[in] mesh Input mesh used to initialize control-node connectivity and geometry.
          */
         virtual void initialize_control_nodes(const GEO::Mesh& mesh) = 0;
 
-        /**
-         * @brief Initialize control-node coordinates in dimensions not provided by the mesh.
-         */
-        void initialize_control_node_quantities() {
-            const GEO::index_t diff_dim = DIM - mesh_v_dim_;
-            for (const auto& nd : control_nodes_mesh_.vertices)
-                std::fill_n(control_node_ptr(nd)+mesh_v_dim_, diff_dim, 0.0);
-        }
-        GEO::Mesh control_nodes_mesh_;
         GEO::Attribute<GEO::index_t> element_control_nodes_; // size == elements nb, dim == nodes nb per element
     };
 }

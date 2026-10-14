@@ -8,9 +8,7 @@
 
 namespace geolio
 {
-    template <GEO::index_t DIM>
-    class SurfaceControlGrid : public ControlGrid<DIM> {
-    static_assert(DIM >= 2);
+    class SurfaceControlGrid : public ControlGrid {
     public:
         /**
          * @brief Construct a surface control grid.
@@ -18,7 +16,7 @@ namespace geolio
          * @param[in] order Polynomial order of the high-order surface representation.
          */
         SurfaceControlGrid(const GEO::index_t mesh_v_dimension, const GEO::index_t order)
-            : ControlGrid<DIM>(mesh_v_dimension, order)
+            : ControlGrid(mesh_v_dimension, order)
         {
             assert(this->mesh_v_dim_ == 2 || this->mesh_v_dim_ == 3);
         }
@@ -29,7 +27,7 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_FACET
          */
         [[nodiscard]] GEO::index_t facet_vertex_lnd(const GEO::index_t lv) const {
-            assert(lv < this->control_nodes_mesh_.facets.nb_vertices(0));
+            assert(lv < this->control_nodes.mesh().facets.nb_vertices(0));
             return this->ELEMENT_VERTEX_CONTROL_POINTS_BEGIN_IDX_[lv];
         }
 
@@ -40,8 +38,8 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_FACET
          */
         [[nodiscard]] GEO::index_t facet_edge_lnd(const GEO::index_t le, const GEO::index_t lv) const {
-            assert(le < this->control_nodes_mesh_.facets.nb_vertices(0));
-            assert(lv < this->CONTROL_POINTS_NB_PER_EDGE_);
+            assert(le < this->control_nodes.mesh().facets.nb_vertices(0));
+            assert(lv < this->control_nodes.nb_per_edge());
             return this->ELEMENT_EDGE_CONTROL_POINTS_BEGIN_IDX_[le] + lv*this->ELEMENT_EDGE_CONTROL_POINTS_NEXT_IDX_STEP_[le];
         }
 
@@ -52,8 +50,8 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_FACET
          */
         [[nodiscard]] GEO::index_t facet_edge_inner_lnd(const GEO::index_t le, const GEO::index_t lv) const {
-            assert(le < this->control_nodes_mesh_.facets.nb_vertices(0));
-            assert(lv < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_);
+            assert(le < this->control_nodes.mesh().facets.nb_vertices(0));
+            assert(lv < this->control_nodes.internal_nb_per_edge());
             return this->ELEMENT_EDGE_INTERNAL_CONTROL_POINTS_BEGIN_IDX_[le] + lv*this->ELEMENT_EDGE_INTERNAL_CONTROL_POINTS_NEXT_IDX_STEP_[le];
         }
 
@@ -64,8 +62,8 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_FACET
          */
         [[nodiscard]] GEO::index_t facet_lnd(const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(lv0 < this->CONTROL_POINTS_NB_PER_EDGE_);
-            assert(lv1 < this->CONTROL_POINTS_NB_PER_EDGE_);
+            assert(lv0 < this->control_nodes.nb_per_edge());
+            assert(lv1 < this->control_nodes.nb_per_edge());
             return this->ELEMENT_CONTROL_POINTS_BEGIN_IDX_ + lv0*this->ELEMENT_CONTROL_POINTS_NEXT_IDX_STEP0_ + lv1*this->ELEMENT_CONTROL_POINTS_NEXT_IDX_STEP1_;
         }
 
@@ -76,8 +74,8 @@ namespace geolio
          * @return local control node index, 0,1,...,CONTROL_POINTS_NB_PER_FACET
          */
         [[nodiscard]] GEO::index_t facet_inner_lnd(const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(lv0 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_);
-            assert(lv1 < this->INTERNAL_CONTROL_POINTS_NB_PER_EDGE_);
+            assert(lv0 < this->control_nodes.internal_nb_per_edge());
+            assert(lv1 < this->control_nodes.internal_nb_per_edge());
             return this->ELEMENT_INTERNAL_CONTROL_POINTS_BEGIN_IDX_ + lv0*this->ELEMENT_INTERNAL_CONTROL_POINTS_NEXT_IDX_STEP0_ + lv1*this->ELEMENT_INTERNAL_CONTROL_POINTS_NEXT_IDX_STEP1_;
         }
 
@@ -88,8 +86,9 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t facet_vertex_nd(const GEO::index_t f, const GEO::index_t lv) const {
-            assert(f < this->control_nodes_mesh_.facets.nb());
-            return this->element_control_nodes_[f*this->CONTROL_POINTS_NB_PER_FACET_ + this->facet_vertex_lnd(lv)];
+            assert(f < this->control_nodes.mesh().facets.nb());
+            assert(lv < this->control_nodes.mesh().facets.nb_vertices(f));
+            return this->element_control_nodes_[f*this->control_nodes.nb_per_facet() + this->facet_vertex_lnd(lv)];
         }
 
         /**
@@ -100,8 +99,10 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t facet_edge_nd(const GEO::index_t f, const GEO::index_t le, const GEO::index_t lv) const {
-            assert(f < this->control_nodes_mesh_.facets.nb());
-            return this->element_control_nodes_[f*this->CONTROL_POINTS_NB_PER_FACET_ + this->facet_edge_lnd(le, lv)];
+            assert(f < this->control_nodes.mesh().facets.nb());
+            assert(le < this->control_nodes.mesh().facets.nb_vertices(f));
+            assert(lv < this->control_nodes.nb_per_edge());
+            return this->element_control_nodes_[f*this->control_nodes.nb_per_facet() + this->facet_edge_lnd(le, lv)];
         }
 
         /**
@@ -112,8 +113,10 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t facet_edge_inner_nd(const GEO::index_t f, const GEO::index_t le, const GEO::index_t lv) const {
-            assert(f < this->control_nodes_mesh_.facets.nb());
-            return this->element_control_nodes_[f*this->CONTROL_POINTS_NB_PER_FACET_ + this->facet_edge_inner_lnd(le, lv)];
+            assert(f < this->control_nodes.mesh().facets.nb());
+            assert(le < this->control_nodes.mesh().facets.nb_vertices(f));
+            assert(lv < this->control_nodes.internal_nb_per_edge());
+            return this->element_control_nodes_[f*this->control_nodes.nb_per_facet() + this->facet_edge_inner_lnd(le, lv)];
         }
 
         /**
@@ -123,9 +126,9 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t facet_nd(const GEO::index_t f, const GEO::index_t lv) const {
-            assert(f < this->control_nodes_mesh_.facets.nb());
-            assert(lv < this->CONTROL_POINTS_NB_PER_FACET_);
-            return this->element_control_nodes_[f*this->CONTROL_POINTS_NB_PER_FACET_ + lv];
+            assert(f < this->control_nodes.mesh().facets.nb());
+            assert(lv < this->control_nodes.nb_per_facet());
+            return this->element_control_nodes_[f*this->control_nodes.nb_per_facet() + lv];
         }
 
         /**
@@ -136,8 +139,10 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t facet_nd(const GEO::index_t f, const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(f < this->control_nodes_mesh_.facets.nb());
-            return this->element_control_nodes_[f*this->CONTROL_POINTS_NB_PER_FACET_ + this->facet_lnd(lv0, lv1)];
+            assert(f < this->control_nodes.mesh().facets.nb());
+            assert(lv0 < this->control_nodes.nb_per_edge());
+            assert(lv1 < this->control_nodes.nb_per_edge());
+            return this->element_control_nodes_[f*this->control_nodes.nb_per_facet() + this->facet_lnd(lv0, lv1)];
         }
 
         /**
@@ -148,8 +153,10 @@ namespace geolio
          * @return control node index
          */
         [[nodiscard]] GEO::index_t facet_inner_nd(const GEO::index_t f, const GEO::index_t lv0, const GEO::index_t lv1) const {
-            assert(f < this->control_nodes_mesh_.facets.nb());
-            return this->element_control_nodes_[f*this->CONTROL_POINTS_NB_PER_FACET_ + this->facet_inner_lnd(lv0, lv1)];
+            assert(f < this->control_nodes.mesh().facets.nb());
+            assert(lv0 < this->control_nodes.internal_nb_per_edge());
+            assert(lv1 < this->control_nodes.internal_nb_per_edge());
+            return this->element_control_nodes_[f*this->control_nodes.nb_per_facet() + this->facet_inner_lnd(lv0, lv1)];
         }
     };
 }

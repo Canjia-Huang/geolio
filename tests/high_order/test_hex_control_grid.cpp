@@ -109,7 +109,7 @@ namespace geolio::test
             const GEO::vec2& uv
             ) {
             const auto position = [&](const double du, const double dv) {
-                return grid.compute_cell_uvw_position(c, project_hex_lf_uv_to_uvw(GEO::vec2(uv.x + du, uv.y + dv), lf));
+                return grid.template compute_cell_uvw_position<DIM>(c, project_hex_lf_uv_to_uvw(GEO::vec2(uv.x + du, uv.y + dv), lf));
             };
             return {
                 GEO::Memory::pointer_as_reference<GEO::vec3>(((position(FINITE_DIFF_STEP, 0.0) - position(-FINITE_DIFF_STEP, 0.0)) / (2.0*FINITE_DIFF_STEP)).data()),
@@ -379,7 +379,7 @@ namespace geolio::test
      */
     class HexControlGridTest : public ::testing::Test {
     protected:
-        using Grid = HexControlGrid<3, QUANTITIES_DIM>;
+        using Grid = HexControlGrid;
 
         /* == meshes =========================================================================================== */
 
@@ -404,7 +404,7 @@ namespace geolio::test
          * @param[in] nd Global index of the control node.
          */
         void jiggle_control_node(const GEO::index_t nd) {
-            control_grid->control_node(nd) += random_offset<DIM>(JITTER_AMPLITUDE);
+            control_grid->control_nodes.point<DIM>(nd) += random_offset<DIM>(JITTER_AMPLITUDE);
         }
 
         /* == evaluations ====================================================================================== */
@@ -465,7 +465,7 @@ namespace geolio::test
         [[nodiscard]] GEO::vecng<DIM, double> cell_centre(const GEO::index_t c) const {
             GEO::vecng<DIM, double> centre;
             for (GEO::index_t lv = 0; lv < HEX_VERTEX_NB; ++lv)
-                centre += control_grid->control_node(control_grid->cell_vertex_nd(c, lv));
+                centre += control_grid->control_nodes.point<DIM>(control_grid->cell_vertex_nd(c, lv));
             return (1.0/HEX_VERTEX_NB)*centre;
         }
 
@@ -500,7 +500,7 @@ namespace geolio::test
                         const GEO::vec3 uvw(node_positions[i], node_positions[j], node_positions[k]);
                         const auto& nd = control_grid->cell_nd(c, i, j, k);
                         EXPECT_NEAR(
-                            GEO::distance2(control_grid->compute_cell_uvw_position(c, uvw), control_grid->control_node(nd)),
+                            GEO::distance2(control_grid->compute_cell_uvw_position<DIM>(c, uvw), control_grid->control_nodes.point<DIM>(nd)),
                             0.0,
                             EXACT_DIST2_TOL
                             );
@@ -516,7 +516,7 @@ namespace geolio::test
         void expect_identity_mapping(const GEO::index_t c) const {
             for (const auto& uvw : grid_unit_samples_3d(SAMPLE_RESOLUTION))
                 EXPECT_NEAR(GEO::distance2(
-                    GEO::Memory::pointer_as_reference<GEO::vec3>(control_grid->compute_cell_uvw_position(c, uvw).data()),
+                    GEO::Memory::pointer_as_reference<GEO::vec3>(control_grid->compute_cell_uvw_position<DIM>(c, uvw).data()),
                     uvw
                     ), 0.0, EXACT_DIST2_TOL);
         }
@@ -542,7 +542,7 @@ namespace geolio::test
             const GEO::vec3 uvw(node_positions[i], node_positions[j], node_positions[k]);
 
             EXPECT_GT(GEO::distance2(
-                GEO::Memory::pointer_as_reference<GEO::vec3>(control_grid->compute_cell_uvw_position(c, uvw).data()),
+                GEO::Memory::pointer_as_reference<GEO::vec3>(control_grid->compute_cell_uvw_position<DIM>(c, uvw).data()),
                 uvw
                 ), 0.0)
                 << "the jitter of control node (" << i << ", " << j << ", " << k << ") must move the mapping";
@@ -573,8 +573,8 @@ namespace geolio::test
                             plus[axis] += FINITE_DIFF_STEP;
                             minus[axis] -= FINITE_DIFF_STEP;
                             return (
-                                control_grid->compute_cell_uvw_position(c, plus) -
-                                control_grid->compute_cell_uvw_position(c, minus)
+                                control_grid->compute_cell_uvw_position<DIM>(c, plus) -
+                                control_grid->compute_cell_uvw_position<DIM>(c, minus)
                                 ) / (2.0*FINITE_DIFF_STEP);
                         };
 
@@ -662,9 +662,9 @@ namespace geolio::test
             GEO::Mesh mesh_out(DIM);
             GEO::Attribute<GEO::index_t> mesh_out_v_idx(mesh_out.vertices.attributes(), "idx");
 
-            mesh_out.vertices.create_vertices(control_grid->control_nodes_nb());
+            mesh_out.vertices.create_vertices(control_grid->control_nodes.nb());
             for (const auto v : mesh_out.vertices) {
-                mesh_out.vertices.point<DIM>(v) = control_grid->control_node(v);
+                mesh_out.vertices.point<DIM>(v) = control_grid->control_nodes.point<DIM>(v);
                 mesh_out_v_idx[v] = v;
             }
 
@@ -688,7 +688,7 @@ namespace geolio::test
             GEO::Attribute<GEO::vec3> mesh_out_v_uvw(mesh_out.vertices.attributes(), "uvw");
             GEO::Attribute<GEO::index_t> mesh_out_f_cell(mesh_out.facets.attributes(), "cell");
 
-            control_grid->append_discretized_high_order_cells_border(
+            control_grid->append_discretized_high_order_cells_border<DIM>(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
                 &mesh_out_v_cell,
@@ -717,7 +717,7 @@ namespace geolio::test
             GEO::Attribute<GEO::vec3> mesh_out_v_uvw(mesh_out.vertices.attributes(), "uvw");
             GEO::Attribute<GEO::index_t> mesh_out_c_cell(mesh_out.cells.attributes(), "cell");
 
-            control_grid->append_discretized_high_order_cells(
+            control_grid->append_discretized_high_order_cells<DIM>(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
                 &mesh_out_v_cell,
@@ -762,7 +762,7 @@ namespace geolio::test
             positions.reserve((control_grid->order()+1)*(control_grid->order()+1));
             for (GEO::index_t i = 0, order = control_grid->order(); i <= order; ++i)
                 for (GEO::index_t j = 0; j <= order; ++j)
-                    positions.push_back(control_grid->control_node(control_grid->cell_facet_nd(c, lf, i, j)));
+                    positions.push_back(control_grid->control_nodes.point<DIM>(control_grid->cell_facet_nd(c, lf, i, j)));
 
             std::ranges::sort(positions, [](const GEO::vecng<DIM, double>& p, const GEO::vecng<DIM, double>& q) {
                 for (GEO::index_t d = 0; d < DIM; ++d) {
@@ -802,6 +802,7 @@ namespace geolio::test
             mesh.cells.create_hex(0, 1, 2, 3, 4, 5, 6, 7);
 
             control_grid = std::make_unique<Grid>(mesh, ORDER);
+            this->control_grid->control_nodes.set_dimension(DIM);
         }
     };
 
@@ -857,7 +858,7 @@ namespace geolio::test
         GEO::index_t new_e = mesh_out.edges.create_edges(POINTS_NB);
         for (GEO::index_t i = 0; i < POINTS_NB; ++i) {
             const GEO::vec2 uv(GEO::Numeric::random_float32(), GEO::Numeric::random_float32());
-            const auto position_all = control_grid->compute_cell_uvw_position(CELL, project_hex_lf_uv_to_uvw(uv, LF));
+            const auto position_all = control_grid->compute_cell_uvw_position<DIM>(CELL, project_hex_lf_uv_to_uvw(uv, LF));
             const auto normal = control_grid->compute_cell_facet_uv_normal(CELL, LF, uv);
 
             const auto position = GEO::Memory::pointer_as_reference<GEO::vec3>(position_all.data());
@@ -886,7 +887,7 @@ namespace geolio::test
                     EXPECT_NEAR(GEO::dot(GEO::normalize(normal), GEO::normalize(tu)), 0.0, NORMAL_ORTHOGONALITY_TOL);
                     EXPECT_NEAR(GEO::dot(GEO::normalize(normal), GEO::normalize(tv)), 0.0, NORMAL_ORTHOGONALITY_TOL);
 
-                    const auto position = control_grid->compute_cell_uvw_position(CELL, project_hex_lf_uv_to_uvw(uv, lf));
+                    const auto position = control_grid->compute_cell_uvw_position<DIM>(CELL, project_hex_lf_uv_to_uvw(uv, lf));
                     EXPECT_GT(GEO::dot(
                         GEO::normalize(GEO::Memory::pointer_as_reference<GEO::vec3>(normal.data())),
                         GEO::normalize(GEO::Memory::pointer_as_reference<GEO::vec3>((position - centre).data()
@@ -895,7 +896,7 @@ namespace geolio::test
             }
         }
 
-        control_grid->append_discretized_high_order_cells_border(mesh_out, BACKGROUND_RESOLUTION);
+        control_grid->append_discretized_high_order_cells_border<DIM>(mesh_out, BACKGROUND_RESOLUTION);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
     }
 
@@ -916,7 +917,7 @@ namespace geolio::test
         GEO::index_t new_e = mesh_out.edges.create_edges(3*POINTS_NB);
         for (const auto& uvw : grid_unit_samples_3d(RESOLUTION)) {
             const auto derivatives = evaluate_derivatives(CELL, uvw);
-            const auto position_all = control_grid->compute_cell_uvw_position(CELL, uvw);
+            const auto position_all = control_grid->compute_cell_uvw_position<DIM>(CELL, uvw);
 
             const auto position = GEO::Memory::pointer_as_reference<GEO::vec3>(position_all.data());
             mesh_out.vertices.point(new_v) = position;
@@ -937,7 +938,7 @@ namespace geolio::test
             new_e += 3;
         }
 
-        control_grid->append_discretized_high_order_cells(mesh_out, BACKGROUND_RESOLUTION);
+        control_grid->append_discretized_high_order_cells<DIM>(mesh_out, BACKGROUND_RESOLUTION);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
     }
 
@@ -955,6 +956,7 @@ namespace geolio::test
             mesh.cells.connect();
 
             control_grid = std::make_unique<Grid>(mesh, ORDER);
+            control_grid->control_nodes.set_dimension(DIM);
         }
     };
 

@@ -126,7 +126,7 @@ namespace
 
 namespace geolio
 {
-    static bool high_order_quad_mesh_load_2_2(
+    bool high_order_quad_mesh_load_2_2(
         LineInput& in,
         GEO::index_t& order,
         std::vector<double>& nodes,
@@ -255,7 +255,7 @@ namespace geolio
         return true;
     }
 
-    static bool high_order_quad_mesh_load_4_1(
+    bool high_order_quad_mesh_load_4_1(
         LineInput& in,
         GEO::index_t& order,
         std::vector<double>& nodes,
@@ -407,16 +407,11 @@ namespace geolio
 
         return true;
     }
-
-    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
+    
     bool high_order_quad_mesh_load(
         const std::string& filepath,
-        GEO::Mesh& mesh,
-        std::unique_ptr<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>& control_grid_ptr
+        std::unique_ptr<QuadControlGrid>& control_grid_ptr
         ) {
-        mesh.clear();
-        mesh.vertices.set_dimension(MESH_DIM);
-
         if (const auto ext = get_extension(filepath);
             ext != "msh")
             LOG::WARN("Currently, only msh format input is supported, but the specified file extension `{}` is not. Is this a mistake?", ext);
@@ -484,6 +479,7 @@ namespace geolio
                 const GEO::index_t element_nodes_nb = (order+1)*(order+1);
 
                 /* Build mesh */
+                GEO::Mesh mesh(3); // It is impossible to distinguish whether DIM==2 or DIM==3, so both are treated as 3.
                 {
                     const GEO::index_t nodes_nb = nodes.size()/3;
                     const GEO::index_t elements_nb = elements.size()/element_nodes_nb;
@@ -513,8 +509,8 @@ namespace geolio
                         if (const auto& v = node_to_vertex[nd];
                             v != GEO::NO_VERTEX
                             ) {
-                            auto& p = mesh.vertices.point<MESH_DIM>(v);
-                            for (GEO::index_t d = 0; d < MESH_DIM; ++d)
+                            auto& p = mesh.vertices.point<3>(v);
+                            for (GEO::index_t d = 0; d < 3; ++d)
                                 p[d] = nodes[nd*3+d];
                         }
                     }
@@ -533,13 +529,13 @@ namespace geolio
                     std::vector<GEO::index_t> gmsh_nodes_order;
                     generate_msh_nodes_order(order, gmsh_nodes_order);
 
-                    control_grid_ptr = std::make_unique<QuadControlGrid<MESH_DIM, QUANTITIES_DIM>>(mesh, order);
+                    control_grid_ptr = std::make_unique<QuadControlGrid>(mesh, order);
                     for (const auto& f : mesh.facets) {
                         for (GEO::index_t i = 0; i < element_nodes_nb; ++i) {
                             const auto nd = control_grid_ptr->facet_nd(f, i);
                             const auto gmsh_nd = elements[f*element_nodes_nb+gmsh_nodes_order[i]];
-                            auto& p = control_grid_ptr->control_node(nd);
-                            for (GEO::index_t d = 0; d < MESH_DIM; ++d)
+                            auto& p = control_grid_ptr->control_nodes.point<3>(nd);
+                            for (GEO::index_t d = 0; d < 3; ++d)
                                 p[d] = nodes[3*gmsh_nd+d];
                         }
                     }
@@ -554,20 +550,13 @@ namespace geolio
         return true;
     }
 
-    template bool high_order_quad_mesh_load<2, 0>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 0>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<2, 1>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 1>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<2, 2>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 2>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<2, 3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<2, 3>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<3, 0>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 0>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<3, 1>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 1>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<3, 2>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 2>>& control_grid_ptr);
-    template bool high_order_quad_mesh_load<3, 3>(const std::string& filepath, GEO::Mesh& mesh, std::unique_ptr<QuadControlGrid<3, 3>>& control_grid_ptr);
-
-    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
-    static bool high_order_quad_mesh_save_2_2(
-        const QuadControlGrid<MESH_DIM, QUANTITIES_DIM>& control_grid,
+    bool high_order_quad_mesh_save_2_2(
+        const QuadControlGrid& control_grid,
         std::ofstream& out
         ) {
+        const GEO::index_t mesh_v_dim = control_grid.mesh_vertices_dimension();
+        assert(mesh_v_dim == 2 || mesh_v_dim == 3);
+
         /* == Mesh format ========================================================================================== */
         {
             out << MESH_FORMAT_BEGIN << "\n";
@@ -578,14 +567,16 @@ namespace geolio
         /* == Nodes ================================================================================================ */
         {
             out << NODES_BEGIN << "\n";
-            out << control_grid.control_nodes_nb() << "\n";
-            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
-                const auto& p = control_grid.control_node(nd);
-                out << nd+1 << " ";
-                for (GEO::index_t d = 0; d < MESH_DIM; ++d)
-                    out << p[d] << " ";
-                if constexpr (MESH_DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
-                    out << "0";
+            out << control_grid.control_nodes.nb() << "\n";
+            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes.nb(); nd < nd_end; ++nd) {
+                if (mesh_v_dim == 2) {
+                    const auto& p = control_grid.control_nodes.point<2>(nd);
+                    out << nd+1 << " " << p[0] << " " << p[1] << " " << "0";  // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
+                }
+                else {
+                    const auto& p = control_grid.control_nodes.point<3>(nd);
+                    out << nd+1 << " " << p[0] << " " << p[1] << " " << p[2];
+                }
                 out << "\n";
             }
             out << NODES_END << "\n";
@@ -593,7 +584,7 @@ namespace geolio
 
         /* == Elements ============================================================================================= */
         {
-            const auto& mesh = control_grid.mesh();
+            const auto& mesh = control_grid.control_nodes.mesh();
             const auto order = control_grid.order();
             const auto element_type_code = get_element_type_code(order);
 
@@ -624,11 +615,13 @@ namespace geolio
         return true;
     }
 
-    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
-    static bool high_order_quad_mesh_save_4_1(
-        const QuadControlGrid<MESH_DIM, QUANTITIES_DIM>& control_grid,
+    bool high_order_quad_mesh_save_4_1(
+        const QuadControlGrid& control_grid,
         std::ofstream& out
         ) {
+        const GEO::index_t mesh_v_dim = control_grid.mesh_vertices_dimension();
+        assert(mesh_v_dim == 2 || mesh_v_dim == 3);
+
         /* == Mesh format ========================================================================================== */
         {
             out << MESH_FORMAT_BEGIN << "\n";
@@ -646,20 +639,27 @@ namespace geolio
 
             std::vector<double> xyz_min{std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
             std::vector<double> xyz_max{-std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(), -std::numeric_limits<double>::max()};
-            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
-                const auto& p = control_grid.control_node(nd);
-                for (GEO::index_t d = 0; d < MESH_DIM; ++d) {
-                    xyz_min[d] = std::min(xyz_min[d], p[d]);
-                    xyz_max[d] = std::max(xyz_max[d], p[d]);
+            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes.nb(); nd < nd_end; ++nd) {
+                if (mesh_v_dim == 2) {
+                    const auto& p = control_grid.control_nodes.point<2>(nd);
+                    for (GEO::index_t d = 0; d < 2; ++d) {
+                        xyz_min[d] = std::min(xyz_min[d], p[d]);
+                        xyz_max[d] = std::max(xyz_max[d], p[d]);
+                    }
+                }
+                else {
+                    const auto& p = control_grid.control_nodes.point<3>(nd);
+                    for (GEO::index_t d = 0; d < 3; ++d) {
+                        xyz_min[d] = std::min(xyz_min[d], p[d]);
+                        xyz_max[d] = std::max(xyz_max[d], p[d]);
+                    }
                 }
             }
             out << ENTITIES_TAG << " ";
-            if constexpr (MESH_DIM == 2)
+            if (mesh_v_dim == 2)
                 out << xyz_min[0] << " " << xyz_min[1] << " " << 0 << " " << xyz_max[0] << " " << xyz_max[1] << " " << 0 << " ";
-            else if constexpr (MESH_DIM == 3)
-                out << xyz_min[0] << " " << xyz_min[1] << " " << xyz_min[2] << " " << xyz_max[0] << " " << xyz_max[1] << " " << xyz_max[2] << " ";
             else
-                static_assert(false);
+                out << xyz_min[0] << " " << xyz_min[1] << " " << xyz_min[2] << " " << xyz_max[0] << " " << xyz_max[1] << " " << xyz_max[2] << " ";
             out << PHYSICAL_GROUP_NUMBER << " "
                 << PHYSICAL_GROUP_TAD << " "
                 << BOUNDARY_CURVES_NUMBER << "\n";
@@ -672,23 +672,26 @@ namespace geolio
             out << NODES_BEGIN << "\n";
 
             out << NODES_ENTITY_BLOCK << " "
-                << control_grid.control_nodes_nb() << " "
+                << control_grid.control_nodes.nb() << " "
                 << "1" << " " // min node idx
-                << control_grid.control_nodes_nb() << "\n"; // max node idx
+                << control_grid.control_nodes.nb() << "\n"; // max node idx
 
             out << NODES_ENTITY_DIMENSION << " "
                 << NODES_ENTITY_ID << " "
                 << NODES_CONTAIM_PARAMETRIC_COORDINATES << " "
-                << control_grid.control_nodes_nb() << "\n";
+                << control_grid.control_nodes.nb() << "\n";
 
-            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd)
+            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes.nb(); nd < nd_end; ++nd)
                 out << nd+1 << "\n";
-            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes_nb(); nd < nd_end; ++nd) {
-                const auto& p = control_grid.control_node(nd);
-                for (GEO::index_t d = 0; d < MESH_DIM; ++d)
-                    out << p[d] << " ";
-                if constexpr (MESH_DIM == 2) // The gmsh format does not support 2D nodes, so a z-coordinate of “0” is added.
-                    out << "0";
+            for (GEO::index_t nd = 0, nd_end = control_grid.control_nodes.nb(); nd < nd_end; ++nd) {
+                if (mesh_v_dim == 2) {
+                    const auto& p = control_grid.control_nodes.point<2>(nd);
+                    out << p[0] << " " << p[1] << " " << "0";
+                }
+                else {
+                    const auto& p = control_grid.control_nodes.point<3>(nd);
+                    out << p[0] << " " << p[1] << " " << p[2];
+                }
                 out << "\n";
             }
 
@@ -697,7 +700,7 @@ namespace geolio
 
         /* == Elements ============================================================================================= */
         {
-            const auto& mesh = control_grid.mesh();
+            const auto& mesh = control_grid.control_nodes.mesh();
             const auto order = control_grid.order();
             const auto element_type_code = get_element_type_code(order);
 
@@ -735,9 +738,8 @@ namespace geolio
         return true;
     }
 
-    template <GEO::index_t MESH_DIM, GEO::index_t QUANTITIES_DIM>
     bool high_order_quad_mesh_save(
-        const QuadControlGrid<MESH_DIM, QUANTITIES_DIM>& control_grid,
+        const QuadControlGrid& control_grid,
         const std::string& filepath,
         const std::string& version_number
         ) {
@@ -758,13 +760,4 @@ namespace geolio
         LOG::ERROR("Unsupported version number `{}`", version_number);
         return false;
     }
-
-    template bool high_order_quad_mesh_save<2, 0>(const QuadControlGrid<2, 0>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<2, 1>(const QuadControlGrid<2, 1>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<2, 2>(const QuadControlGrid<2, 2>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<2, 3>(const QuadControlGrid<2, 3>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<3, 0>(const QuadControlGrid<3, 0>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<3, 1>(const QuadControlGrid<3, 1>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<3, 2>(const QuadControlGrid<3, 2>& control_grid, const std::string& filepath, const std::string& version_number);
-    template bool high_order_quad_mesh_save<3, 3>(const QuadControlGrid<3, 3>& control_grid, const std::string& filepath, const std::string& version_number);
 }
