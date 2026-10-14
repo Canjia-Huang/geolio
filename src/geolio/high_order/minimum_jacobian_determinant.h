@@ -29,7 +29,7 @@ namespace geolio
      */
     template<typename CONTROL_GRID>
     class MinimumJacobianDeterminant {
-        static_assert(isQuadControlGrid<CONTROL_GRID>::value || isHexControlGrid<CONTROL_GRID>::value);
+        static_assert(std::is_same_v<CONTROL_GRID, QuadControlGrid> || std::is_same_v<CONTROL_GRID, HexControlGrid>);
     public:
         /**
          * Create a MinJacobianDet analyzer for the given control grid.
@@ -41,7 +41,7 @@ namespace geolio
             ): control_grid_(control_grid),
                ORDER_(control_grid.order())
         {
-            if constexpr (isQuadControlGrid<CONTROL_GRID>::value) {
+            if constexpr (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
                 if (use_absolute_area_)
                     n_ = 4*ORDER_-2;
                 else
@@ -85,7 +85,10 @@ namespace geolio
          * so the analyzer reports zero-area or degenerate facets rather than orientation reversals.
          * This interface is available only when `CONTROL_GRID` is `QuadControlGrid<3>`.
          */
-        void use_absolute_area() requires (isQuadControlGrid<CONTROL_GRID>::value && QuadControlGridMeshDim<CONTROL_GRID>::value == 3) { use_absolute_area_ = true; };
+        void use_absolute_area() requires (std::is_same_v<CONTROL_GRID, QuadControlGrid>) {
+            assert(CONTROL_GRID.)
+            use_absolute_area_ = true;
+        };
 
         /**
          * Represents an axis-aligned sub-block in the parametric (u,v,w) domain together with interval
