@@ -802,7 +802,12 @@ namespace geolio::test
             mesh.cells.create_hex(0, 1, 2, 3, 4, 5, 6, 7);
 
             control_grid = std::make_unique<Grid>(mesh, ORDER);
-            this->control_grid->control_nodes.set_dimension(DIM);
+            control_grid->control_nodes.set_dimension(DIM);
+
+            EXPECT_EQ(control_grid->control_nodes.mesh().vertices.nb(), std::pow(ORDER+1, 3));
+            EXPECT_EQ(control_grid->control_nodes.mesh().edges.nb(), 0);
+            EXPECT_EQ(control_grid->control_nodes.mesh().facets.nb(), 0);
+            EXPECT_EQ(control_grid->control_nodes.mesh().cells.nb(), 1);
         }
     };
 
@@ -957,6 +962,11 @@ namespace geolio::test
 
             control_grid = std::make_unique<Grid>(mesh, ORDER);
             control_grid->control_nodes.set_dimension(DIM);
+
+            EXPECT_EQ(control_grid->control_nodes.mesh().vertices.nb(), 2*std::pow(ORDER+1, 3)-std::pow(ORDER+1, 2));
+            EXPECT_EQ(control_grid->control_nodes.mesh().edges.nb(), 0);
+            EXPECT_EQ(control_grid->control_nodes.mesh().facets.nb(), 0);
+            EXPECT_EQ(control_grid->control_nodes.mesh().cells.nb(), 2);
         }
     };
 
