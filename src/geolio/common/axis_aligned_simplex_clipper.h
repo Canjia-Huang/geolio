@@ -193,6 +193,13 @@ namespace geolio
      *    points as soon as the section is thin;
      *  - a vertex lying exactly on a cut plane belongs to the *negative* (closed) half
      *    space: a cell is reported on the positive side only when it is strictly on it;
+     *  - a border facet lying *exactly* in a cut plane (both of its vertices on the plane for
+     *    a triangle, its three vertices for a tetrahedron) is always reported through
+     *    `facet_cut_plane()`, including when the cell it belongs to is *not* cut by that
+     *    plane: a cut plane may coincide with a facet of the clipped mesh, and the cells on
+     *    its negative side are then left untouched by the clip. A caller accumulating a
+     *    measure along the cut planes -- for instance the boundary term of a block cutting
+     *    gradient -- relies on the bookkeeping being complete;
      *  - degenerate (zero measure) cells are *kept*, since a cut plane going through a
      *    vertex produces them. Their degeneracy is exact (coincident vertices, exactly zero
      *    orientation) rather than almost degenerate, so callers can identify and drop them

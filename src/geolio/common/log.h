@@ -9,6 +9,14 @@
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/sink.h>
 
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
 #ifdef ERROR
 #undef ERROR
 #endif
@@ -53,7 +61,7 @@ namespace geolio::LOG {
 
             /**
              * @brief Returns the captured source line number.
-             * @return The line number.
+             * @return The source line number.
              */
             [[nodiscard]] constexpr std::uint32_t LineNum() const noexcept {
                 return _lineNum;
@@ -78,17 +86,360 @@ namespace geolio::LOG {
                                       location.FuncName()};
         }
 
+        /**
+         * @brief The process-wide state of one logging category.
+         * @details The name, the underlying spdlog logger and the category's own
+         *          on/off switch live here instead of inside Category, so every
+         *          handle of the same category -- one per class, per object or per
+         *          translation unit -- observes and controls the very same state.
+         */
+        struct CategoryState {
+            /** The category name, which is also the underlying spdlog logger name. */
+            std::string name;
+
+            /** The underlying spdlog logger, derived from the default logger. */
+            std::shared_ptr<spdlog::logger> logger;
+
+            /** The category-level switch; independent of the spdlog level. */
+            std::atomic<bool> enabled{true};
+        };
+
+        /**
+         * @brief Returns the state of the given category, creating it on first use.
+         * @details Defined in log.cpp on purpose: a single state then serves the
+         *          geolio library, the applications and the tests, whereas a
+         *          header-only state would be duplicated in every shared object on
+         *          platforms without symbol interposition, so that a category
+         *          disabled from one module would keep logging in another one.
+         *
+         *          The spdlog logger it holds, on the contrary, belongs to the spdlog
+         *          registry of the module that opens the category first; it comes
+         *          from the caller, through @p existing or @p prototype, which is
+         *          what keeps a category of the application configured like the rest
+         *          of the application even where the registries are not merged.
+         * @param[in] name The category name.
+         * @param[in] existing A logger of that name that the calling module already
+         *            has, or nullptr to create one from @p prototype.
+         * @param[in] prototype The default logger of the calling module, cloned to
+         *            create the logger of a category that does not exist yet.
+         * @return The shared state of that category; never null.
+         */
+        std::shared_ptr<CategoryState> GetOrCreateCategory(const std::string &name,
+                                                           std::shared_ptr<spdlog::logger> existing,
+                                                           const std::shared_ptr<spdlog::logger> &prototype);
+
+        /**
+         * @brief Makes the logger of a category known to the spdlog registry of the
+         *        module this function is compiled into.
+         * @details Deliberately inline, so that it runs in the calling module. spdlog
+         *          is header-only here, so when geolio is a shared library the library
+         *          and the application each hold their own spdlog registry on the
+         *          platforms that do not merge those symbols -- Windows, typically.
+         *          A category that the application opens must then be registered in
+         *          the registry of the application, otherwise its logger is missing
+         *          from spdlog::get(name), does not follow spdlog::set_level() and
+         *          spdlog::set_pattern(), and does not write to the sinks of the
+         *          application. Where the registries are merged already, the lookup
+         *          below finds the logger and nothing else happens.
+         * @param[in] state The state of the category to adopt.
+         */
+        inline void AdoptCategoryLogger(const std::shared_ptr<CategoryState> &state) {
+            if (spdlog::get(state->name) != nullptr) {
+                return;
+            }
+            try {
+                spdlog::register_logger(state->logger);
+            } catch (const spdlog::spdlog_ex &) {
+                // Another thread registered a logger of that name in between, and the
+                // registry of this module now knows one: that is all this needs.
+            }
+        }
+
+        /**
+         * @brief Returns the state of the given category without creating it.
+         * @param[in] name The category name.
+         * @return The shared state, or nullptr when that category does not exist yet.
+         */
+        std::shared_ptr<CategoryState> FindCategory(const std::string &name);
+
+        /**
+         * @brief Returns the names of every category created so far.
+         * @return The category names, in unspecified order.
+         */
+        std::vector<std::string> CategoryNames();
+
+        /**
+         * @brief Applies the level specification found in an environment variable.
+         * @details Also defined in log.cpp, where the levels are kept for the
+         *          categories that are created only after this call.
+         * @param[in] variable The environment variable to read.
+         */
+        void LoadEnvironmentLevels(const char *variable);
     } // namespace detail
+
+    /**
+     * @brief A named logger giving one class its own logging configuration.
+     * @details A Category is a handle on the process-wide state of a category (see
+     *          detail::CategoryState). It wraps a named spdlog logger that shares
+     *          the sinks, the formatter and the flush policy of the default logger,
+     *          plus an independent on/off switch. Everything logged through the
+     *          same category name -- from any class, object or translation unit --
+     *          is therefore configured as a whole:
+     *
+     *            - Category::SetEnabled(false), or LOG::Disable(name), silences
+     *              exactly that category, whatever the global level becomes;
+     *            - Category::SetLevel() gives the category its own threshold; a
+     *              new category otherwise starts at the level of the default
+     *              logger, unless its SPDLOG_LEVEL entry says otherwise, and it
+     *              follows the later spdlog::set_level() calls;
+     *            - the category *is* a plain spdlog logger named after the category,
+     *              so spdlog::get(name), spdlog::set_level(), spdlog::set_pattern(),
+     *              spdlog::apply_all() and `SPDLOG_LEVEL=info,name=off` all act on it;
+     *            - that name is what `%n` prints, and the default pattern of spdlog
+     *              contains `%n`, so a category already shows up in the output
+     *              without any setup, where the unnamed default logger shows no
+     *              name at all:
+     * @code
+     *   [2026-10-13 12:00:00.000] [info] [frame_field.cpp:42] a global message
+     *   [2026-10-13 12:00:00.001] [frame_field] [info] [frame_field.cpp:43] a message of that class
+     * @endcode
+     *              An application that sets a pattern of its own must keep `%n`
+     *              in it, e.g. spdlog::set_pattern("[%n] [%l] %v"), otherwise the
+     *              name of the category is dropped along with the other fields
+     *              that the pattern does not mention.
+     *
+     * @code
+     *   class FrameField {
+     *   public:
+     *       static LOG::Category &Logger() {
+     *           static LOG::Category category{"frame_field"};
+     *           return category;
+     *       }
+     *
+     *       void compute() {
+     *           LOG::DEBUG(Logger(), "found {} facets", nb);   // this class only
+     *           LOG::DEBUG("global message");                  // unchanged, global
+     *       }
+     *   };
+     *
+     *   LOG::Disable("frame_field");   // from anywhere: silence that class only
+     *   LOG::SetLevel("frame_field", spdlog::level::debug);   // or retune it
+     * @endcode
+     *
+     * @note The handle is cheap to copy, and a copy refers to the same category:
+     *       the switch and the level are shared, not per handle.
+     * @note Prefer the function-local static accessor shown above over an inline
+     *       static member: the underlying logger is then created on first use, so
+     *       it inherits a default logger (sinks, pattern) installed at startup.
+     * @note Open a category through LOG::Category, or through one of the LOG:: tags,
+     *       rather than by looking its name up with spdlog::get() alone: geolio being
+     *       a shared library and spdlog header-only, the library and the application
+     *       can each have their own spdlog registry (on Windows, and wherever those
+     *       symbols are not merged), and it is LOG::Category that keeps both sides
+     *       working on the same logger.
+     */
+    class Category {
+    public:
+        /**
+         * @brief Opens the category with the given name, creating it on first use.
+         * @details The logger of the category is created once per process, from the
+         *          default logger of the module that opens the category first -- the
+         *          application, in the intended usage -- so it starts with the sinks,
+         *          the pattern, the level and the flush policy of that module, and it
+         *          follows every later spdlog::set_level(), spdlog::set_pattern() and
+         *          spdlog::apply_all() call of that module. A logger of that name that
+         *          the module already has is reused as is.
+         * @param[in] name The category name, used as the spdlog logger name.
+         */
+        explicit Category(const std::string_view name) {
+            const std::string key{name};
+            _state = detail::GetOrCreateCategory(key, spdlog::get(key), spdlog::default_logger());
+            detail::AdoptCategoryLogger(_state);
+        }
+
+        /**
+         * @brief Returns the category name.
+         * @return The name, which is also the underlying spdlog logger name.
+         */
+        [[nodiscard]] const std::string &Name() const noexcept {
+            return _state->name;
+        }
+
+        /**
+         * @brief Returns the underlying spdlog logger.
+         * @details Escape hatch for what the category API does not cover, e.g.
+         *          replacing its sinks with a dedicated file sink or setting a
+         *          category-specific pattern.
+         * @return The underlying spdlog logger; never null.
+         */
+        [[nodiscard]] const std::shared_ptr<spdlog::logger> &Logger() const noexcept {
+            return _state->logger;
+        }
+
+        /**
+         * @brief Tells whether this category currently logs.
+         * @return True when the category is switched on; the spdlog level still
+         *         filters the messages that are actually emitted.
+         */
+        [[nodiscard]] bool Enabled() const noexcept {
+            return _state->enabled.load(std::memory_order_relaxed);
+        }
+
+        /**
+         * @brief Switches this category on or off.
+         * @details This is a hard, category-scoped mute: it is not undone by a later
+         *          spdlog::set_level(), unlike setting the level to off, since the
+         *          global level of spdlog is applied to every registered logger.
+         * @param[in] enabled False to silence the category, true to allow it again.
+         */
+        void SetEnabled(const bool enabled) const noexcept {
+            _state->enabled.store(enabled, std::memory_order_relaxed);
+        }
+
+        /** @brief Switches this category on. */
+        void Enable() const noexcept {
+            SetEnabled(true);
+        }
+
+        /** @brief Switches this category off, so that it logs nothing. */
+        void Disable() const noexcept {
+            SetEnabled(false);
+        }
+
+        /**
+         * @brief Returns the log level threshold of this category.
+         * @return The lowest level this category currently emits.
+         */
+        [[nodiscard]] spdlog::level::level_enum Level() const {
+            return _state->logger->level();
+        }
+
+        /**
+         * @brief Sets the log level threshold of this category only.
+         * @param[in] level The lowest level this category should emit.
+         */
+        void SetLevel(const spdlog::level::level_enum level) const {
+            _state->logger->set_level(level);
+        }
+
+        /** @brief Flushes the pending messages of this category. */
+        void Flush() const {
+            _state->logger->flush();
+        }
+
+        /**
+         * @brief Emits one message of this category, with the given call site.
+         * @details This is the back end of the LOG::TRACE, LOG::DEBUG, ... tags when
+         *          they are handed a category: it checks the category switch first,
+         *          then the level of the logger, so that a silenced category costs
+         *          nothing but two atomic loads. It is public because those tags are
+         *          free templates, and it can be called directly when the message of
+         *          a log statement is built elsewhere.
+         * @param[in] level The level of the message.
+         * @param[in] location The call-site location of the log statement.
+         * @param[in] fmt The format string describing the message.
+         * @param[in] args The arguments to be formatted into the message.
+         */
+        template<typename... Args>
+        void Emit(const spdlog::level::level_enum level, const detail::SourceLocation &location,
+                  fmt::format_string<Args...> fmt, Args &&...args) const {
+            if (!Enabled() || !_state->logger->should_log(level)) {
+                return;
+            }
+            _state->logger->log(detail::GetLogSourceLocation(location), level, fmt, std::forward<Args>(args)...);
+        }
+
+    private:
+        /** The shared state of this category. */
+        std::shared_ptr<detail::CategoryState> _state;
+    };
+
+    /**
+     * @brief Switches one category on or off, creating it on first use.
+     * @details Convenience for configurations where no Category handle is at hand,
+     *          e.g. a command-line flag of an application.
+     * @param[in] category The category name.
+     * @param[in] enabled False to silence that category, true to allow it again.
+     */
+    inline void SetEnabled(const std::string_view category, const bool enabled) {
+        Category{category}.SetEnabled(enabled);
+    }
+
+    /**
+     * @brief Switches one category on, creating it on first use.
+     * @param[in] category The category name.
+     */
+    inline void Enable(const std::string_view category) {
+        SetEnabled(category, true);
+    }
+
+    /**
+     * @brief Silences one category, creating it on first use.
+     * @param[in] category The category name.
+     */
+    inline void Disable(const std::string_view category) {
+        SetEnabled(category, false);
+    }
+
+    /**
+     * @brief Sets the level threshold of one category, creating it on first use.
+     * @param[in] category The category name.
+     * @param[in] level The lowest level that category should emit.
+     */
+    inline void SetLevel(const std::string_view category, const spdlog::level::level_enum level) {
+        Category{category}.SetLevel(level);
+    }
+
+    /**
+     * @brief Tells whether one category currently logs.
+     * @details A category that was never mentioned is enabled by default.
+     * @param[in] category The category name.
+     * @return True when that category is switched on.
+     */
+    [[nodiscard]] inline bool IsEnabled(const std::string_view category) {
+        const auto state = detail::FindCategory(std::string{category});
+        return state == nullptr || state->enabled.load(std::memory_order_relaxed);
+    }
+
+    /**
+     * @brief Returns the names of every category created so far.
+     * @return The category names, in unspecified order.
+     */
+    [[nodiscard]] inline std::vector<std::string> Names() {
+        return detail::CategoryNames();
+    }
+
+    /**
+     * @brief Applies per-category levels read from an environment variable.
+     * @details Lets a user retune the logging of a class without recompiling, e.g.
+     *          @code
+     *            SPDLOG_LEVEL="info,frame_field=off,mesh_object=debug" ./my_app
+     *          @endcode
+     *          where the bare `info` is the global level and every `name=level`
+     *          entry is a category. Call it once, at startup, after the level of
+     *          the application has been set, since the last writer wins.
+     * @param[in] variable The environment variable to read, SPDLOG_LEVEL by default.
+     */
+    inline void LoadEnvironmentLevels(const char *variable = "SPDLOG_LEVEL") {
+        detail::LoadEnvironmentLevels(variable);
+    }
 
     /**
      * @brief Logs a trace-level message, including the call-site location.
      * @details Wraps spdlog's trace logging so that each log statement
-     *          automatically carries its compile-time source location.
+     *          automatically carries its compile-time source location. Given a
+     *          Category as its first argument, the message goes to that category
+     *          instead of the default logger, and obeys the switch and the level
+     *          of that category:
+     * @code
+     *   LOG::TRACE("message of the whole application");
+     *   LOG::TRACE(Logger(), "message of this class only");
+     * @endcode
      */
     template<typename... Args>
     struct TRACE {
         /**
-         * @brief Emits a trace-level log message.
+         * @brief Emits a trace-level log message on the default logger.
          * @details Forwards the formatted message and arguments to spdlog with
          *          the given (or default-captured) source location.
          * @param[in] fmt The format string describing the message.
@@ -97,6 +448,19 @@ namespace geolio::LOG {
          */
         explicit constexpr TRACE(fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
             spdlog::log(GetLogSourceLocation(location), spdlog::level::trace, fmt, std::forward<Args>(args)...);
+        }
+
+        /**
+         * @brief Emits a trace-level log message on the given category.
+         * @details Goes through Category::Emit(), so the message is dropped when
+         *          that category is switched off or its level filters it out.
+         * @param[in] category The category the message belongs to.
+         * @param[in] fmt The format string describing the message.
+         * @param[in] args The arguments to be formatted into the message.
+         * @param[in] location The call-site location, auto-captured if omitted.
+         */
+        explicit constexpr TRACE(const Category &category, fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
+            category.Emit(spdlog::level::trace, location, fmt, std::forward<Args>(args)...);
         }
     };
 
@@ -108,14 +472,25 @@ namespace geolio::LOG {
     TRACE(fmt::format_string<Args...> fmt, Args &&...args) -> TRACE<Args...>;
 
     /**
+     * @brief CTAD deduction guide for the category form of TRACE.
+     * @details Deduces Args from the format string and the forwarded arguments,
+     *          the leading category being already a complete type.
+     */
+    template<typename... Args>
+    TRACE(const Category &category, fmt::format_string<Args...> fmt, Args &&...args) -> TRACE<Args...>;
+
+    /**
      * @brief Logs a debug-level message, including the call-site location.
      * @details Wraps spdlog's debug logging so that each log statement
-     *          automatically carries its compile-time source location.
+     *          automatically carries its compile-time source location. Given a
+     *          Category as its first argument, the message goes to that category
+     *          instead of the default logger, and obeys the switch and the level
+     *          of that category.
      */
     template<typename... Args>
     struct DEBUG {
         /**
-         * @brief Emits a debug-level log message.
+         * @brief Emits a debug-level log message on the default logger.
          * @details Forwards the formatted message and arguments to spdlog with
          *          the given (or default-captured) source location.
          * @param[in] fmt The format string describing the message.
@@ -124,6 +499,19 @@ namespace geolio::LOG {
          */
         explicit constexpr DEBUG(fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
             spdlog::log(GetLogSourceLocation(location), spdlog::level::debug, fmt, std::forward<Args>(args)...);
+        }
+
+        /**
+         * @brief Emits a debug-level log message on the given category.
+         * @details Goes through Category::Emit(), so the message is dropped when
+         *          that category is switched off or its level filters it out.
+         * @param[in] category The category the message belongs to.
+         * @param[in] fmt The format string describing the message.
+         * @param[in] args The arguments to be formatted into the message.
+         * @param[in] location The call-site location, auto-captured if omitted.
+         */
+        explicit constexpr DEBUG(const Category &category, fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
+            category.Emit(spdlog::level::debug, location, fmt, std::forward<Args>(args)...);
         }
     };
 
@@ -135,14 +523,25 @@ namespace geolio::LOG {
     DEBUG(fmt::format_string<Args...> fmt, Args &&...args) -> DEBUG<Args...>;
 
     /**
+     * @brief CTAD deduction guide for the category form of DEBUG.
+     * @details Deduces Args from the format string and the forwarded arguments,
+     *          the leading category being already a complete type.
+     */
+    template<typename... Args>
+    DEBUG(const Category &category, fmt::format_string<Args...> fmt, Args &&...args) -> DEBUG<Args...>;
+
+    /**
      * @brief Logs an info-level message, including the call-site location.
      * @details Wraps spdlog's info logging so that each log statement
-     *          automatically carries its compile-time source location.
+     *          automatically carries its compile-time source location. Given a
+     *          Category as its first argument, the message goes to that category
+     *          instead of the default logger, and obeys the switch and the level
+     *          of that category.
      */
     template<typename... Args>
     struct INFO {
         /**
-         * @brief Emits an info-level log message.
+         * @brief Emits an info-level log message on the default logger.
          * @details Forwards the formatted message and arguments to spdlog with
          *          the given (or default-captured) source location.
          * @param[in] fmt The format string describing the message.
@@ -151,6 +550,19 @@ namespace geolio::LOG {
          */
         explicit constexpr INFO(fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
             spdlog::log(GetLogSourceLocation(location), spdlog::level::info, fmt, std::forward<Args>(args)...);
+        }
+
+        /**
+         * @brief Emits an info-level log message on the given category.
+         * @details Goes through Category::Emit(), so the message is dropped when
+         *          that category is switched off or its level filters it out.
+         * @param[in] category The category the message belongs to.
+         * @param[in] fmt The format string describing the message.
+         * @param[in] args The arguments to be formatted into the message.
+         * @param[in] location The call-site location, auto-captured if omitted.
+         */
+        explicit constexpr INFO(const Category &category, fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
+            category.Emit(spdlog::level::info, location, fmt, std::forward<Args>(args)...);
         }
     };
 
@@ -162,14 +574,25 @@ namespace geolio::LOG {
     INFO(fmt::format_string<Args...> fmt, Args &&...args) -> INFO<Args...>;
 
     /**
+     * @brief CTAD deduction guide for the category form of INFO.
+     * @details Deduces Args from the format string and the forwarded arguments,
+     *          the leading category being already a complete type.
+     */
+    template<typename... Args>
+    INFO(const Category &category, fmt::format_string<Args...> fmt, Args &&...args) -> INFO<Args...>;
+
+    /**
      * @brief Logs a warning-level message, including the call-site location.
      * @details Wraps spdlog's warning logging so that each log statement
-     *          automatically carries its compile-time source location.
+     *          automatically carries its compile-time source location. Given a
+     *          Category as its first argument, the message goes to that category
+     *          instead of the default logger, and obeys the switch and the level
+     *          of that category.
      */
     template<typename... Args>
     struct WARN {
         /**
-         * @brief Emits a warning-level log message.
+         * @brief Emits a warning-level log message on the default logger.
          * @details Forwards the formatted message and arguments to spdlog with
          *          the given (or default-captured) source location.
          * @param[in] fmt The format string describing the message.
@@ -178,6 +601,19 @@ namespace geolio::LOG {
          */
         explicit constexpr WARN(fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
             spdlog::log(GetLogSourceLocation(location), spdlog::level::warn, fmt, std::forward<Args>(args)...);
+        }
+
+        /**
+         * @brief Emits a warning-level log message on the given category.
+         * @details Goes through Category::Emit(), so the message is dropped when
+         *          that category is switched off or its level filters it out.
+         * @param[in] category The category the message belongs to.
+         * @param[in] fmt The format string describing the message.
+         * @param[in] args The arguments to be formatted into the message.
+         * @param[in] location The call-site location, auto-captured if omitted.
+         */
+        explicit constexpr WARN(const Category &category, fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
+            category.Emit(spdlog::level::warn, location, fmt, std::forward<Args>(args)...);
         }
     };
 
@@ -189,14 +625,25 @@ namespace geolio::LOG {
     WARN(fmt::format_string<Args...> fmt, Args &&...args) -> WARN<Args...>;
 
     /**
+     * @brief CTAD deduction guide for the category form of WARN.
+     * @details Deduces Args from the format string and the forwarded arguments,
+     *          the leading category being already a complete type.
+     */
+    template<typename... Args>
+    WARN(const Category &category, fmt::format_string<Args...> fmt, Args &&...args) -> WARN<Args...>;
+
+    /**
      * @brief Logs an error-level message, including the call-site location.
      * @details Wraps spdlog's error logging so that each log statement
-     *          automatically carries its compile-time source location.
+     *          automatically carries its compile-time source location. Given a
+     *          Category as its first argument, the message goes to that category
+     *          instead of the default logger, and obeys the switch and the level
+     *          of that category.
      */
     template<typename... Args>
     struct ERROR {
         /**
-         * @brief Emits an error-level log message.
+         * @brief Emits an error-level log message on the default logger.
          * @details Forwards the formatted message and arguments to spdlog with
          *          the given (or default-captured) source location.
          * @param[in] fmt The format string describing the message.
@@ -205,6 +652,19 @@ namespace geolio::LOG {
          */
         explicit constexpr ERROR(fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
             spdlog::log(GetLogSourceLocation(location), spdlog::level::err, fmt, std::forward<Args>(args)...);
+        }
+
+        /**
+         * @brief Emits an error-level log message on the given category.
+         * @details Goes through Category::Emit(), so the message is dropped when
+         *          that category is switched off or its level filters it out.
+         * @param[in] category The category the message belongs to.
+         * @param[in] fmt The format string describing the message.
+         * @param[in] args The arguments to be formatted into the message.
+         * @param[in] location The call-site location, auto-captured if omitted.
+         */
+        explicit constexpr ERROR(const Category &category, fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
+            category.Emit(spdlog::level::err, location, fmt, std::forward<Args>(args)...);
         }
     };
 
@@ -216,14 +676,25 @@ namespace geolio::LOG {
     ERROR(fmt::format_string<Args...> fmt, Args &&...args) -> ERROR<Args...>;
 
     /**
+     * @brief CTAD deduction guide for the category form of ERROR.
+     * @details Deduces Args from the format string and the forwarded arguments,
+     *          the leading category being already a complete type.
+     */
+    template<typename... Args>
+    ERROR(const Category &category, fmt::format_string<Args...> fmt, Args &&...args) -> ERROR<Args...>;
+
+    /**
      * @brief Logs a critical-level message, including the call-site location.
      * @details Wraps spdlog's critical logging so that each log statement
-     *          automatically carries its compile-time source location.
+     *          automatically carries its compile-time source location. Given a
+     *          Category as its first argument, the message goes to that category
+     *          instead of the default logger, and obeys the switch and the level
+     *          of that category.
      */
     template<typename... Args>
     struct CRITICAL {
         /**
-         * @brief Emits a critical-level log message.
+         * @brief Emits a critical-level log message on the default logger.
          * @details Forwards the formatted message and arguments to spdlog with
          *          the given (or default-captured) source location.
          * @param[in] fmt The format string describing the message.
@@ -233,6 +704,19 @@ namespace geolio::LOG {
         explicit constexpr CRITICAL(fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
             spdlog::log(GetLogSourceLocation(location), spdlog::level::critical, fmt, std::forward<Args>(args)...);
         }
+
+        /**
+         * @brief Emits a critical-level log message on the given category.
+         * @details Goes through Category::Emit(), so the message is dropped when
+         *          that category is switched off or its level filters it out.
+         * @param[in] category The category the message belongs to.
+         * @param[in] fmt The format string describing the message.
+         * @param[in] args The arguments to be formatted into the message.
+         * @param[in] location The call-site location, auto-captured if omitted.
+         */
+        explicit constexpr CRITICAL(const Category &category, fmt::format_string<Args...> fmt, Args &&...args, const detail::SourceLocation &location = {}) {
+            category.Emit(spdlog::level::critical, location, fmt, std::forward<Args>(args)...);
+        }
     };
 
     /**
@@ -241,6 +725,14 @@ namespace geolio::LOG {
      */
     template<typename... Args>
     CRITICAL(fmt::format_string<Args...> fmt, Args &&...args) -> CRITICAL<Args...>;
+
+    /**
+     * @brief CTAD deduction guide for the category form of CRITICAL.
+     * @details Deduces Args from the format string and the forwarded arguments,
+     *          the leading category being already a complete type.
+     */
+    template<typename... Args>
+    CRITICAL(const Category &category, fmt::format_string<Args...> fmt, Args &&...args) -> CRITICAL<Args...>;
 } // namespace LOG
 
 #endif //GEOLIO_LOG_H
