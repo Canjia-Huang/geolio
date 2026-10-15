@@ -572,9 +572,9 @@ namespace geolio
             ) const {
             volumes.resize(this->control_nodes.mesh().cells.nb());
 
-            /* 2k-1 >= 3*order-1  ->  k >= 1.5*order */
+            /* 2k-1 >= 3*order-1  ->  the rule must be exact for degree 3*order-1 */
             std::vector<std::pair<GEO::vec3, double>> points_and_weights;
-            geolio::get_Gauss_Legendre_quadrature_cube(std::ceil(1.5*this->order_), points_and_weights);
+            geolio::get_Gauss_Legendre_quadrature_cube(3*this->order_ - 1, points_and_weights);
 
             for (const auto& c : this->control_nodes.mesh().cells) {
                 auto& V = volumes[c];

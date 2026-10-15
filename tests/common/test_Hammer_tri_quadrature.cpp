@@ -86,5 +86,5 @@ namespace geolio::test
     }
 
     INSTANTIATE_TEST_SUITE_P(DegreeTests, HammerTriQuadratureTest,
-        ::testing::Values(1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15));
+        ::testing::Values(1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15, 10, 12, 14, 16, 17, 20));
 }

@@ -41,9 +41,9 @@ namespace geolio::test
     class GaussLegendreQuadratureTest : public ::testing::TestWithParam<GEO::index_t> {
     public:
         void get_points_and_weights(
-            const GEO::index_t order
+            const GEO::index_t degree
             ) {
-            geolio::get_Gauss_Legendre_quadrature(order, points_and_weights_);
+            geolio::get_Gauss_Legendre_quadrature(degree, points_and_weights_);
 
             /* [0, 1] -> [-1, 1] */
             for (auto& [x, w] : points_and_weights_) {
@@ -51,7 +51,10 @@ namespace geolio::test
                 w *= 2;
             }
 
-            ASSERT_EQ(points_and_weights_.size(), order);
+            /* An n-point rule is exact up to degree 2n-1, so the rule returned for
+             * `degree` has the smallest n with 2n-1 >= degree. */
+            num_points_ = (degree + 2) / 2;
+            ASSERT_EQ(points_and_weights_.size(), num_points_);
         }
 
         void eval_nodes_symmetry(
@@ -72,27 +75,27 @@ namespace geolio::test
         }
 
         void eval_k_polynomial(
-            const GEO::index_t order
             ) const {
-            for (int k = 0; k <= 2*order-1; ++k) {
+            const GEO::index_t MAX_DEGREE = 2*num_points_-1;
+            for (GEO::index_t k = 0; k <= MAX_DEGREE; ++k) {
                 const double analytical = analytical_integral(k);
                 const double numerical = numerical_integral(k, points_and_weights_);
                 EXPECT_NEAR(analytical, numerical, 1e-14);
             }
         }
 
+        GEO::index_t num_points_ = 0;
         std::vector<std::pair<double, double>> points_and_weights_;
     };
 
-    TEST_P(GaussLegendreQuadratureTest, SupportsMultipleOrders) {
-        const GEO::index_t n = GetParam();
-        get_points_and_weights(n);
+    TEST_P(GaussLegendreQuadratureTest, SupportsMultipleDegrees) {
+        get_points_and_weights(GetParam());
 
         eval_nodes_symmetry();
         eval_weights_sum();
-        eval_k_polynomial(n);
+        eval_k_polynomial();
     }
 
-    INSTANTIATE_TEST_SUITE_P(OrderTest, GaussLegendreQuadratureTest,
-        ::testing::Values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
+    INSTANTIATE_TEST_SUITE_P(DegreeTests, GaussLegendreQuadratureTest,
+        ::testing::Range(GEO::index_t(1), GEO::index_t(30)));
 }

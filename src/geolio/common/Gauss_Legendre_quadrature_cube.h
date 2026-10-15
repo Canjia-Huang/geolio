@@ -12,19 +12,21 @@ namespace geolio
     /**
      * @brief Generate the Gauss-Legendre quadrature rule on the unit cube [0, 1]^3.
      *
-     * This function builds the 3D tensor-product rule from the 1D Gauss-Legendre
-     * quadrature of the given order.
+     * This function builds the 3D tensor-product rule from a 1D Gauss-Legendre rule
+     * that is exact for the requested degree.
      *
-     * @param[in] order The quadrature order used to generate the 1D rule.
+     * @param[in] degree Target polynomial degree of exactness in each variable.
      * @param[out] points_and_weights The resulting 3D quadrature points and weights,
      *                                stored as (point, weight) pairs.
+     * @note The resulting rule is exact for all monomials `x^a y^b z^c` with
+     *       `a <= degree`, `b <= degree` and `c <= degree`.
      */
     inline void get_Gauss_Legendre_quadrature_cube(
-        const GEO::index_t order,
+        const GEO::index_t degree,
         std::vector<std::pair<GEO::vec3, double>>& points_and_weights
         ) {
         std::vector<std::pair<double, double>> points_and_weights_1d;
-        get_Gauss_Legendre_quadrature(order, points_and_weights_1d);
+        get_Gauss_Legendre_quadrature(degree, points_and_weights_1d);
 
         points_and_weights.clear();
         points_and_weights.reserve(std::pow(points_and_weights_1d.size(),3));

@@ -592,9 +592,11 @@ namespace geolio
             /*
              * DIM == 2: 2n-1 >= 2p-1, n >= p
              * DIM == 3: appro n = p+1 or p+2
+             * The facet measure is not polynomial, so keep the previous node count
+             * n = p + mesh_dimension - 2; as a degree of exactness that is 2n-1.
              */
             std::vector<std::pair<GEO::vec2, double>> points_and_weights;
-            geolio::get_Gauss_Legendre_quadrature_quad(std::ceil(this->order_ + mesh_dimension_-2), points_and_weights);
+            geolio::get_Gauss_Legendre_quadrature_quad(2*(this->order_ + mesh_dimension_ - 2) - 1, points_and_weights);
 
             for (const auto& f : this->control_nodes.mesh().facets) {
                 auto& S = areas[f];

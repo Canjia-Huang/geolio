@@ -232,22 +232,21 @@ namespace geolio::test
     // =====================================================================
 
     /**
-     * @brief Orders needed by the collapsed rules for a degree @p p integrand.
+     * @brief Degree of exactness needed by the collapsed rules for a degree @p p integrand.
      * @details After the change of variables the integrand has degree ``p + 2`` in
-     *          the slowest variable and ``p`` in the fastest, and an n-point
-     *          Gauss-Legendre rule is exact up to degree ``2n - 1``.
+     *          the slowest variable and ``p`` in the fastest, so a rule that is exact
+     *          for degree ``p + 2`` integrates the whole collapsed integrand exactly.
      * @param[in] p Degree of the integrand.
-     * @return A number of nodes sufficient for exactness.
+     * @return A degree of exactness sufficient for exactness.
      * @note The rules are deliberately built by collapsing a one-dimensional
-     *       Gauss-Legendre rule instead of using the canned triangle and tetrahedron
-     *       rules of Hammer_tri_quadrature.h and Hammer_tet_quadrature.h: the tet
-     *       rules available there stop at degree of precision 7, which is below the
-     *       degree 10 reached by the collapse at ``p = 8``. The collapsed rule has no
-     *       such ceiling, because get_Gauss_Legendre_quadrature() computes nodes at
-     *       any order.
+     *       Gauss-Legendre rule rather than from the canned triangle and tetrahedron
+     *       rules of Hammer_tri_quadrature.h and Hammer_tet_quadrature.h, so that the
+     *       reference values stay independent of the quadrature code under test. The
+     *       collapsed rule is exact at any degree, because
+     *       get_Gauss_Legendre_quadrature() computes nodes at any degree.
      */
-    static int quadrature_order(const unsigned int p) {
-        return static_cast<int>((p + 3) / 2) + 2;
+    static GEO::index_t quadrature_degree(const unsigned int p) {
+        return static_cast<GEO::index_t>(p) + 2;
     }
 
     /**
@@ -261,7 +260,7 @@ namespace geolio::test
      * @param[in] b Second triangle vertex.
      * @param[in] c Third triangle vertex.
      * @param[in] integrand The function to integrate.
-     * @param[in] order Number of Gauss-Legendre nodes per variable.
+     * @param[in] degree Degree of exactness requested from the 1D Gauss-Legendre rule.
      * @return The integral of @p integrand over the triangle, in physical units.
      */
     static double integrate_triangle(
@@ -269,21 +268,19 @@ namespace geolio::test
         const GEO::vec3& b,
         const GEO::vec3& c,
         const std::function<double(const GEO::vec3&)>& integrand,
-        const int order
+        const GEO::index_t degree
         ) {
         std::vector<std::pair<double, double>> rule;
-        get_Gauss_Legendre_quadrature(GEO::index_t(order), rule);
+        get_Gauss_Legendre_quadrature(degree, rule);
 
         const double area_scale = GEO::length(GEO::cross(b - a, c - a));
         double total = 0.0;
-        for (int i = 0; i < order; ++i) {
-            for (int j = 0; j < order; ++j) {
-                const double u = rule[i].first;
-                const double v = rule[j].first;
+        for (const auto& [u, wu] : rule) {
+            for (const auto& [v, wv] : rule) {
                 const double s = u;
                 const double t = v * (1.0 - u);
                 const GEO::vec3 x = a + s * (b - a) + t * (c - a);
-                total += rule[i].second * rule[j].second * (1.0 - u) * integrand(x);
+                total += wu * wv * (1.0 - u) * integrand(x);
             }
         }
         return total * area_scale;
@@ -299,7 +296,7 @@ namespace geolio::test
      * @param[in] p2 Third tetrahedron vertex.
      * @param[in] p3 Fourth tetrahedron vertex.
      * @param[in] integrand The function to integrate.
-     * @param[in] order Number of Gauss-Legendre nodes per variable.
+     * @param[in] degree Degree of exactness requested from the 1D Gauss-Legendre rule.
      * @return The integral of @p integrand over the tetrahedron, in physical units.
      */
     static double integrate_tetrahedron(
@@ -308,10 +305,10 @@ namespace geolio::test
         const GEO::vec3& p2,
         const GEO::vec3& p3,
         const std::function<double(const GEO::vec3&)>& integrand,
-        const int order
+        const GEO::index_t degree
         ) {
         std::vector<std::pair<double, double>> rule;
-        get_Gauss_Legendre_quadrature(GEO::index_t(order), rule);
+        get_Gauss_Legendre_quadrature(degree, rule);
 
         const GEO::vec3 U1 = p1 - p0;
         const GEO::vec3 U2 = p2 - p0;
@@ -319,18 +316,14 @@ namespace geolio::test
         const double volume_scale = ::fabs(GEO::dot(U1, GEO::cross(U2, U3)));
 
         double total = 0.0;
-        for (int i = 0; i < order; ++i) {
-            for (int j = 0; j < order; ++j) {
-                for (int k = 0; k < order; ++k) {
-                    const double a = rule[i].first;
-                    const double b = rule[j].first;
-                    const double c = rule[k].first;
+        for (const auto& [a, wa] : rule) {
+            for (const auto& [b, wb] : rule) {
+                for (const auto& [c, wc] : rule) {
                     const double s = a;
                     const double t = b * (1.0 - a);
                     const double u = c * (1.0 - a) * (1.0 - b);
                     const GEO::vec3 x = p0 + s * U1 + t * U2 + u * U3;
-                    total += rule[i].second * rule[j].second * rule[k].second *
-                        (1.0 - a) * (1.0 - a) * (1.0 - b) * integrand(x);
+                    total += wa * wb * wc * (1.0 - a) * (1.0 - a) * (1.0 - b) * integrand(x);
                 }
             }
         }
@@ -529,7 +522,7 @@ namespace geolio::test
                     }
                     return acc;
                 },
-                quadrature_order(p)
+                quadrature_degree(p)
                 );
 
             const double expected = lp_surface_energy_normalization(p) * reference;
@@ -586,7 +579,7 @@ namespace geolio::test
                     }
                     return acc;
                 },
-                quadrature_order(p)
+                quadrature_degree(p)
                 );
 
             const double expected = lp_volume_energy_normalization(p) * reference;
@@ -667,10 +660,10 @@ namespace geolio::test
 
             // Reference integrals over the transformed simplices.
             const double tri_ref = integrate_triangle(
-                U[0], U[1], U[2], norm_p_pow, quadrature_order(p)
+                U[0], U[1], U[2], norm_p_pow, quadrature_degree(p)
                 );
             const double tet_ref = integrate_tetrahedron(
-                GEO::vec3(0, 0, 0), U[0], U[1], U[2], norm_p_pow, quadrature_order(p)
+                GEO::vec3(0, 0, 0), U[0], U[1], U[2], norm_p_pow, quadrature_degree(p)
                 );
 
             EXPECT_NEAR(

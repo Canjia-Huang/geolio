@@ -7,10 +7,12 @@
 
 #include <array>
 #include <utility>
+#include <vector>
 #include <geogram/basic/geometry.h>
 #include <geogram/basic/numeric.h>
 #include <cassert>
-#include <geolio/common/log.h>
+#include <geolio/common/Gauss_Jacobi_quadrature.h>
+#include <geolio/common/Gauss_Legendre_quadrature.h>
 
 namespace geolio
 {
@@ -27,15 +29,15 @@ namespace geolio
      * (0, 0, 1) --------- (0, 1, 0)
      */
 
-    // KEAST0, the Keast Rule, order 1, degree of precision 1.
-    inline const std::vector<std::pair<GEO::vec3, double>> KEAST0_ORDER_1 = {
+    // KEAST0, the Keast rule, 1 point, degree of precision 1.
+    inline const std::vector<std::pair<GEO::vec3, double>> KEAST0 = {
         {
             {GEO::vec3(0.2500000000000000, 0.2500000000000000, 0.2500000000000000), 0.1666666666666667}
         }
     };
 
-    // KEAST1, the Keast Rule, order 4, precision 2.
-    inline const std::vector<std::pair<GEO::vec3, double>> KEAST1_ORDER_4 = {
+    // KEAST1, the Keast rule, 4 points, degree of precision 2.
+    inline const std::vector<std::pair<GEO::vec3, double>> KEAST1 = {
         {
             {GEO::vec3(0.5854101966249685, 0.1381966011250105, 0.1381966011250105), 0.0416666666666667},
             {GEO::vec3(0.1381966011250105, 0.1381966011250105, 0.1381966011250105), 0.0416666666666667},
@@ -44,8 +46,8 @@ namespace geolio
         }
     };
 
-    // KEAST3, the Keast Rule, order 10, degree of precision 3.
-    inline const std::vector<std::pair<GEO::vec3, double>> KEAST3_ORDER_10 = {
+    // KEAST2, the Keast rule, 5 points, degree of precision 3.
+    inline const std::vector<std::pair<GEO::vec3, double>> KEAST2 = {
         {
             {GEO::vec3(0.2500000000000000, 0.2500000000000000, 0.2500000000000000), -0.1333333333333333},
             {GEO::vec3(0.5000000000000000, 0.1666666666666667, 0.1666666666666667), 0.0750000000000000},
@@ -55,8 +57,8 @@ namespace geolio
         }
     };
 
-    // KEAST4, the Keast Rule, order 11, degree of precision 4.
-    inline const std::vector<std::pair<GEO::vec3, double>> KEAST4_ORDER_11 = {
+    // KEAST4, the Keast rule, 11 points, degree of precision 4.
+    inline const std::vector<std::pair<GEO::vec3, double>> KEAST4 = {
         {
             {GEO::vec3(0.2500000000000000, 0.2500000000000000, 0.2500000000000000), -0.0131555555555556},
             {GEO::vec3(0.7857142857142857, 0.0714285714285714, 0.0714285714285714), 0.0076222222222222},
@@ -72,8 +74,8 @@ namespace geolio
         }
     };
 
-    // KEAST6, the Keast Rule, order 15, degree of precision 5.
-    inline const std::vector<std::pair<GEO::vec3, double>> KEAST6_ORDER_15 = {
+    // KEAST6, the Keast rule, 15 points, degree of precision 5.
+    inline const std::vector<std::pair<GEO::vec3, double>> KEAST6 = {
         {
             {GEO::vec3(0.2500000000000000, 0.2500000000000000, 0.2500000000000000), 0.0302836780970892},
             {GEO::vec3(0.0000000000000000, 0.3333333333333333, 0.3333333333333333), 0.0060267857142857},
@@ -93,8 +95,8 @@ namespace geolio
         }
     };
 
-    // KEAST7, the Keast Rule, order 24, degree of precision 6.
-    inline const std::vector<std::pair<GEO::vec3, double>> KEAST7_ORDER_24 = {
+    // KEAST7, the Keast rule, 24 points, degree of precision 6.
+    inline const std::vector<std::pair<GEO::vec3, double>> KEAST7 = {
         {
             {GEO::vec3(0.3561913862225449, 0.2146028712591517, 0.2146028712591517), 0.0066537917096946},
             {GEO::vec3(0.2146028712591517, 0.2146028712591517, 0.2146028712591517), 0.0066537917096946},
@@ -123,8 +125,8 @@ namespace geolio
         }
     };
 
-    // KEAST8, the Keast Rule, order 31, degree of precision 7.
-    inline const std::vector<std::pair<GEO::vec3, double>> KEAST8_ORDER_31 = {
+    // KEAST8, the Keast rule, 31 points, degree of precision 7.
+    inline const std::vector<std::pair<GEO::vec3, double>> KEAST8 = {
         {
             {GEO::vec3(0.2500000000000000, 0.2500000000000000, 0.2500000000000000), 0.0182642234661088},
             {GEO::vec3(0.7653604230090441, 0.0782131923303186, 0.0782131923303186), 0.0105999415244142},
@@ -166,11 +168,15 @@ namespace geolio
      * The returned points are in the parameter domain with vertices
      * `(0,0,0)`, `(1,0,0)`, `(0,1,0)`, and `(0,0,1)`.
      *
+     * The tabulated degrees `1, 2, ..., 7` are served from the tables above.
+     * Every other degree is computed on the fly by collapsing the tetrahedron
+     * onto the unit cube, so @p degree has no upper limit.
+     *
      * @param[in] degree Target polynomial degree of exactness.
-     * Supported values are: `1, 2, 3, 4, 5, 6, 7`.
      * @param[out] points_and_weights Output pairs `(uvw, w)`, where `uvw` is a
      * quadrature point on the reference tetrahedron and `w` is the corresponding weight.
-     * @note Unsupported @p degree values trigger `THROW_RUNTIME_ERROR(...)`.
+     * @note A computed rule has `ceil((degree + 1) / 2)^3` points, all of them in
+     * the interior of the tetrahedron, and all of its weights are positive.
      */
     inline void get_Hammer_tet_quadrature(
         const GEO::index_t degree,
@@ -178,30 +184,59 @@ namespace geolio
         ) {
         switch (degree) {
             case 1:
-                points_and_weights = KEAST0_ORDER_1;
+                points_and_weights = KEAST0;
                 break;
             case 2:
-                points_and_weights = KEAST1_ORDER_4;
+                points_and_weights = KEAST1;
                 break;
             case 3:
-                points_and_weights = KEAST3_ORDER_10;
+                points_and_weights = KEAST2;
                 break;
             case 4:
-                points_and_weights = KEAST4_ORDER_11;
+                points_and_weights = KEAST4;
                 break;
             case 5:
-                points_and_weights = KEAST6_ORDER_15;
+                points_and_weights = KEAST6;
                 break;
             case 6:
-                points_and_weights = KEAST7_ORDER_24;
+                points_and_weights = KEAST7;
                 break;
             case 7:
-                points_and_weights = KEAST8_ORDER_31;
+                points_and_weights = KEAST8;
                 break;
-            default:
-                LOG::WARN("Hammer tetrahedron quadrature degree {} is not supported! Use the highest available degree.", degree);
-                points_and_weights = KEAST8_ORDER_31;
+            default: {
+                /*
+                 * Collapse the reference tetrahedron onto the unit cube,
+                 *
+                 *     (u, v, w) |-> (u, v (1 - u), w (1 - u) (1 - v)),
+                 *     Jacobian (1 - u)^2 (1 - v),
+                 *
+                 * and integrate over the cube with a tensor product of a
+                 * Gauss-Jacobi rule of weight `(1 - u)^2` along `u` and a
+                 * Gauss-Jacobi rule of weight `(1 - v)^1` along `v`, which together
+                 * absorb the Jacobian, and a Gauss-Legendre rule along `w`.
+                 *
+                 * A polynomial of degree `degree` in `(x, y, z)` becomes a
+                 * polynomial of degree at most `degree` in each of `u`, `v` and `w`,
+                 * so asking each 1D rule for degree `degree` is exactly enough; the
+                 * rule then picks a sufficient number of points per direction itself.
+                 */
+                std::vector<std::pair<double, double>> rule_u, rule_v, rule_w;
+                get_Gauss_Jacobi_quadrature(degree, 2.0, rule_u);
+                get_Gauss_Jacobi_quadrature(degree, 1.0, rule_v);
+                get_Gauss_Legendre_quadrature(degree, rule_w);
+
+                points_and_weights.clear();
+                points_and_weights.reserve(rule_u.size() * rule_v.size() * rule_w.size());
+                for (const auto& [u, wu] : rule_u)
+                    for (const auto& [v, wv] : rule_v)
+                        for (const auto& [w, ww] : rule_w)
+                            points_and_weights.emplace_back(
+                                GEO::vec3(u, v * (1.0 - u), w * (1.0 - u) * (1.0 - v)),
+                                wu * wv * ww
+                                );
                 break;
+            }
         }
     }
 }

@@ -7,10 +7,12 @@
 
 #include <array>
 #include <utility>
+#include <vector>
 #include <geogram/basic/geometry.h>
 #include <geogram/basic/numeric.h>
 #include <cassert>
-#include <geolio/common/log.h>
+#include <geolio/common/Gauss_Jacobi_quadrature.h>
+#include <geolio/common/Gauss_Legendre_quadrature.h>
 
 namespace geolio
 {
@@ -25,15 +27,16 @@ namespace geolio
      * (0, 0) --- (1, 0)
      */
 
-    // CENTROID, the centroid rule, order 1, degree of precision 1.
-    inline const std::vector<std::pair<GEO::vec2, double>> CENTROID_ORDER_1 = {
+    // CENTROID, the centroid rule, 1 point, degree of precision 1.
+    inline const std::vector<std::pair<GEO::vec2, double>> CENTROID = {
         {
             {GEO::vec2(0.33333333333333333, 0.33333333333333333), 0.5}
         }
     };
 
-    // GAUSS4X4, order 16, degree of precision 7, (essentially a product of two 4 point 1D Gauss-Legendre rules).
-    inline const std::vector<std::pair<GEO::vec2, double>> GAUSS4X4_ORDER_16 = {
+    // GAUSS4X4, 16 points, degree of precision 7 (essentially a product of two
+    // 4-point 1D Gauss-Legendre rules).
+    inline const std::vector<std::pair<GEO::vec2, double>> GAUSS4X4 = {
         {
             {GEO::vec2(0.0571041961, 0.06546699455602246), 0.023568368187905685},
             {GEO::vec2(0.2768430136, 0.05021012321401679), 0.035388067896299475},
@@ -54,8 +57,9 @@ namespace geolio
         }
     };
 
-    // GAUSS8X8, order 64, degree of precision 15, (essentially a product of two 8 point 1D Gauss-Legendre rules).
-    inline const std::vector<std::pair<GEO::vec2, double>> GAUSS8X8_ORDER_64 = {
+    // GAUSS8X8, 64 points, degree of precision 15 (essentially a product of two
+    // 8-point 1D Gauss-Legendre rules).
+    inline const std::vector<std::pair<GEO::vec2, double>> GAUSS8X8 = {
         {
             {GEO::vec2(0.9553660447100000, 0.8862103848242247E-03), 0.1667837031338886E-03},
             {GEO::vec2(0.9553660447100000, 0.4537789678039195E-02), 0.3663940405745523E-03},
@@ -124,8 +128,8 @@ namespace geolio
         }
     };
 
-    // SEVEN_POINT, order 7, degree of precision 3.
-    inline const std::vector<std::pair<GEO::vec2, double>> SEVEN_POINT_ORDER_7 = {
+    // SEVEN_POINT, 7 points, degree of precision 3.
+    inline const std::vector<std::pair<GEO::vec2, double>> SEVEN_POINT = {
         {
             {GEO::vec2(0.33333333333333333333, 0.33333333333333333333), 0.22500000000000000000},
             {GEO::vec2(1.00000000000000000000, 0.00000000000000000000), 0.02500000000000000000},
@@ -137,8 +141,8 @@ namespace geolio
         }
     };
 
-    // STRANG1, order 3, degree of precision 2.
-    inline const std::vector<std::pair<GEO::vec2, double>> STRANG1_ORDER_3 = {
+    // STRANG1, 3 points, degree of precision 2.
+    inline const std::vector<std::pair<GEO::vec2, double>> STRANG1 = {
         {
             {GEO::vec2(0.66666666666666666667, 0.16666666666666666667), 0.16666666666666666667},
             {GEO::vec2(0.16666666666666666667, 0.66666666666666666667), 0.16666666666666666667},
@@ -146,8 +150,8 @@ namespace geolio
         }
     };
 
-    // STRANG3, order 4, degree of precision 3.
-    inline const std::vector<std::pair<GEO::vec2, double>> STRANG3_ORDER_4 = {
+    // STRANG3, 4 points, degree of precision 3.
+    inline const std::vector<std::pair<GEO::vec2, double>> STRANG3 = {
         {
             {GEO::vec2(0.33333333333333333333, 0.33333333333333333333), -0.28125000000000000000},
             {GEO::vec2(0.60000000000000000000, 0.20000000000000000000),  0.26041666666666666667},
@@ -156,8 +160,8 @@ namespace geolio
         }
     };
 
-    // STRANG5, order 6, degree of precision 4.
-    inline const std::vector<std::pair<GEO::vec2, double>> STRANG5_ORDER_6 = {
+    // STRANG5, 6 points, degree of precision 4.
+    inline const std::vector<std::pair<GEO::vec2, double>> STRANG5 = {
         {
             {GEO::vec2(0.816847572980459, 0.091576213509771), 0.054975871827661},
             {GEO::vec2(0.091576213509771, 0.816847572980459), 0.054975871827661},
@@ -168,8 +172,8 @@ namespace geolio
         }
     };
 
-    // STRANG7, order 7, degree of precision 5.
-    inline const std::vector<std::pair<GEO::vec2, double>> STRANG7_ORDER_7 = {
+    // STRANG7, 7 points, degree of precision 5.
+    inline const std::vector<std::pair<GEO::vec2, double>> STRANG7 = {
         {
             {GEO::vec2(0.33333333333333333, 0.33333333333333333), 0.1125},
             {GEO::vec2(0.79742698535308720, 0.10128650732345633), 0.062969590272413585},
@@ -181,8 +185,11 @@ namespace geolio
         }
     };
 
-    // STRANG8, order 9, degree of precision 6.
-    inline const std::vector<std::pair<GEO::vec2, double>> STRANG8_ORDER_9 = {
+    // STRANG8, 9 points, degree of precision 5.
+    // NOTE The source dataset labels this rule "degree of precision 6", but it is only
+    // exact for polynomials up to degree 5 (the degree-6 monomial x^0 y^6 is integrated
+    // with an error of about 7e-5), which is why the switch below does not use it.
+    inline const std::vector<std::pair<GEO::vec2, double>> STRANG8 = {
         {
             {GEO::vec2(0.124949503233232, 0.437525248383384), 0.1029752523804435},
             {GEO::vec2(0.437525248383384, 0.124949503233232), 0.1029752523804435},
@@ -196,8 +203,8 @@ namespace geolio
         }
     };
 
-    // STRANG9, order 12, degree of precision 6.
-    inline const std::vector<std::pair<GEO::vec2, double>> STRANG9_ORDER_12 = {
+    // STRANG9, 12 points, degree of precision 6.
+    inline const std::vector<std::pair<GEO::vec2, double>> STRANG9 = {
         {
             {GEO::vec2(0.873821971016996, 0.063089014491502), 0.0254224531851035},
             {GEO::vec2(0.063089014491502, 0.873821971016996), 0.0254224531851035},
@@ -214,8 +221,8 @@ namespace geolio
         }
     };
 
-    // STRANG10, order 13, degree of precision 7.
-    inline const std::vector<std::pair<GEO::vec2, double>> STRANG10_ORDER_13 = {
+    // STRANG10, 13 points, degree of precision 7.
+    inline const std::vector<std::pair<GEO::vec2, double>> STRANG10 = {
         {
             {GEO::vec2(0.333333333333333, 0.333333333333333), -0.0747850222338350},
             {GEO::vec2(0.479308067841923, 0.260345966079038),  0.0878076287166020},
@@ -233,8 +240,8 @@ namespace geolio
         }
     };
 
-    // TOMS584_19, order 19, degree of precision 8, a rule from ACM TOMS algorithm #584.
-    inline const std::vector<std::pair<GEO::vec2, double>> TOMS584_19_ORDER_19 = {
+    // TOMS584_19, 19 points, degree of precision 8, a rule from ACM TOMS algorithm #584.
+    inline const std::vector<std::pair<GEO::vec2, double>> TOMS584_19 = {
         {
             {GEO::vec2(0.3333333333333333, 0.3333333333333333), 0.01893054560015735},
             {GEO::vec2(0.7974269853530872, 0.1012865073234563), 0.01881021270659145},
@@ -258,8 +265,8 @@ namespace geolio
         }
     };
 
-    // TOMS612_19, order 19, degree of precision 9, a rule from ACM TOMS algorithm #612.
-    inline const std::vector<std::pair<GEO::vec2, double>> TOMS612_19_ORDER_19 = {
+    // TOMS612_19, 19 points, degree of precision 9, a rule from ACM TOMS algorithm #612.
+    inline const std::vector<std::pair<GEO::vec2, double>> TOMS612_19 = {
         {
             {GEO::vec2(0.33333333333333331, 0.33333333333333331), 0.048567898141398051},
             {GEO::vec2(0.0206349616025259287, 0.48968251919873701), 0.015667350113569914},
@@ -283,8 +290,8 @@ namespace geolio
         }
     };
 
-    // TOMS612_28, order 28, degree of precision 11, a rule from ACM TOMS algorithm #612.
-    inline const std::vector<std::pair<GEO::vec2, double>> TOMS612_28_ORDER_28 = {
+    // TOMS612_28, 28 points, degree of precision 11, a rule from ACM TOMS algorithm #612.
+    inline const std::vector<std::pair<GEO::vec2, double>> TOMS612_28 = {
         {
             {GEO::vec2(0.33333333333333333, 0.33333333333333333), 0.04398865058111095},
             {GEO::vec2(0.9480217181434233, 0.02598914092828833), 0.004372155776868095},
@@ -317,8 +324,8 @@ namespace geolio
         }
     };
 
-    // TOMS706_37, order 37, degree of precision 13, a rule from ACM TOMS algorithm #706.
-    inline const std::vector<std::pair<GEO::vec2, double>> TOMS706_37_ORDER_37 = {
+    // TOMS706_37, 37 points, degree of precision 13, a rule from ACM TOMS algorithm #706.
+    inline const std::vector<std::pair<GEO::vec2, double>> TOMS706_37 = {
         {
             {GEO::vec2(0.333333333333333333333333333333, 0.333333333333333333333333333333), 0.025869883032872066777589572711},
             {GEO::vec2(0.950275662924105565450352089520, 0.024862168537947217274823955239), 0.004003899777782400798902061730},
@@ -366,11 +373,15 @@ namespace geolio
      * The returned points are in the parameter domain with vertices
      * `(0,0)`, `(1,0)`, and `(0,1)`.
      *
+     * The tabulated degrees `1, 2, ..., 9, 11, 13` and `15` are served from the
+     * tables above. Every other degree is computed on the fly by collapsing the
+     * triangle onto the unit square, so @p degree has no upper limit.
+     *
      * @param[in] degree Target polynomial degree of exactness.
-     * Supported values are: `1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15`.
      * @param[out] points_and_weights Output pairs `(uv, w)`, where `uv` is a
      * quadrature point on the reference triangle and `w` is the corresponding weight.
-     * @note Unsupported @p degree values trigger `assert(0)`.
+     * @note A computed rule has `ceil((degree + 1) / 2)^2` points, all of them in
+     * the interior of the triangle, and all of its weights are positive.
      */
     inline void get_Hammer_tri_quadrature(
         const GEO::index_t degree,
@@ -378,48 +389,70 @@ namespace geolio
         ) {
         switch (degree) {
             case 1:
-                points_and_weights = CENTROID_ORDER_1;
+                points_and_weights = CENTROID;
                 break;
             case 2:
-                points_and_weights = STRANG1_ORDER_3;
+                points_and_weights = STRANG1;
                 break;
             case 3:
-                points_and_weights = STRANG3_ORDER_4;
-                // points_and_weights = SEVEN_POINT_order_7;
+                points_and_weights = STRANG3;
+                // points_and_weights = SEVEN_POINT; // same degree, kept for reference
                 break;
             case 4:
-                points_and_weights = STRANG5_ORDER_6;
+                points_and_weights = STRANG5;
                 break;
             case 5:
-                points_and_weights = STRANG7_ORDER_7;
+                points_and_weights = STRANG7;
                 break;
             case 6:
-                // points_and_weights = STRANG8_order_9; // low precision
-                points_and_weights = STRANG9_ORDER_12;
+                // points_and_weights = STRANG8; // only degree 5, too low
+                points_and_weights = STRANG9;
                 break;
             case 7:
-                // points_and_weights = GAUSS4X4_order_16; // low precision
-                points_and_weights = STRANG10_ORDER_13;
+                // points_and_weights = GAUSS4X4; // same degree, kept for reference
+                points_and_weights = STRANG10;
                 break;
             case 8:
-                points_and_weights = TOMS584_19_ORDER_19;
+                points_and_weights = TOMS584_19;
                 break;
             case 9:
-                points_and_weights = TOMS612_19_ORDER_19;
+                points_and_weights = TOMS612_19;
                 break;
             case 11:
-                points_and_weights = TOMS612_28_ORDER_28;
+                points_and_weights = TOMS612_28;
                 break;
             case 13:
-                points_and_weights = TOMS706_37_ORDER_37;
+                points_and_weights = TOMS706_37;
                 break;
             case 15:
-                points_and_weights = GAUSS8X8_ORDER_64;
+                points_and_weights = GAUSS8X8;
                 break;
-            default:
-                LOG::WARN("Hammer triangle quadrature degree {} is not supported! Use the highest available degree (15).", degree);
-                points_and_weights = GAUSS8X8_ORDER_64;
+            default: {
+                /*
+                 * Collapse the reference triangle onto the unit square,
+                 *
+                 *     (u, v) |-> (u, v (1 - u)),    Jacobian (1 - u),
+                 *
+                 * and integrate over the square with a tensor product of a
+                 * Gauss-Jacobi rule of weight `(1 - u)^1` along `u`, which absorbs
+                 * the Jacobian, and a Gauss-Legendre rule along `v`.
+                 *
+                 * A polynomial of degree `degree` in `(x, y)` becomes a polynomial
+                 * of degree at most `degree` in each of `u` and `v`, so asking each
+                 * 1D rule for degree `degree` is exactly enough; the rule then picks
+                 * a sufficient number of points per direction itself.
+                 */
+                std::vector<std::pair<double, double>> rule_u, rule_v;
+                get_Gauss_Jacobi_quadrature(degree, 1.0, rule_u);
+                get_Gauss_Legendre_quadrature(degree, rule_v);
+
+                points_and_weights.clear();
+                points_and_weights.reserve(rule_u.size() * rule_v.size());
+                for (const auto& [u, wu] : rule_u)
+                    for (const auto& [v, wv] : rule_v)
+                        points_and_weights.emplace_back(GEO::vec2(u, v * (1.0 - u)), wu * wv);
                 break;
+            }
         }
     }
 }
