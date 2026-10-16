@@ -103,19 +103,39 @@ namespace geolio::geobox
         void draw_volume(bool lighting);
 
         /**
+         * @brief Tests whether the displayed attribute exists in the mesh.
+         * @details The selection made in the GUI names an attribute of the mesh
+         *          the object was built from, and the mesh can lose it: reload()
+         *          replaces the mesh with the one its file now holds, which may
+         *          not have that attribute any more. GeoGram reconciles the same
+         *          situation in MeshGfx::set_scalar_attribute(), by falling back
+         *          to MESH_NONE; GeoBox has to do it itself, since the cell-facet
+         *          pass below draws without MeshGfx (see
+         *          cell_facets_attribute_active()).
+         * @details The attribute tested is the one that would be sampled, i.e.
+         *          the display copy while it is up to date and the displayed
+         *          attribute otherwise (see colormap_attribute_name()); the test
+         *          is the one MeshGfx::begin_attributes() binds with, so it tells
+         *          exactly whether there is a value to feed the colormap with.
+         * @return true if the displayed attribute can be sampled.
+         */
+        bool displayed_attribute_is_defined();
+
+        /**
          * @brief Tests whether the volume must be drawn facet by facet.
          * @details True when a scalar attribute is displayed on the cell facets
-         *          (GEO::MESH_CELL_FACETS). Such an attribute is defined per
-         *          half-facet, i.e. once per (cell, facet) incidence, so a cell
-         *          can no longer be sent to GLUP as a whole-cell primitive
-         *          (GLUP_TETRAHEDRA, GLUP_HEXAHEDRA, ...): its facets have to be
-         *          emitted one by one, each with the attribute of the cell facet
-         *          it comes from.
+         *          (GEO::MESH_CELL_FACETS) and the mesh still carries it (see
+         *          displayed_attribute_is_defined()). Such an attribute is
+         *          defined per half-facet, i.e. once per (cell, facet)
+         *          incidence, so a cell can no longer be sent to GLUP as a
+         *          whole-cell primitive (GLUP_TETRAHEDRA, GLUP_HEXAHEDRA, ...):
+         *          its facets have to be emitted one by one, each with the
+         *          attribute of the cell facet it comes from.
          * @return true if the attribute display must use the cell-facet path.
          * @ref <geogram_gfx/mesh/mesh_gfx.cpp> MeshGfx::draw_tets() and
          *      MeshGfx::draw_hybrid(), GeoGram PR #386
          */
-        bool cell_facets_attribute_active() const;
+        bool cell_facets_attribute_active();
 
         /**
          * @brief Returns the shrink to apply to the cell facets.
@@ -208,7 +228,10 @@ namespace geolio::geobox
          *        coordinate of the next GLUP vertex.
          * @details Same contract as MeshGfx::draw_attribute_as_tex_coord(),
          *          restricted to the scalar (1-D) attributes displayed by
-         *          draw_scene().
+         *          draw_scene(). Emits no texture coordinate when the mesh does
+         *          not have the displayed attribute, which the colormap then
+         *          samples as the plain element color (see
+         *          displayed_attribute_is_defined()).
          * @param[in] element Index of the element the attribute is read from.
          * @ref <geogram_gfx/mesh/mesh_gfx.h>
          *      MeshGfx::draw_attribute_as_tex_coord()

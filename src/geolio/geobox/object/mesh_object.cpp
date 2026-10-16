@@ -320,8 +320,16 @@ namespace geolio::geobox
             mesh_.copy(mesh);
             bbox_diag_ = -1.0f; // invalidate the cached bounding-box diagonal
             // The new mesh has its own attributes: the display copy of the
-            // displayed one has to be rebuilt on next draw.
+            // displayed one has to be rebuilt on next draw (see
+            // update_display_attribute()). The displayed attribute itself may be
+            // gone from the file, which the drawing tests for before sampling it
+            // (see displayed_attribute_is_defined()).
             display_attribute_ = DisplayAttribute();
+            // MeshGfx caches the geometry and the attributes it draws in buffer
+            // objects, which it only re-uploads once it is told the mesh changed:
+            // without this, the object would keep displaying the mesh the file
+            // held before the reload.
+            mesh_gfx_.set_mesh(&mesh_);
         }
     }
 
@@ -607,13 +615,33 @@ namespace geolio::geobox
         }
     }
 
+    bool MeshObject::displayed_attribute_is_defined(
+        ) {
+        if (attribute_subelements_ == GEO::MESH_NONE)
+            return false;
+
+        // The name tested is the one draw_scene() hands to MeshGfx and
+        // begin_attributes() binds: the display copy while it is up to date, the
+        // displayed attribute otherwise (see colormap_attribute_name()).
+        const GEO::MeshSubElementsStore& subelements =
+            mesh_.get_subelements_by_type(attribute_subelements_);
+        return GEO::ReadOnlyScalarAttributeAdapter::is_defined(
+            subelements.attributes(), colormap_attribute_name());
+    }
+
     bool MeshObject::cell_facets_attribute_active(
-        ) const {
+        ) {
         // GeoGram PR #386 also requires MeshGfx's picking mode to be MESH_NONE;
         // GeoBox never picks in the mesh (MeshGfx::set_picking_mode() is not
         // called anywhere in the application), so there is nothing to test here.
         return show_attributes_ &&
-               attribute_subelements_ == GEO::MESH_CELL_FACETS;
+               attribute_subelements_ == GEO::MESH_CELL_FACETS &&
+               // The mesh may have lost the attribute since it was selected
+               // (see reload()): the pass then has no value to color the facets
+               // with, and drawing the volume through MeshGfx, as when no
+               // attribute is displayed, is both faster and the behavior
+               // GeoGram has (it drops the display in set_scalar_attribute()).
+               displayed_attribute_is_defined();
     }
 
     double MeshObject::cells_shrink_factor(
@@ -908,6 +936,13 @@ namespace geolio::geobox
     void MeshObject::draw_attribute_as_tex_coord(
         const GEO::index_t element
         ) {
+        // begin_attributes() leaves the attribute unbound when the mesh does not
+        // have it (see displayed_attribute_is_defined()): there is then no value
+        // to feed the colormap with, and reading the adapter would abort on the
+        // element type of an unbound attribute (ET_NONE).
+        if (!scalar_attribute_.is_bound())
+            return;
+
         // GeoBox only displays scalar (1-D) attributes: draw_scene() always
         // calls MeshGfx::set_scalar_attribute(), which sets attribute_dim_ = 1.
         glupPrivateTexCoord1d(scalar_attribute_[element]);
