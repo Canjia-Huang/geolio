@@ -293,7 +293,7 @@ namespace geolio
         }
     };
 
-    constexpr std::array<std::array<GEO::index_t, 24>, 4> HEX_TO_TET = {{
+    constexpr std::array<std::array<GEO::index_t, 24>, 4> HEX_TO_TETS = {{
         {{
             // 0 - 7
             0, 1, 3, 7, // UVW

@@ -551,7 +551,7 @@ namespace geolio::test
     protected:
         void SetUp() override {
             HexDescriptorTest::SetUp();
-            decompose(HEX_TO_TET[GetParam().apex]);
+            decompose(HEX_TO_TETS[GetParam().apex]);
         }
 
         void decompose(const std::array<GEO::index_t, 24>& hex_to_tet) {
@@ -700,8 +700,8 @@ namespace geolio::test
         });
 
     TEST_P(HexToTetDescriptorTest, HEX_TO_TET_TABLE) {
-        ASSERT_EQ(HEX_TO_TET.size(), 4);
-        ASSERT_EQ(HEX_TO_TET[GetParam().apex].size(), 24);
+        ASSERT_EQ(HEX_TO_TETS.size(), 4);
+        ASSERT_EQ(HEX_TO_TETS[GetParam().apex].size(), 24);
         ASSERT_EQ(mesh.vertices.nb(), 8);
         ASSERT_EQ(mesh.cells.nb(), 6);
 
