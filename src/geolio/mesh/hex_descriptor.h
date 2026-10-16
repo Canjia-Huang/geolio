@@ -292,6 +292,42 @@ namespace geolio
             (1<<HEX_LF_INCIDENT_LV[5][0]) | (1<<HEX_LF_INCIDENT_LV[5][1]) | (1<<HEX_LF_INCIDENT_LV[5][2]) | (1<<HEX_LF_INCIDENT_LV[5][3])
         }
     };
+
+    constexpr std::array<std::array<GEO::index_t, 24>, 4> HEX_TO_TET = {{
+        {{
+            // 0 - 7
+            0, 1, 3, 7, // UVW
+            0, 5, 1, 7, // UWV
+            0, 3, 2, 7, // VUW
+            0, 2, 6, 7, // VWU
+            0, 4, 5, 7, // WUV
+            0, 6, 4, 7  // WVU
+        }},
+        {{ // 1 - 6
+            1, 2, 0, 6, // UVW
+            1, 0, 4, 6, // UWV
+            1, 3, 2, 6, // VUW
+            1, 7, 3, 6, // VWU
+            1, 4, 5, 6, // WUV
+            1, 5, 7, 6  // WVU
+        }},
+        {{ // 2 - 5
+            2, 1, 3, 5, // UVW
+            2, 3, 7, 5, // UWV
+            2, 0, 1, 5, // VUW
+            2, 4, 0, 5, // VWU
+            2, 7, 6, 5, // WUV
+            2, 6, 4, 5  // WVU
+        }},
+        {{ // 3 - 4
+            3, 2, 0, 4, // UVW
+            3, 6, 2, 4, // UWV
+            3, 0, 1, 4, // VUW
+            3, 1, 5, 4, // VWU
+            3, 7, 6, 4, // WUV
+            3, 5, 7, 4  // WVU
+        }}
+    }};
 }
 #endif //GEOLIO_HEX_DESCRIPTOR_H
 
