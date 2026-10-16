@@ -295,7 +295,7 @@ namespace geolio::geobox
         if (show_attributes_) {
             mesh_gfx_.set_scalar_attribute(
                 attribute_subelements_,
-                point_attribute_name_,
+                colormap_attribute_name(),
                 colormap_range_min(),
                 colormap_range_max(),
                 colormaps_[current_colormap_index_].texture,
@@ -319,8 +319,9 @@ namespace geolio::geobox
             mesh.load(filepath_)) {
             mesh_.copy(mesh);
             bbox_diag_ = -1.0f; // invalidate the cached bounding-box diagonal
-            // The new mesh has its own attributes: rescan them on next draw.
-            colormap_range_ = ColormapRange();
+            // The new mesh has its own attributes: the display copy of the
+            // displayed one has to be rebuilt on next draw.
+            display_attribute_ = DisplayAttribute();
         }
     }
 
@@ -407,7 +408,7 @@ namespace geolio::geobox
         if (show_attributes_ &&
             attribute_subelements_ == GEO::MESH_VERTICES) {
             scalar_attribute.bind_if_is_defined(
-                mesh_.vertices.attributes(), point_attribute_name_
+                mesh_.vertices.attributes(), colormap_attribute_name()
             );
             if (scalar_attribute.is_bound()) {
                 textured = true;
@@ -922,7 +923,7 @@ namespace geolio::geobox
         const GEO::MeshSubElementsStore& subelements =
             mesh_.get_subelements_by_type(attribute_subelements_);
         scalar_attribute_.bind_if_is_defined(
-            subelements.attributes(), point_attribute_name_);
+            subelements.attributes(), colormap_attribute_name());
         if (!scalar_attribute_.is_bound()) {
             // No attribute to display: keep the plain element color.
             return;
@@ -940,10 +941,11 @@ namespace geolio::geobox
             colormaps_[current_colormap_index_].texture
         );
 
-        // Rescale the attribute range [colormap_range_min(),
-        // colormap_range_max()] to [0,1] (the full range for a continuous
-        // attribute, one band per integer when the attribute holds
-        // GEO::NO_INDEX values).
+        // Rescale the displayed range [colormap_range_min(),
+        // colormap_range_max()] to [0,1], i.e. onto the whole colormap. The
+        // values sampled here are the clamped ones (see
+        // update_display_attribute()), so the range is never exceeded and the
+        // elements outside of it have the color of its nearest end.
         GEO::glupMapTexCoords1d(
             colormap_range_min(),
             colormap_range_max(),
@@ -991,115 +993,113 @@ namespace geolio::geobox
         }
     }
 
-    bool MeshObject::random_colormap_active(
-        ) const {
-        // The random colormap colors an attribute by mapping every distinct
-        // value onto its own texel, which is what the sentinel-aware range of
-        // update_colormap_range() is for. The other colormaps are sampled the
-        // way GeoGram does, i.e. with [attribute_min_, attribute_max_] mapped
-        // linearly onto them.
-        return current_colormap_index_ < colormaps_.size() &&
-               colormaps_[current_colormap_index_].name == RANDOM_COLORMAP_NAME;
-    }
-
-    void MeshObject::update_colormap_range(
-        ) const {
+    void MeshObject::update_display_attribute(
+        ) {
+        // Nothing to sample the colormap with: the display copy would have no
+        // source to be built from, and the displayed attribute has to be
+        // sampled as it is.
         if (attribute_subelements_ == GEO::MESH_NONE) {
-            colormap_range_ = ColormapRange();
+            display_attribute_.up_to_date = false;
             return;
         }
 
-        const GEO::MeshSubElementsStore& subelements =
+        GEO::MeshSubElementsStore& subelements =
             mesh_.get_subelements_by_type(attribute_subelements_);
-        GEO::ReadOnlyScalarAttributeAdapter attribute(
+        GEO::ReadOnlyScalarAttributeAdapter source(
             subelements.attributes(), point_attribute_name_
         );
-
-        // Scanning the attribute is only worth it when its range changed: the
-        // min/max fields, the attribute itself, the selected colormap, or the
-        // mesh the attribute belongs to.
-        const GEO::index_t nb_elements =
-            attribute.is_bound() ? subelements.nb() : 0;
-        if (colormap_range_.colormap_index == current_colormap_index_ &&
-            colormap_range_.store == attribute.attribute_store() &&
-            colormap_range_.element_index == attribute.element_index() &&
-            colormap_range_.nb_elements == nb_elements &&
-            colormap_range_.attribute_min == attribute_min_ &&
-            colormap_range_.attribute_max == attribute_max_) {
-            return;
-        }
-        colormap_range_.colormap_index = current_colormap_index_;
-        colormap_range_.store = attribute.attribute_store();
-        colormap_range_.element_index = attribute.element_index();
-        colormap_range_.nb_elements = nb_elements;
-        colormap_range_.attribute_min = attribute_min_;
-        colormap_range_.attribute_max = attribute_max_;
-
-        // Without a range to correct, the colormap is sampled with the range
-        // autorange() (or the user) set, as in GeoGram. That is also what every
-        // colormap but the random one keeps using: only the random one is meant
-        // to give each distinct value its own color.
-        colormap_range_.min = static_cast<double>(attribute_min_);
-        colormap_range_.max = static_cast<double>(attribute_max_);
-
-        if (!random_colormap_active())
-            return;
-
-        // Only an index attribute (GEO::index_t is uint32) can hold the
-        // GEO::NO_INDEX sentinel; for any other storage type, 4294967295 is an
-        // ordinary value of the attribute scale and nothing has to be done.
-        if (nb_elements == 0 ||
-            attribute.element_type() !=
-            GEO::ScalarAttributeAdapterBase::ET_UINT32) {
+        // A mesh whose displayed attribute is named like the display copy would
+        // make that copy read itself as its source: there is nothing to copy
+        // from then, and copying would destroy the values it has to hold.
+        if (!source.is_bound() ||
+            point_attribute_name_ == DISPLAY_ATTRIBUTE_NAME) {
+            display_attribute_.up_to_date = false;
             return;
         }
 
-        // Range of the values that belong to the scale, i.e. of everything but
-        // the sentinel, within the range displayed by the min/max fields.
-        float min_value = GEO::Numeric::max_float32();
-        float max_value = GEO::Numeric::min_float32();
-        bool has_no_index = false;
+        const GEO::index_t nb_elements = subelements.nb();
+        const double min_value = colormap_range_min();
+        const double max_value = colormap_range_max();
+
+        // Scanning the attribute (and having MeshGfx re-upload it) is only
+        // worth it when something the copy depends on changed: the attribute it
+        // is built from, or the range its values are clamped to.
+        if (display_attribute_.up_to_date &&
+            display_attribute_.store == source.attribute_store() &&
+            display_attribute_.name == point_attribute_name_ &&
+            display_attribute_.element_index == source.element_index() &&
+            display_attribute_.nb_elements == nb_elements &&
+            display_attribute_.min == min_value &&
+            display_attribute_.max == max_value) {
+            return;
+        }
+
+        // The copy is GeoBox's own: an attribute of the same name the mesh
+        // happens to carry (a mesh file, say) is replaced whatever its type, so
+        // that the name always refers to a scalar attribute of ours.
+        if (subelements.attributes().is_defined(DISPLAY_ATTRIBUTE_NAME))
+            subelements.attributes().delete_attribute_store(
+                DISPLAY_ATTRIBUTE_NAME);
+
+        // A float attribute: the values only reach the colormap through the
+        // texture coordinates GLUP interpolates, which are single precision
+        // whatever the attribute holds.
+        GEO::Attribute<float> display(
+            subelements.attributes(), DISPLAY_ATTRIBUTE_NAME
+        );
         for (GEO::index_t i = 0; i < nb_elements; ++i) {
-            const double value = attribute[i];
-            if (value == double(GEO::NO_INDEX)) {
-                has_no_index = true;
+            display[i] = static_cast<float>(std::clamp(
+                static_cast<double>(source[i]), min_value, max_value
+            ));
+        }
+
+        // MeshGfx samples the attribute through a buffer object, which it only
+        // re-uploads when it is told the mesh changed: the values just written
+        // would not be the ones drawn otherwise, since set_scalar_attribute()
+        // only marks them dirty when the attribute it samples changes.
+        // set_mesh() invalidates more than that (the geometry buffers too), but
+        // it is the only public way to hand MeshGfx a modified mesh.
+        mesh_gfx_.set_mesh(&mesh_);
+
+        display_attribute_.store = source.attribute_store();
+        display_attribute_.name = point_attribute_name_;
+        display_attribute_.element_index = source.element_index();
+        display_attribute_.nb_elements = nb_elements;
+        display_attribute_.min = min_value;
+        display_attribute_.max = max_value;
+        display_attribute_.up_to_date = true;
+    }
+
+    std::string MeshObject::colormap_attribute_name(
+        ) {
+        update_display_attribute();
+        return display_attribute_.up_to_date ?
+            DISPLAY_ATTRIBUTE_NAME : point_attribute_name_;
+    }
+
+    std::string MeshObject::attribute_names(
+        ) const {
+        std::vector<std::string> attributes;
+        GEO::String::split_string(
+            mesh_.get_scalar_attributes(), ';', attributes);
+
+        // The display copy is not an attribute of the mesh: it only carries the
+        // values the current min/max fields ask for (see
+        // update_display_attribute()) and must not be selectable.
+        const std::string hidden = std::string(".") + DISPLAY_ATTRIBUTE_NAME;
+        std::string result;
+        for (const std::string& attribute : attributes) {
+            if (attribute.size() >= hidden.size() &&
+                attribute.compare(
+                    attribute.size() - hidden.size(),
+                    hidden.size(), hidden) == 0) {
                 continue;
             }
-            if (value < colormap_range_.min || value > colormap_range_.max)
-                continue;
-            min_value = std::min(min_value, static_cast<float>(value));
-            max_value = std::max(max_value, static_cast<float>(value));
+            if (!result.empty())
+                result += ';';
+            result += attribute;
         }
-
-        // Plain index attribute: the linear mapping already gives every value
-        // of a small integer range a texel of its own.
-        if (!has_no_index || min_value > max_value)
-            return;
-
-        // The sentinel is not a value of the scale, and neither are the values
-        // above the max field: lay the colormap out as one band per integer of
-        // [min_value, max_value] plus one band for the sentinel. Starting half
-        // a band below min_value puts integer v at the center of its band, i.e.
-        // at (v - min_value + 0.5) / nb_bands of the colormap, and the band
-        // above max_value is reserved for GEO::NO_INDEX: its texcoord is far
-        // above 1 and GL_CLAMP_TO_EDGE samples it with the last texel of the
-        // colormap, so the sentinel gets a color of its own -- e.g. a random
-        // one with the "random" colormap -- instead of sharing the color of
-        // max_value.
-        colormap_range_.min = static_cast<double>(min_value) - 0.5;
-        colormap_range_.max = static_cast<double>(max_value) + 1.5;
-    }
-
-    double MeshObject::colormap_range_min(
-        ) const {
-        update_colormap_range();
-        return colormap_range_.min;
-    }
-
-    double MeshObject::colormap_range_max(
-        ) const {
-        update_colormap_range();
-        return colormap_range_.max;
+        return result;
     }
 
     void MeshObject::set_attribute(
@@ -1118,11 +1118,11 @@ namespace geolio::geobox
         // is only recomputed while the min/max fields are still untouched (both
         // zero). A range the user set therefore describes the values they want
         // to look at and survives selecting another attribute, which is what
-        // makes the fields, and the coloring of a colormap that is not the
-        // random one, agree: [0, 4] set for an attribute holding 0..3 plus
-        // GEO::NO_INDEX keeps mapping those values onto the four quarters of
-        // the colormap. The "autorange" button restores the raw range
-        // (GEO::NO_INDEX included) at any time.
+        // makes the fields and the coloring agree: the colormap always spans
+        // exactly the range the fields read, whatever the attribute, and the
+        // values outside of it take the color of the nearest end (see
+        // update_display_attribute()). The "autorange" button restores the raw
+        // range (GEO::NO_INDEX included) at any time.
         if (attribute_min_ == 0.0f && attribute_max_ == 0.0f)
             autorange();
     }

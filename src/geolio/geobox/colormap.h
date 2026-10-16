@@ -23,8 +23,9 @@ namespace geolio::geobox
      * @brief Name of the random colormap GeoBox appends to the GeoGram ones.
      * @details Every texel of that colormap is a random color, which makes it
      *          suitable to display an attribute with few distinct values, one
-     *          color each: MeshObject lays the attribute range out
-     *          accordingly, see MeshObject::update_colormap_range().
+     *          color each: setting the min/max fields of MeshObject to the
+     *          values of the attribute spreads them over the texels of the
+     *          colormap, see MeshObject::colormap_range_min().
      */
     inline constexpr const char* RANDOM_COLORMAP_NAME = "random";
 

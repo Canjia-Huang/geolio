@@ -4,7 +4,6 @@
 //
 #include <gtest/gtest.h>
 #include <algorithm>
-#include <cmath>
 #include <set>
 #include <string>
 #include <vector>
@@ -45,24 +44,63 @@ namespace geolio::test
             attribute_max_ = hi;
         }
 
-        /// Range actually mapped onto the colormap, used to sample it.
+        /// Range actually mapped onto the colormap.
         double colormap_min() const { return colormap_range_min(); }
 
         double colormap_max() const { return colormap_range_max(); }
 
+        /// Name of the attribute the colormap is sampled with.
+        std::string sampled_attribute() { return colormap_attribute_name(); }
+
+        /// Value of \p element in the attribute the colormap is sampled with,
+        /// i.e. the value the GPU is given.
+        double sampled_value(const GEO::index_t element) {
+            const GEO::MeshSubElementsStore& subelements =
+                mesh().get_subelements_by_type(attribute_subelements_);
+            GEO::ReadOnlyScalarAttributeAdapter attribute(
+                subelements.attributes(), colormap_attribute_name());
+            return attribute[element];
+        }
+
+        /// Value \p element holds in the mesh attribute itself, which the
+        /// display copy must leave untouched.
+        double source_value(const GEO::index_t element) {
+            const GEO::MeshSubElementsStore& subelements =
+                mesh().get_subelements_by_type(attribute_subelements_);
+            GEO::ReadOnlyScalarAttributeAdapter attribute(
+                subelements.attributes(), point_attribute_name_);
+            return attribute[element];
+        }
+
+        /// Names of the attributes offered by the attribute popup.
+        std::string offered_attributes() const { return attribute_names(); }
+
+        /// Name of the attribute that carries the values the colormap samples.
+        static const char* display_attribute() {
+            return DISPLAY_ATTRIBUTE_NAME;
+        }
+
         /**
          * @brief Texel of the 256-texel colormap that \p value is colored with.
-         * @details The texture coordinate computed by GLUP's texture matrix is
-         *          clamped (GL_CLAMP_TO_EDGE) and sampled with GL_NEAREST, so
-         *          two values are displayed with the same color exactly when
-         *          they fall into the same texel.
+         * @details The colormap spans exactly [colormap_min(), colormap_max()]
+         *          and the values outside of it are clamped to it, so two
+         *          values are displayed with the same color exactly when they
+         *          fall into the same texel.
          */
         int texel(const double value) const {
             const double low = colormap_range_min();
             const double high = colormap_range_max();
-            double t = (value - low) / (high - low);
-            t = std::min(std::max(t, 0.0), 1.0);
+            if (!(high > low)) {
+                return 0;
+            }
+            double t = (std::clamp(value, low, high) - low) / (high - low);
             return std::min(static_cast<int>(t * 256.0), 255);
+        }
+
+        /// Texel element \p element is colored with, from the values the
+        /// colormap is actually sampled with.
+        int element_texel(const GEO::index_t element) {
+            return texel(sampled_value(element));
         }
     };
 
@@ -129,15 +167,85 @@ namespace geolio::test
             v_cell[4] = GEO::NO_INDEX;
         }
 
-        /// Number of values the scenario attributes hold: 0..10 + the sentinel.
-        constexpr GEO::index_t NB_VALUES = 12;
+        /// Index of the vertex that holds GEO::NO_INDEX in the scenarios.
+        constexpr GEO::index_t NO_INDEX_VERTEX = 4;
     }
 
     /**
-     * @brief A colormap that is not the random one must NOT use the sentinel
-     *        remapping: [min, max] is mapped linearly onto it.
+     * @brief The colormap spans exactly the range the min/max fields read.
      */
-    TEST(MeshObjectAttributeRangeTest, NonRandomColormapIsNotRemapped) {
+    TEST(MeshObjectAttributeRangeTest, ColormapSpansTheMinMaxFields) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        object.select("vertices.v_cell");
+        object.select_colormap(VIRIDIS);
+        object.set_field(0.0f, 3.0f);
+
+        EXPECT_DOUBLE_EQ(object.colormap_min(), 0.0);
+        EXPECT_DOUBLE_EQ(object.colormap_max(), 3.0);
+        // The two bounds of the range get the two ends of the colormap: no band
+        // is reserved above the max for GEO::NO_INDEX, as the values above the
+        // max are colored like the max (see
+        // ValuesOutsideTheRangeTakeTheEndColors).
+        EXPECT_EQ(object.texel(0.0), 0);
+        EXPECT_EQ(object.texel(3.0), 255);
+    }
+
+    /**
+     * @brief A range filled in the other way round is read in increasing order.
+     * @details A decreasing range would mirror the colormap (see
+     *          GEO::glupMapTexCoords1d()) and invert the clamping.
+     */
+    TEST(MeshObjectAttributeRangeTest, BoundsAreOrdered) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        object.select("vertices.v_cell");
+        object.set_field(3.0f, 0.0f);
+
+        EXPECT_DOUBLE_EQ(object.colormap_min(), 0.0);
+        EXPECT_DOUBLE_EQ(object.colormap_max(), 3.0);
+    }
+
+    /**
+     * @brief Values outside the range take the color of the nearest end.
+     * @details The reported scenario: values 0..3 plus GEO::NO_INDEX. The
+     *          sentinel is not a value of the attribute scale, so once the
+     *          range is narrowed to the scale it must not stretch the colormap:
+     *          it is colored like the max bound, and a value below the min
+     *          bound like the min bound.
+     */
+    TEST(MeshObjectAttributeRangeTest, ValuesOutsideTheRangeTakeTheEndColors) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        object.select("vertices.v_cell");
+        object.select_colormap(VIRIDIS);
+        object.set_field(0.0f, 3.0f);
+
+        // The sentinel is colored like the max bound...
+        EXPECT_EQ(object.texel(static_cast<double>(GEO::NO_INDEX)),
+                  object.texel(3.0));
+        // ... and any value below the min bound like the min bound.
+        EXPECT_EQ(object.texel(-1000.0), object.texel(0.0));
+
+        // What the colormap samples is the clamped value, and the mesh
+        // attribute keeps the values it was loaded with.
+        EXPECT_DOUBLE_EQ(
+            object.sampled_value(NO_INDEX_VERTEX), 3.0);
+        EXPECT_DOUBLE_EQ(
+            object.source_value(NO_INDEX_VERTEX),
+            static_cast<double>(GEO::NO_INDEX));
+    }
+
+    /**
+     * @brief The values of the range are mapped linearly onto the colormap.
+     */
+    TEST(MeshObjectAttributeRangeTest, ValuesInsideTheRangeAreMappedLinearly) {
         GEO::Mesh mesh;
         make_cell_index_mesh(mesh);
 
@@ -146,14 +254,11 @@ namespace geolio::test
         object.select_colormap(VIRIDIS);
         object.set_field(0.0f, 4.0f);
 
-        // Plain linear mapping: [min,max] -> [0,1] -> texel. The bands the
-        // random colormap lays out (texels 25, 76, 128, 179 for these values)
-        // must not appear here.
-        EXPECT_DOUBLE_EQ(object.colormap_min(), 0.0);
-        EXPECT_DOUBLE_EQ(object.colormap_max(), 4.0);
+        // [0,4] -> [0,1] -> texel: the values of the range are spread over the
+        // whole colormap, in order.
         for (GEO::index_t v = 0; v <= 3; ++v) {
-            EXPECT_EQ(object.texel(static_cast<double>(v)),
-                      static_cast<int>(v) * 64) << "value " << v;
+            EXPECT_EQ(object.element_texel(v), static_cast<int>(v) * 64)
+                << "value " << v;
         }
     }
 
@@ -161,7 +266,9 @@ namespace geolio::test
      * @brief autorange() keeps ranging over every value, sentinel included.
      * @details GeoBox leaves autorange() to GeoGram: it reports the raw
      *          [min, max] of the attribute, which is what the min/max fields
-     *          show. Handling GEO::NO_INDEX is up to the colormap range.
+     *          show. Such a range squeezes the values of the scale into the
+     *          first texel; narrowing the fields is what spreads them over the
+     *          colormap (see ColormapSpansTheMinMaxFields).
      */
     TEST(MeshObjectAttributeRangeTest, AutorangeStillCoversNoIndex) {
         GEO::Mesh mesh;
@@ -175,39 +282,105 @@ namespace geolio::test
     }
 
     /**
-     * @brief The reported scenario: values 0..3 plus GEO::NO_INDEX.
-     * @details The raw range of that attribute is [0, 4.29e9] (see
-     *          AutorangeStillCoversNoIndex), which by itself would color the
-     *          four values with a single texel and the sentinel with the last
-     *          one. The random colormap remaps that range (see ColormapRange)
-     *          and must therefore show the four values and the sentinel with
-     *          five colors of their own, without any range being set by hand,
-     *          which is what the remapping is for. A colormap that is not the
-     *          random one keeps the GeoGram behavior: the colors follow the
-     *          min/max fields, so setting them to 0..4 spreads the four values
-     *          over the colormap.
+     * @brief The random colormap follows the range like every other one.
+     * @details It is meant to give an attribute with few distinct values one
+     *          color each, which the user gets by setting the min/max fields to
+     *          the values of the scale: no band is reserved for GEO::NO_INDEX,
+     *          which then shares the color of the max bound (see
+     *          ValuesOutsideTheRangeTakeTheEndColors).
      */
-    TEST(MeshObjectAttributeRangeTest, RandomColormapKeepsExtremeValuesApart) {
+    TEST(MeshObjectAttributeRangeTest, RandomColormapFollowsTheRange) {
+        GEO::Mesh mesh;
+        make_cell_index_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        object.select("vertices.v_cell");
+        object.select_colormap(RANDOM);
+        object.set_field(0.0f, 10.0f);
+
+        // 0..10, no two of them in the same texel: one random color each.
+        std::set<int> texels;
+        for (GEO::index_t v = 0; v <= 10; ++v)
+            texels.insert(object.element_texel(v));
+        EXPECT_EQ(texels.size(), 11u);
+
+        // The sentinel is out of the scale: it is colored like the value that
+        // closes the range.
+        EXPECT_EQ(object.element_texel(11), object.element_texel(10));
+    }
+
+    /**
+     * @brief The display copy follows every change of the range.
+     * @details It is only rebuilt when one of its inputs changed, so the tests
+     *          pin down that the range fields and the displayed attribute are
+     *          part of those inputs: a stale copy would color the elements with
+     *          the values of a range the fields no longer read.
+     */
+    TEST(MeshObjectAttributeRangeTest, DisplayCopyFollowsTheRange) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
         TestMeshObject object("test", test_colormaps(), mesh);
         object.select("vertices.v_cell");
-        object.select_colormap(RANDOM);
+        object.select_colormap(VIRIDIS);
+        object.set_field(0.0f, 3.0f);
+        EXPECT_DOUBLE_EQ(object.sampled_value(NO_INDEX_VERTEX), 3.0);
+        EXPECT_EQ(object.element_texel(NO_INDEX_VERTEX), 255);
 
-        // The fields are the raw range, sentinel included...
-        EXPECT_DOUBLE_EQ(object.field_min(), 0.0);
-        EXPECT_GE(object.field_max(), 1.0e9);
-        // ... and the remap still gives the four values a band each, plus the
-        // band it keeps free above them for the sentinel.
-        std::set<int> texels;
+        // Widening the max field: the sentinel is clamped to the new bound.
+        object.set_field_max(10.0f);
+        EXPECT_DOUBLE_EQ(object.colormap_max(), 10.0);
+        EXPECT_DOUBLE_EQ(object.sampled_value(NO_INDEX_VERTEX), 10.0);
+
+        // Narrowing the range again: the values inside of it are untouched and
+        // the sentinel goes back to the last texel.
+        object.set_field(-5.0f, 4.0f);
+        EXPECT_DOUBLE_EQ(object.sampled_value(0), 0.0);
+        EXPECT_EQ(object.element_texel(NO_INDEX_VERTEX), 255);
+
+        // The copy is rebuilt for another attribute too: it belongs to the
+        // store of the attribute it is built from, not to that attribute.
+        object.select("vertices.point[0]");
+        EXPECT_EQ(object.sampled_attribute(),
+                  TestMeshObject::display_attribute());
+        EXPECT_DOUBLE_EQ(object.sampled_value(0), 0.0);
+    }
+
+    /**
+     * @brief The display copy is a display artefact, not an attribute.
+     * @details The clamped values the colormap samples are stored in an
+     *          attribute of the mesh (MeshGfx samples what the mesh holds), so
+     *          the tests pin down that it is invisible to the rest of the
+     *          application and that it does not alter the source attribute.
+     */
+    TEST(MeshObjectAttributeRangeTest, DisplayCopyIsHiddenFromTheAttributeList) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        object.select("vertices.v_cell");
+        object.set_field(0.0f, 3.0f);
+
+        // The colormap samples the display copy...
+        EXPECT_EQ(object.sampled_attribute(),
+                  TestMeshObject::display_attribute());
+        // ... which lives in the mesh the object displays (a copy of the one
+        // handed to the constructor) and is not offered as an attribute.
+        EXPECT_TRUE(
+            object.mesh().vertices.attributes().is_defined(
+                TestMeshObject::display_attribute()));
+        // ... which is not offered as an attribute to display, and leaves the
+        // displayed attribute itself alone.
+        EXPECT_EQ(object.offered_attributes().find(
+                      TestMeshObject::display_attribute()),
+                  std::string::npos);
+        EXPECT_NE(object.offered_attributes().find("vertices.v_cell"),
+                  std::string::npos);
         for (GEO::index_t v = 0; v <= 3; ++v)
-            texels.insert(object.texel(static_cast<double>(v)));
-        EXPECT_EQ(texels.size(), 4u);
-        EXPECT_NE(
-            object.texel(3.0),
-            object.texel(static_cast<double>(GEO::NO_INDEX))
-        );
+            EXPECT_DOUBLE_EQ(object.source_value(v),
+                             static_cast<double>(v));
+        EXPECT_DOUBLE_EQ(object.source_value(NO_INDEX_VERTEX),
+                         static_cast<double>(GEO::NO_INDEX));
     }
 
     /**
@@ -216,10 +389,7 @@ namespace geolio::test
      *          min/max fields are still untouched (both zero). The range of the
      *          fields describes the values the user wants to look at, so
      *          replacing it with the range of the newly selected attribute
-     *          would color the elements with a range the fields no longer read
-     *          -- which is how an attribute holding 0..3 plus GEO::NO_INDEX
-     *          ends up displayed with a single color even though the range was
-     *          set to 0..4.
+     *          would color the elements with a range the fields no longer read.
      */
     TEST(MeshObjectAttributeRangeTest, UserRangeSurvivesSelectingAnAttribute) {
         GEO::Mesh mesh;
@@ -249,64 +419,6 @@ namespace geolio::test
     }
 
     /**
-     * @brief With the random colormap, every value gets its own texel.
-     * @details The random colormap shows one random color per distinct value
-     *          as long as the values of the range and GEO::NO_INDEX fall into
-     *          different texels; that is what the range laid out by
-     *          update_colormap_range() is for.
-     */
-    TEST(MeshObjectAttributeRangeTest, RandomColormapGivesEveryValueATexel) {
-        GEO::Mesh mesh;
-        make_cell_index_mesh(mesh);
-
-        TestMeshObject object("test", test_colormaps(), mesh);
-        object.select("vertices.v_cell");
-        object.select_colormap(RANDOM);
-
-        std::set<int> texels;
-        for (GEO::index_t v = 0; v <= 10; ++v)
-            texels.insert(object.texel(static_cast<double>(v)));
-        texels.insert(object.texel(static_cast<double>(GEO::NO_INDEX)));
-
-        // 11 indices + the sentinel, no two of them in the same texel: one
-        // random color each.
-        EXPECT_EQ(texels.size(), NB_VALUES);
-        EXPECT_NE(
-            object.texel(10.0),
-            object.texel(static_cast<double>(GEO::NO_INDEX))
-        );
-    }
-
-    /**
-     * @brief The other colormaps keep the GeoGram range, sentinel included.
-     * @details They are sampled with [attribute_min_, attribute_max_] mapped
-     *          linearly, exactly as before the random colormap existed: the
-     *          sentinel is part of the range and only the values at the ends of
-     *          the colormap stand out.
-     */
-    TEST(MeshObjectAttributeRangeTest, OtherColormapsKeepTheGeoGramRange) {
-        GEO::Mesh mesh;
-        make_cell_index_mesh(mesh);
-
-        TestMeshObject object("test", test_colormaps(), mesh);
-        object.select("vertices.v_cell");
-        object.select_colormap(RANDOM);
-        // Lay the random range out first, so that the switch below has to
-        // recompute it.
-        EXPECT_EQ(object.texel(0.0), 10);
-
-        object.select_colormap(VIRIDIS);
-        EXPECT_DOUBLE_EQ(object.colormap_min(), object.field_min());
-        EXPECT_DOUBLE_EQ(object.colormap_max(), object.field_max());
-
-        // The whole 0..10 range is squeezed into the first texel, the sentinel
-        // lands on the last one.
-        for (GEO::index_t v = 0; v <= 10; ++v)
-            EXPECT_EQ(object.texel(static_cast<double>(v)), 0);
-        EXPECT_EQ(object.texel(static_cast<double>(GEO::NO_INDEX)), 255);
-    }
-
-    /**
      * @brief Without a sentinel, values are mapped linearly, as before.
      */
     TEST(MeshObjectAttributeRangeTest, ContinuousAttributeIsMappedLinearly) {
@@ -327,17 +439,20 @@ namespace geolio::test
 
         EXPECT_DOUBLE_EQ(object.colormap_min(), 0.0);
         EXPECT_DOUBLE_EQ(object.colormap_max(), 10.0);
-        // The extremes still reach the first and last texel of the colormap.
+        // The extremes still reach the first and last texel of the colormap,
+        // and nothing is clamped: the copy holds the values themselves.
         EXPECT_EQ(object.texel(0.0), 0);
         EXPECT_EQ(object.texel(10.0), 255);
+        for (GEO::index_t v = 0; v <= 10; ++v)
+            EXPECT_DOUBLE_EQ(
+                object.sampled_value(v), object.source_value(v));
     }
 
     /**
      * @brief 4294967295 is an ordinary value of a non index attribute.
      * @details Only an uint32 attribute can hold the GEO::NO_INDEX sentinel;
      *          a float64 attribute that happens to contain the same number is
-     *          a plain continuous attribute and keeps the linear mapping, even
-     *          with the random colormap.
+     *          a plain continuous attribute and is mapped like any other value.
      */
     TEST(MeshObjectAttributeRangeTest, SentinelIsNotSpecialForFloatAttributes) {
         GEO::Mesh mesh;
@@ -355,40 +470,12 @@ namespace geolio::test
         object.select("vertices.quality");
         object.select_colormap(RANDOM);
 
-        // The huge value is still part of the displayed range...
+        // The huge value is part of the displayed range...
         EXPECT_DOUBLE_EQ(object.colormap_min(), 0.0);
         EXPECT_GT(object.colormap_max(), 1.0e9);
-        // ... and no band is reserved for it, so 0 keeps the first texel.
+        // ... so it is not clamped: 0 keeps the first texel and the huge value
+        // the last one.
         EXPECT_EQ(object.texel(0.0), 0);
-    }
-
-    /**
-     * @brief Narrowing the max field keeps the sentinel in a band of its own.
-     * @details The reserved band is what a value above the max field falls
-     *          back onto: such a value is out of the displayed range just like
-     *          the sentinel is out of the attribute scale.
-     */
-    TEST(MeshObjectAttributeRangeTest, ValuesAboveTheMaxFieldShareTheReservedBand) {
-        GEO::Mesh mesh;
-        make_cell_index_mesh(mesh);
-
-        TestMeshObject object("test", test_colormaps(), mesh);
-        object.select("vertices.v_cell");
-        object.select_colormap(RANDOM);
-        // The user narrows the displayed range to 0..8.
-        object.set_field_max(8.0f);
-
-        std::set<int> texels;
-        for (GEO::index_t v = 0; v <= 9; ++v)
-            texels.insert(object.texel(static_cast<double>(v)));
-        texels.insert(object.texel(static_cast<double>(GEO::NO_INDEX)));
-
-        // 0..9 have a texel each, and the sentinel keeps the reserved one.
-        EXPECT_EQ(texels.size(), 11u);
-        EXPECT_EQ(object.texel(10.0), object.texel(double(GEO::NO_INDEX)));
-        EXPECT_NE(
-            object.texel(9.0),
-            object.texel(static_cast<double>(GEO::NO_INDEX))
-        );
+        EXPECT_EQ(object.element_texel(1), 255);
     }
 }
