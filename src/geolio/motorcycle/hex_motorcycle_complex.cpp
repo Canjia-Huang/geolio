@@ -9,6 +9,8 @@
 #include <geogram/mesh/mesh_io.h>
 #include <geolio/common/utils.h>
 #include <geolio/mesh/hex_operations.h>
+
+#include "geolio/common/pair_hash.h"
 #include "geolio/mesh/mesh_operations.h"
 
 namespace geolio
@@ -209,21 +211,6 @@ namespace geolio
         }
     }
 
-    namespace
-    {
-        /* Hash of a mesh edge key (v0 < v1), used by the flat edge table in
-         * find_all_singular_and_border_edges(). */
-        GEO::index_t edge_key_hash(
-            const GEO::index_t v0,
-            const GEO::index_t v1
-            ) {
-            // Fibonacci hashing of the packed key: the low bits of v1 alone are too regular
-            // for linear probing on a structured grid mesh.
-            const auto key = (static_cast<uint64_t>(v0) << 32) | static_cast<uint64_t>(v1);
-            return static_cast<GEO::index_t>((key * 0x9E3779B97F4A7C15ull) >> 32);
-        }
-    }
-
     void HexMotorCycleComplex::find_all_singular_and_border_edges(
         ) {
         const GEO::index_t cell_edges_nb = 12*mesh_.cells.nb();
@@ -256,7 +243,7 @@ namespace geolio
                 const auto v0 = std::min(ev0, ev1);
                 const auto v1 = std::max(ev0, ev1);
 
-                GEO::index_t slot = edge_key_hash(v0, v1) & mask;
+                GEO::index_t slot = static_cast<GEO::index_t>(compute_pair_hash(v0, v1)) & mask;
                 for (;;) {
                     if (slot_v0[slot] == GEO::NO_INDEX) { // new mesh edge
                         const GEO::index_t e = edge_incident_cells_nb.size();
@@ -338,9 +325,9 @@ namespace geolio
         ) {
         blocks_.clear();
 
-        std::vector<bool> prcessed_cells(mesh_.cells.nb(), false);
+        std::vector<bool> processed_cells(mesh_.cells.nb(), false);
         for (const auto& start_c : mesh_.cells) {
-            if (prcessed_cells[start_c]) // labelled
+            if (processed_cells[start_c]) // labelled
                 continue;
 
             /* Build motorcycle block */
@@ -348,7 +335,7 @@ namespace geolio
             MC_block.flood_fill_cells(start_c);
 
             for (const auto& b_cell : MC_block.block_cells())
-                prcessed_cells[b_cell.c] = true;
+                processed_cells[b_cell.c] = true;
 
             blocks_.push_back(MC_block);
         }
