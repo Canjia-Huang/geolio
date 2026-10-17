@@ -4,7 +4,9 @@
 //
 #ifndef GEOLIO_QUAD_MOTORCYCLE_GRAPH_H
 #define GEOLIO_QUAD_MOTORCYCLE_GRAPH_H
+#include <array>
 #include <queue>
+#include <utility>
 #include <geogram/mesh/mesh.h>
 #include "quad_motorcycle_block.h"
 
@@ -148,8 +150,130 @@ namespace geolio
          *
          * @pre `mesh_fc_tagged_` has been populated by propagation.
          * @post Each block is built from a connected set of faces and stored in `blocks_`.
+         *       `mesh_f_block_` maps every face to the index of its block.
          */
         GEO::index_t decompose_into_blocks();
+
+        /**
+         * A directed local edge of a facet: the edge from `facet_corner(f, lv)` to
+         * `facet_corner(f, (lv + 1) % 4)`.
+         */
+        struct LineEdge {
+           GEO::index_t f{GEO::NO_INDEX};
+           GEO::index_t lv{GEO::NO_INDEX};
+        };
+
+        /**
+         * Kind of obstacle that terminates a traced grid line.
+         */
+        enum class LineEnd {
+           MESH_BORDER, ///< A vertex on the mesh border was reached.
+           WALL,        ///< A tagged (already burnt) edge was reached.
+           CLOSED       ///< The line closed on itself.
+        };
+
+        /**
+         * A whole grid line traced through a facet (both directions) and how it ends.
+         */
+        struct LineTrace {
+           std::vector<LineEdge> edges; ///< Edges of the line, starting at the seed edge.
+           LineEnd end_fwd{LineEnd::WALL}; ///< End reached when walking forward from the seed.
+           LineEnd end_bwd{LineEnd::WALL}; ///< End reached when walking backward.
+           bool closed{false}; ///< The line is a closed loop.
+           GEO::index_t score{0}; ///< How well the line cuts a block open; higher is better.
+        };
+
+        /**
+         * Tags both sides of an edge.
+         *
+         * @param[in] f Face holding the edge.
+         * @param[in] lv Local edge index in `f`.
+         * @param[in] tag Tag value to write (only `GEO::NO_INDEX` is interpreted as "untagged").
+         * @return Number of facet corners that were tagged by this call (0 or 1 per side).
+         */
+        GEO::index_t tag_edge(GEO::index_t f, GEO::index_t lv, GEO::index_t tag);
+
+        /**
+         * Walks one step along the grid line through the local edge (@p f, @p lv).
+         *
+         * The step is the same "continue through the opposite edge" rule as the burning: the
+         * line leaves the tip vertex of the edge and continues straight across it.
+         *
+         * @param[in] f Face holding the current edge.
+         * @param[in] lv Local edge index of the current edge.
+         * @param[in] block_id Block the line is not allowed to leave.
+         * @param[in,out] ordered_f_lv Scratch buffer for the one-ring of the tip vertex.
+         * @param[out] nf Face holding the next edge.
+         * @param[out] nlv Local edge index of the next edge.
+         * @param[out] reached_border Set when the line stopped on a mesh border vertex.
+         * @return true when the line continues, false when it ends here.
+         */
+        bool next_line_edge(
+           GEO::index_t f,
+           GEO::index_t lv,
+           GEO::index_t block_id,
+           std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_f_lv,
+           GEO::index_t& nf,
+           GEO::index_t& nlv,
+           bool& reached_border) const;
+
+        /**
+         * Walks a grid line in one direction, collecting its edges.
+         *
+         * @param[in] f Face holding the first edge.
+         * @param[in] lv Local edge index of the first edge.
+         * @param[in] block_id Block the line is not allowed to leave.
+         * @param[in,out] ordered_f_lv Scratch buffer for the one-rings.
+         * @param[out] edges Edges of the line, in walking order. Existing content is kept.
+         * @return How the walk ended.
+         */
+        LineEnd walk_line(
+           GEO::index_t f,
+           GEO::index_t lv,
+           GEO::index_t block_id,
+           std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_f_lv,
+           std::vector<LineEdge>& edges) const;
+
+        /**
+         * Traces the whole grid line of family @p k through the facet @p f0.
+         *
+         * @param[in] f0 Seed facet.
+         * @param[in] lv_ref Local edge index that anchors the facet frame in the block.
+         * @param[in] k Family: 0 or 1 (the two local edges `lv_ref+k` and `lv_ref+k+2`).
+         * @param[in] block_id Block the line is not allowed to leave.
+         * @param[in,out] ordered_f_lv Scratch buffer for the one-rings.
+         * @param[out] trace The traced line.
+         * @return false when the family has no usable edge in @p f0.
+         */
+        bool trace_line_family(
+           GEO::index_t f0,
+           GEO::index_t lv_ref,
+           GEO::index_t k,
+           GEO::index_t block_id,
+           std::vector<std::pair<GEO::index_t, GEO::index_t>>& ordered_f_lv,
+           LineTrace& trace) const;
+
+        /**
+         * Cuts a block open by tagging one of its grid lines as an artificial wall (a seam).
+         *
+         * @param[in] block Block to cut.
+         * @param[in] block_id Index of @p block in `blocks_`.
+         * @return true when at least one new edge was tagged.
+         */
+        bool cut_block(const QuadMotorCycleBlock& block, GEO::index_t block_id);
+
+        /**
+         * Checks whether a block is a cuboid with four distinct corner vertices.
+         */
+        static bool block_is_valid(const QuadMotorCycleBlock& block);
+
+        /**
+         * Finds the first block that is not a valid cuboid.
+         *
+         * @param[out] block_id Index of the offending block in `blocks_`.
+         * @return true when an offending block was found.
+         */
+        bool find_invalid_block(GEO::index_t& block_id) const;
 
         const std::string attribute_id_;
 
@@ -159,6 +283,7 @@ namespace geolio
         GEO::Attribute<bool> mesh_v_border_; // [v] -> border vertex
 
         std::vector<QuadMotorCycleBlock> blocks_;
+        std::vector<GEO::index_t> mesh_f_block_; // [f] -> block id, or GEO::NO_INDEX
     };
 }
 

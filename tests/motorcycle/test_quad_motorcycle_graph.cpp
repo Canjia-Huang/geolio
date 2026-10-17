@@ -2,6 +2,7 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/6.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
+#include <array>
 #include <unordered_set>
 #include <gtest/gtest.h>
 #include <geolio/motorcycle/quad_motorcycle_graph.h>
@@ -12,12 +13,23 @@ namespace geolio::test
 {
     class QuadMotorCycleGraphTest : public ::testing::Test {
     protected:
-        void SetUp() override {
-            ASSERT_TRUE(quad_mesh.load(std::string(TEST_DATA_PATH) + "botijo_out_quad_7.geogram"));
-            MC = std::make_unique<QuadMotorCycleGraph>(quad_mesh);
-        }
-
         void save_results() {
+            /* Every block must be a cuboid with four distinct corners: loop blocks are cut open
+             * by compute(), otherwise their coarse quads would be degenerate. */
+            for (const auto& block : MC->blocks()) {
+                ASSERT_TRUE(block.is_rectangular());
+                const std::array<GEO::index_t, 4> corners{
+                    block.facet_corner_vertex(0),
+                    block.facet_corner_vertex(1),
+                    block.facet_corner_vertex(2),
+                    block.facet_corner_vertex(3)
+                };
+                for (GEO::index_t i = 0; i < 4; ++i) {
+                    for (GEO::index_t j = i + 1; j < 4; ++j)
+                        ASSERT_NE(corners[i], corners[j]);
+                }
+            }
+
             GEO::Attribute<GEO::index_t> quad_f_block(quad_mesh.facets.attributes(), "block");
             MC->label_blocks(quad_f_block);
 
@@ -68,12 +80,38 @@ namespace geolio::test
         std::unique_ptr<QuadMotorCycleGraph> MC;
     };
 
-    TEST_F(QuadMotorCycleGraphTest, base_complex) {
+    class QuadMotorCycleGraphExampleTests : public QuadMotorCycleGraphTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(quad_mesh.load(std::string(TEST_DATA_PATH) + "botijo_out_quad_7.geogram"));
+            MC = std::make_unique<QuadMotorCycleGraph>(quad_mesh);
+        }
+    };
+
+    TEST_F(QuadMotorCycleGraphExampleTests, base_complex) {
         MC->compute(QuadMotorCycleGraph::BASE_COMPLEX);
         save_results();
     }
 
-    TEST_F(QuadMotorCycleGraphTest, motorcycle_complex) {
+    TEST_F(QuadMotorCycleGraphExampleTests, motorcycle_complex) {
+        MC->compute(QuadMotorCycleGraph::MOTORCYCLE_COMPLEX);
+        save_results();
+    }
+
+    class QuadMotorCycleGraphSimpleLoopTests : public QuadMotorCycleGraphTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(quad_mesh.load(std::string(TEST_DATA_PATH) + "simple_loop_quad.geogram"));
+            MC = std::make_unique<QuadMotorCycleGraph>(quad_mesh);
+        }
+    };
+
+    TEST_F(QuadMotorCycleGraphSimpleLoopTests, base_complex) {
+        MC->compute(QuadMotorCycleGraph::BASE_COMPLEX);
+        save_results();
+    }
+
+    TEST_F(QuadMotorCycleGraphSimpleLoopTests, motorcycle_complex) {
         MC->compute(QuadMotorCycleGraph::MOTORCYCLE_COMPLEX);
         save_results();
     }

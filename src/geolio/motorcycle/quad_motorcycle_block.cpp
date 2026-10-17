@@ -119,12 +119,25 @@ namespace geolio
             throw std::logic_error("im here");
         }
 
+        /* A block that wraps around is kept in flood-fill order: see is_rectangular(). */
         rebuild_ordered_facets();
+    }
+
+    std::array<GEO::index_t, 4> QuadMotorCycleBlock::corner_vertices(
+        ) const {
+        assert(is_rectangular());
+        return {
+            facet_corner_vertex(0),
+            facet_corner_vertex(1),
+            facet_corner_vertex(2),
+            facet_corner_vertex(3)
+        };
     }
 
     GEO::index_t QuadMotorCycleBlock::facet_corner_vertex(
         const GEO::index_t lv
         ) const {
+        assert(is_rectangular());
         assert(!block_facets_.empty());
         assert(lv < 4);
 
@@ -151,7 +164,7 @@ namespace geolio
         }
     }
 
-    void QuadMotorCycleBlock::rebuild_ordered_facets(
+    bool QuadMotorCycleBlock::rebuild_ordered_facets(
         ) {
         assert(!block_facets_.empty());
 
@@ -165,13 +178,15 @@ namespace geolio
             min_y = std::min(min_y, BF.coord.y);
             max_y = std::max(max_y, BF.coord.y);
         }
-        len_x_ = max_x - min_x + 1;
-        len_y_ = max_y - min_y + 1;
-        if (len_x_*len_y_ != block_facets_.size()) {
-            throw std::logic_error("This block is likely toroidal rather than cuboidal! But the split function has not yet been implemented.");
-            // TODO: need to split this block
-            return;
+        const int len_x = max_x - min_x + 1;
+        const int len_y = max_y - min_y + 1;
+        if (static_cast<std::size_t>(len_x)*len_y != block_facets_.size()) {
+            /* The block wraps around (a loop) or is not cuboidal: keep the flood-fill order and
+             * let the caller cut it open. */
+            return false;
         }
+        len_x_ = len_x;
+        len_y_ = len_y;
 
         /* Fill orderly */
         std::vector<BlockFacet> new_block_facets(len_x_*len_y_);
@@ -199,5 +214,7 @@ namespace geolio
             GEO::mesh_save(mesh_out, "debug.geogram");
             throw std::logic_error("im here");
         }
+
+        return true;
     }
 }
