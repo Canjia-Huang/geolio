@@ -181,12 +181,29 @@ namespace geolio
             throw std::logic_error("im here");
         }
 
+        /* A block that wraps around is kept in flood-fill order: see is_cuboid(). */
         rebuild_ordered_cells();
+    }
+
+    std::array<GEO::index_t, 8> HexMotorCycleBlock::corner_vertices(
+        ) const {
+        assert(is_cuboid());
+        return {
+            cell_corner_vertex(0),
+            cell_corner_vertex(1),
+            cell_corner_vertex(2),
+            cell_corner_vertex(3),
+            cell_corner_vertex(4),
+            cell_corner_vertex(5),
+            cell_corner_vertex(6),
+            cell_corner_vertex(7)
+        };
     }
 
     GEO::index_t HexMotorCycleBlock::cell_corner_vertex(
         const GEO::index_t lv
         ) const {
+        assert(is_cuboid());
         assert(!block_cells_.empty());
         assert(lv < 8);
 
@@ -253,7 +270,7 @@ namespace geolio
         }
     }
 
-    void HexMotorCycleBlock::rebuild_ordered_cells(
+    bool HexMotorCycleBlock::rebuild_ordered_cells(
         ) {
         assert(!block_cells_.empty());
 
@@ -271,14 +288,17 @@ namespace geolio
             min_z = std::min(min_z, BC.coord.z);
             max_z = std::max(max_z, BC.coord.z);
         }
-        len_x_ = max_x - min_x + 1;
-        len_y_ = max_y - min_y + 1;
-        len_z_ = max_z - min_z + 1;
-        if (len_x_*len_y_*len_z_ != block_cells_.size()) {
-            throw std::logic_error("This block is likely toroidal rather than cuboidal! But the split function has not yet been implemented.");
-            // TODO: need to split this block
-            return;
+        const int len_x = max_x - min_x + 1;
+        const int len_y = max_y - min_y + 1;
+        const int len_z = max_z - min_z + 1;
+        if (static_cast<std::size_t>(len_x)*len_y*len_z != block_cells_.size()) {
+            /* The block wraps around (a loop) or is not cuboidal: keep the flood-fill order and
+             * let the caller cut it open. */
+            return false;
         }
+        len_x_ = len_x;
+        len_y_ = len_y;
+        len_z_ = len_z;
 
         /* Fill orderly */
         std::vector<BlockCell> new_block_cells(len_x_*len_y_*len_z_);
@@ -314,5 +334,7 @@ namespace geolio
             GEO::mesh_save(mesh_out, "debug.geogram");
             throw std::logic_error("im here");
         }
+
+        return true;
     }
 }

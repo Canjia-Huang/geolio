@@ -5,6 +5,8 @@
 #ifndef GEOLIO_HEX_MOTORCYCLE_COMPLEX_H
 #define GEOLIO_HEX_MOTORCYCLE_COMPLEX_H
 #include <queue>
+#include <tuple>
+#include <utility>
 #include <geogram/mesh/mesh.h>
 #include "hex_motorcycle_block.h"
 
@@ -162,9 +164,113 @@ namespace geolio
          *
          * @pre `M_cf_tagged_` has been populated by motorcycle propagation (for example via
          *      `compute()`).
-         * @post Block indices are assigned to the processed cells.
+         * @post Block indices are assigned to the processed cells. `mesh_c_block_` maps every
+         *       cell to the index of its block.
          */
         GEO::index_t decompose_into_blocks();
+
+        /**
+         * A cell facet: the local facet `lf` of cell `c`.
+         */
+        struct SheetFacet {
+           GEO::index_t c{GEO::NO_INDEX};
+           GEO::index_t lf{GEO::NO_INDEX};
+        };
+
+        /**
+         * A whole sheet of coplanar cell facets traced through a seed facet.
+         */
+        struct SheetTrace {
+           std::vector<SheetFacet> facets; ///< Facets of the sheet.
+           std::vector<std::pair<GEO::index_t, GEO::index_t>> boundary_edges; ///< Mesh edges
+                                                                              ///< where the sheet
+                                                                              ///< stops.
+           GEO::index_t boundary_loops{0}; ///< Connected components of the boundary edges.
+           GEO::index_t border_edges{0}; ///< Boundary edges that are on the mesh border.
+           bool closed{false}; ///< The sheet has no boundary at all.
+        };
+
+        /**
+         * Tags both sides of a cell facet.
+         *
+         * @param[in] c Cell holding the facet.
+         * @param[in] lf Local facet index in `c`.
+         * @param[in] tag Tag value to write (only `GEO::NO_INDEX` is interpreted as "untagged").
+         * @return Number of cell facets tagged by this call (0 or 1 per side).
+         */
+        GEO::index_t tag_cell_facet(GEO::index_t c, GEO::index_t lf, GEO::index_t tag);
+
+        /**
+         * Checks whether a cell facet is inside a block, i.e. it can be part of a cut.
+         *
+         * @param[in] c Cell holding the facet.
+         * @param[in] lf Local facet index in `c`.
+         * @param[in] block_id Block the facet has to be interior to.
+         */
+        bool is_sheet_facet_usable(GEO::index_t c, GEO::index_t lf, GEO::index_t block_id) const;
+
+        /**
+         * Walks one step along a sheet: the coplanar facet across the edge (@p c, @p lf, @p le).
+         *
+         * This is the undirected version of the rule used by the burning: the sheet continues
+         * straight through the edge into the opposite facet of the ring of cells around it.
+         *
+         * @param[in] c Cell holding the current facet.
+         * @param[in] lf Local facet index of the current facet.
+         * @param[in] le Local edge of the current facet to cross.
+         * @param[in,out] ordered_c_le_lf Scratch buffer for the cells around the edge.
+         * @param[out] nc Cell holding the next facet.
+         * @param[out] nlf Local facet index of the next facet.
+         * @return false when the sheet ends at this edge (border or singular edge).
+         */
+        bool next_sheet_facet(
+            GEO::index_t c,
+            GEO::index_t lf,
+            GEO::index_t le,
+            std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& ordered_c_le_lf,
+            GEO::index_t& nc,
+            GEO::index_t& nlf) const;
+
+        /**
+         * Traces the whole sheet through the facet (@p c, @p lf).
+         *
+         * The trace stops at the boundary of @p block_id, at tagged facets and at mesh border or
+         * singular edges.
+         *
+         * @param[in] c Cell holding the seed facet.
+         * @param[in] lf Local facet index of the seed facet.
+         * @param[in] block_id Block the sheet is not allowed to leave.
+         * @param[in,out] ordered_c_le_lf Scratch buffer for the cells around an edge.
+         * @param[out] trace The traced sheet.
+         */
+        void trace_sheet(
+            GEO::index_t c,
+            GEO::index_t lf,
+            GEO::index_t block_id,
+            std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& ordered_c_le_lf,
+            SheetTrace& trace) const;
+
+        /**
+         * Cuts a block open by tagging one of its sheets as an artificial wall (a seam).
+         *
+         * @param[in] block Block to cut.
+         * @param[in] block_id Index of @p block in `blocks_`.
+         * @return true when at least one new facet was tagged.
+         */
+        bool cut_block(const HexMotorCycleBlock& block, GEO::index_t block_id);
+
+        /**
+         * Checks whether a block is a cuboid with eight distinct corner vertices.
+         */
+        static bool block_is_valid(const HexMotorCycleBlock& block);
+
+        /**
+         * Finds the first block that is not a valid cuboid.
+         *
+         * @param[out] block_id Index of the offending block in `blocks_`.
+         * @return true when an offending block was found.
+         */
+        bool find_invalid_block(GEO::index_t& block_id) const;
 
         const std::string attribute_id_;
 
@@ -174,6 +280,7 @@ namespace geolio
         std::vector<bool> mesh_ce_border_; // [12*c+le] -> boundary/interior status
 
         std::vector<HexMotorCycleBlock> blocks_;
+        std::vector<GEO::index_t> mesh_c_block_; // [c] -> block id, or GEO::NO_INDEX
     };
 }
 

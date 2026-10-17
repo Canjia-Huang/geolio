@@ -385,7 +385,8 @@ namespace geolio
             reached_border = true; // non-manifold vertex
             return false;
         }
-        assert(ordered_f_lv.size() == 4); // regular interior vertex
+        if (ordered_f_lv.size() != 4) // regular interior vertex
+            return false;
 
         nf = ordered_f_lv[1].first;
         nlv = ordered_f_lv[1].second;

@@ -9,9 +9,64 @@
 #include <geogram/mesh/mesh_io.h>
 #include <geolio/common/utils.h>
 #include <geolio/mesh/hex_operations.h>
+#include <unordered_map>
 
 #include "geolio/common/pair_hash.h"
 #include "geolio/mesh/mesh_operations.h"
+
+namespace
+{
+    /* Upper bound on the number of artificial cuts performed before giving up. Every cut adds a
+     * wall inside a loop block, so only a few are needed in practice. */
+    constexpr GEO::index_t MAX_CUT_ATTEMPTS = 16;
+
+    /* Tag value of the artificial walls created by a cut. Outside of the burning, tags are only
+     * interpreted as "is this facet a wall?", and 0 is also the value used for border facets. */
+    constexpr GEO::index_t SEAM_TAG = 0;
+
+    /* Counts the connected components (loops) of the boundary edges of a sheet. */
+    GEO::index_t count_boundary_loops(
+        const std::vector<std::pair<GEO::index_t, GEO::index_t>>& boundary_edges
+        ) {
+        if (boundary_edges.empty())
+            return 0;
+
+        /* Vertex -> indices of the incident boundary edges. */
+        std::unordered_map<GEO::index_t, std::vector<GEO::index_t>> incident;
+        incident.reserve(boundary_edges.size()*2);
+        for (GEO::index_t i = 0, i_end = boundary_edges.size(); i < i_end; ++i) {
+            incident[boundary_edges[i].first].push_back(i);
+            incident[boundary_edges[i].second].push_back(i);
+        }
+
+        std::vector<bool> used(boundary_edges.size(), false);
+        std::vector<GEO::index_t> stack;
+        GEO::index_t loops_nb = 0;
+        for (GEO::index_t i = 0, i_end = boundary_edges.size(); i < i_end; ++i) {
+            if (used[i])
+                continue;
+
+            ++loops_nb;
+            stack.push_back(i);
+            used[i] = true;
+            while (!stack.empty()) {
+                const auto e = boundary_edges[stack.back()];
+                stack.pop_back();
+
+                for (const auto v : {e.first, e.second}) {
+                    for (const auto next : incident[v]) {
+                        if (used[next])
+                            continue;
+                        used[next] = true;
+                        stack.push_back(next);
+                    }
+                }
+            }
+        }
+
+        return loops_nb;
+    }
+}
 
 namespace geolio
 {
@@ -100,19 +155,8 @@ namespace geolio
             if (!alive)
                 continue;
 
-            /* Mark facet as burnt */
-            mesh_cf_tagged_[8*F_c+F_lf] = F_d;
-            if (const auto& nc = mesh_.cells.adjacent(F_c, F_lf);
-                nc != GEO::NO_CELL) {
-                const auto& nlf = find_hex_facet(
-                    mesh_,
-                    nc,
-                    mesh_.cells.facet_vertex(F_c, F_lf, 2),
-                    mesh_.cells.facet_vertex(F_c, F_lf, 1),
-                    mesh_.cells.facet_vertex(F_c, F_lf, 0));
-                assert(nlf != GEO::NO_INDEX);
-                mesh_cf_tagged_[8*nc+nlf] = F_d;
-            }
+            /* Mark facet as burnt (both sides) */
+            tag_cell_facet(F_c, F_lf, F_d);
 
             /* Burning */
             for (const auto& F_le1 : HEX_LF_INCIDENT_LE[F_lf]) {
@@ -156,7 +200,35 @@ namespace geolio
         }
 
         /* Decompose */
-        const GEO::index_t blocks_nb = decompose_into_blocks();
+        GEO::index_t blocks_nb = decompose_into_blocks();
+
+        /* A block wraps around when the region it covers has no singular edge at all (e.g. a ring
+         * of hexahedra, or a periodic mesh). Such a block cannot be unrolled into a cuboid: its
+         * layout is not dense and a coarse hex built from it would be degenerate. Cut every such
+         * block open along sheets of cell facets (artificial motorcycles) and decompose again
+         * until all blocks are valid cuboids.
+         *
+         * NOTE: two cuts are enough to turn an open loop (a ring) into cuboids. A closed loop
+         * (a periodic mesh) is split into cuboids as well, but its coarse hexes then share corner
+         * vertices, so the coarse mesh is not a valid hex mesh yet: it needs more cuts, which
+         * would be driven by the coarse facet incidence. */
+        for (GEO::index_t attempt = 0; ; ++attempt) {
+            GEO::index_t block_id = GEO::NO_INDEX;
+            if (!find_invalid_block(block_id))
+                break;
+
+            if (attempt >= MAX_CUT_ATTEMPTS)
+                throw std::logic_error(
+                    "HexMotorCycleComplex: a loop block could not be cut into cuboids. "
+                    "The block may not be a simple loop, or cutting it needs more cuts.");
+
+            assert(block_id < blocks_.size());
+            if (!cut_block(blocks_[block_id], block_id))
+                throw std::logic_error(
+                    "HexMotorCycleComplex: no sheet can cut a loop block open.");
+
+            blocks_nb = decompose_into_blocks();
+        }
 
         return blocks_nb;
     }
@@ -324,6 +396,7 @@ namespace geolio
     GEO::index_t HexMotorCycleComplex::decompose_into_blocks(
         ) {
         blocks_.clear();
+        mesh_c_block_.assign(mesh_.cells.nb(), GEO::NO_INDEX);
 
         std::vector<bool> processed_cells(mesh_.cells.nb(), false);
         for (const auto& start_c : mesh_.cells) {
@@ -334,12 +407,264 @@ namespace geolio
             HexMotorCycleBlock MC_block(mesh_, mesh_cf_tagged_);
             MC_block.flood_fill_cells(start_c);
 
-            for (const auto& b_cell : MC_block.block_cells())
+            const auto block_id = static_cast<GEO::index_t>(blocks_.size());
+            for (const auto& b_cell : MC_block.block_cells()) {
                 processed_cells[b_cell.c] = true;
+                mesh_c_block_[b_cell.c] = block_id;
+            }
 
             blocks_.push_back(MC_block);
         }
 
         return blocks_.size();
+    }
+
+    GEO::index_t HexMotorCycleComplex::tag_cell_facet(
+        const GEO::index_t c,
+        const GEO::index_t lf,
+        const GEO::index_t tag
+        ) {
+        GEO::index_t tagged_nb = 0;
+
+        if (mesh_cf_tagged_[8*c+lf] == GEO::NO_INDEX) {
+            mesh_cf_tagged_[8*c+lf] = tag;
+            ++tagged_nb;
+        }
+
+        if (const auto nc = mesh_.cells.adjacent(c, lf); nc != GEO::NO_CELL) {
+            const auto nlf = find_hex_facet(
+                mesh_,
+                nc,
+                mesh_.cells.facet_vertex(c, lf, 2),
+                mesh_.cells.facet_vertex(c, lf, 1),
+                mesh_.cells.facet_vertex(c, lf, 0));
+            assert(nlf != GEO::NO_INDEX);
+
+            if (mesh_cf_tagged_[8*nc+nlf] == GEO::NO_INDEX) {
+                mesh_cf_tagged_[8*nc+nlf] = tag;
+                ++tagged_nb;
+            }
+        }
+
+        return tagged_nb;
+    }
+
+    bool HexMotorCycleComplex::is_sheet_facet_usable(
+        const GEO::index_t c,
+        const GEO::index_t lf,
+        const GEO::index_t block_id
+        ) const {
+        const auto nc = mesh_.cells.adjacent(c, lf);
+        if (nc == GEO::NO_CELL) // on the mesh border
+            return false;
+
+        /* Facets are always tagged on both sides, so checking one side is enough. */
+        if (mesh_cf_tagged_[8*c+lf] != GEO::NO_INDEX) // already a wall
+            return false;
+
+        return mesh_c_block_[nc] == block_id;
+    }
+
+    bool HexMotorCycleComplex::next_sheet_facet(
+        const GEO::index_t c,
+        const GEO::index_t lf,
+        const GEO::index_t le,
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& ordered_c_le_lf,
+        GEO::index_t& nc,
+        GEO::index_t& nlf
+        ) const {
+        /* The sheet only continues through regular interior edges (same rule as the burning). */
+        if (mesh_ce_singular_[12*c+le] || mesh_ce_border_[12*c+le])
+            return false;
+        if (get_edge_incident_cells(mesh_, c, le, ordered_c_le_lf))
+            return false;
+        if (ordered_c_le_lf.size() != 4) // regular interior edge
+            return false;
+        assert(std::get<0>(ordered_c_le_lf[0]) == c);
+
+        /* The facets around an edge alternate between the planes through it, so the coplanar
+         * facet is the one two cells away in the ring (or one, depending on which of the two
+         * facets of `c` holds the sheet). */
+        const auto opp_i = mesh_.cells.edge_adjacent_facet(c, le, 0) == lf ? 2 : 1;
+        nc = std::get<0>(ordered_c_le_lf[opp_i]);
+        nlf = std::get<2>(ordered_c_le_lf[opp_i]);
+
+        assert(mesh_.cells.adjacent(c, lf) != nc);
+        return true;
+    }
+
+    void HexMotorCycleComplex::trace_sheet(
+        const GEO::index_t c,
+        const GEO::index_t lf,
+        const GEO::index_t block_id,
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>>& ordered_c_le_lf,
+        SheetTrace& trace
+        ) const {
+        trace = SheetTrace{};
+
+        std::vector<bool> visited(8*mesh_.cells.nb(), false);
+        std::vector<SheetFacet> stack;
+
+        stack.push_back({c, lf});
+        visited[8*c+lf] = true;
+
+        while (!stack.empty()) {
+            const auto [cc, clf] = stack.back();
+            stack.pop_back();
+            trace.facets.push_back({cc, clf});
+
+            /* Every edge of the facet either continues the sheet or bounds it. */
+            for (const auto& le : HEX_LF_INCIDENT_LE[clf]) {
+                GEO::index_t nc = GEO::NO_INDEX, nlf = GEO::NO_INDEX;
+                if (!next_sheet_facet(cc, clf, le, ordered_c_le_lf, nc, nlf) ||
+                    !is_sheet_facet_usable(nc, nlf, block_id)) {
+                    trace.boundary_edges.emplace_back(
+                        std::min(mesh_.cells.edge_vertex(cc, le, 0), mesh_.cells.edge_vertex(cc, le, 1)),
+                        std::max(mesh_.cells.edge_vertex(cc, le, 0), mesh_.cells.edge_vertex(cc, le, 1)));
+                    if (mesh_ce_border_[12*cc+le])
+                        ++trace.border_edges;
+                    continue;
+                }
+
+                if (visited[8*nc+nlf])
+                    continue;
+
+                visited[8*nc+nlf] = true;
+                stack.push_back({nc, nlf});
+            }
+        }
+
+        trace.closed = trace.boundary_edges.empty();
+        trace.boundary_loops = count_boundary_loops(trace.boundary_edges);
+    }
+
+    bool HexMotorCycleComplex::cut_block(
+        const HexMotorCycleBlock& block,
+        const GEO::index_t block_id
+        ) {
+        assert(!block.block_cells().empty());
+
+        /* Pick the seed cell. A cuboid block is cut through its middle so that the two halves stay
+         * balanced; a loop block is still in flood-fill order, so its first cell (the flood-fill
+         * seed) is as good as any. */
+        GEO::index_t seed_c = block.block_cells().front().c;
+        std::array<GEO::index_t, 6> seed_lfs = block.block_cells().front().lfs;
+        GEO::index_t preferred = GEO::NO_INDEX;
+        if (block.is_cuboid()) {
+            const auto mid = block.block_cells()[
+                static_cast<std::size_t>(block.len_x()/2) +
+                static_cast<std::size_t>(block.len_y()/2)*block.len_x() +
+                static_cast<std::size_t>(block.len_z()/2)*block.len_x()*block.len_y()];
+            seed_c = mid.c;
+            seed_lfs = mid.lfs;
+
+            /* A cuboid block with repeating corners was cut open once and still closes up along
+             * the cut: the corners repeat along the wrapped axis, so the next sheet has to be
+             * perpendicular to it. Corner `lv` has bit 0/1/2 = x/y/z side. */
+            const auto corners = block.corner_vertices();
+            constexpr GEO::index_t corner_pairs[3][4][2] = {
+                {{0, 1}, {2, 3}, {4, 5}, {6, 7}}, // repeat along x
+                {{0, 2}, {1, 3}, {4, 6}, {5, 7}}, // repeat along y
+                {{0, 4}, {1, 5}, {2, 6}, {3, 7}} // repeat along z
+            };
+            for (GEO::index_t axis = 0; axis < 3 && preferred == GEO::NO_INDEX; ++axis) {
+                bool wrapped = true;
+                for (const auto& pair : corner_pairs[axis]) {
+                    if (corners[pair[0]] != corners[pair[1]]) {
+                        wrapped = false;
+                        break;
+                    }
+                }
+                if (wrapped)
+                    preferred = axis;
+            }
+        }
+
+        /* Trace one sheet per block direction. Sides 2*d and 2*d+1 of the block cell frame are the
+         * two facets of the cell that face along direction d. */
+        std::vector<std::tuple<GEO::index_t, GEO::index_t, GEO::index_t>> ordered_c_le_lf;
+        std::array<SheetTrace, 3> traces;
+        std::array<bool, 3> found{false, false, false};
+        for (GEO::index_t d = 0; d < 3; ++d) {
+            for (GEO::index_t s = 0; s < 2 && !found[d]; ++s) {
+                const auto f_lf = seed_lfs[2*d+s];
+                if (!is_sheet_facet_usable(seed_c, f_lf, block_id))
+                    continue;
+
+                trace_sheet(seed_c, f_lf, block_id, ordered_c_le_lf, traces[d]);
+                found[d] = true;
+            }
+        }
+
+        /* Keep the sheet that cuts the block open best. How well a sheet cuts is decided by its
+         * boundary: a sheet that wraps around has no boundary, and a sheet that only wraps in one
+         * direction has two boundary loops instead of one. */
+        const auto cuts_better = [](const SheetTrace& candidate, const SheetTrace& current) {
+            if (candidate.closed != current.closed)
+                return !candidate.closed;
+            if ((candidate.boundary_loops == 1) != (current.boundary_loops == 1))
+                return candidate.boundary_loops == 1;
+            return candidate.border_edges > current.border_edges;
+        };
+
+        GEO::index_t best = GEO::NO_INDEX;
+        for (GEO::index_t d = 0; d < 3; ++d) {
+            if (!found[d])
+                continue;
+            if (best == GEO::NO_INDEX) {
+                best = d;
+                continue;
+            }
+
+            if (preferred != GEO::NO_INDEX) {
+                /* A block that was already cut open once has to be cut again along the same axis. */
+                if (d == preferred && best != preferred)
+                    best = d;
+                continue;
+            }
+
+            if (cuts_better(traces[d], traces[best]))
+                best = d;
+        }
+        if (best == GEO::NO_INDEX)
+            return false;
+
+        GEO::index_t tagged_nb = 0;
+        for (const auto& facet : traces[best].facets)
+            tagged_nb += tag_cell_facet(facet.c, facet.lf, SEAM_TAG);
+
+        return tagged_nb > 0;
+    }
+
+    bool HexMotorCycleComplex::block_is_valid(
+        const HexMotorCycleBlock& block
+        ) {
+        if (!block.is_cuboid())
+            return false;
+
+        /* A cuboid whose corners repeat wraps around, so its coarse hex would be degenerate. */
+        const auto corners = block.corner_vertices();
+        for (GEO::index_t i = 0; i < 8; ++i) {
+            for (GEO::index_t j = i+1; j < 8; ++j) {
+                if (corners[i] == corners[j])
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool HexMotorCycleComplex::find_invalid_block(
+        GEO::index_t& block_id
+        ) const {
+        for (GEO::index_t i = 0, i_end = blocks_.size(); i < i_end; ++i) {
+            if (block_is_valid(blocks_[i]))
+                continue;
+
+            block_id = i;
+            return true;
+        }
+
+        return false;
     }
 }

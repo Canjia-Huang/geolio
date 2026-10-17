@@ -2,6 +2,7 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/9/5.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
+#include <array>
 #include <unordered_set>
 #include <gtest/gtest.h>
 #include <geolio/motorcycle/hex_motorcycle_complex.h>
@@ -13,14 +14,18 @@ namespace geolio::test
 {
     class HexMotorcycleComplexTest : public ::testing::Test {
     protected:
-        void SetUp() override {
-            ASSERT_TRUE(hex_mesh.load(std::string(TEST_DATA_PATH) + "i01c_m1_hex.geogram"));
-            hex_mesh.edges.clear();
-            hex_mesh.facets.clear();
-            MC = std::make_unique<HexMotorCycleComplex>(hex_mesh);
-        }
-
         void save_results() {
+            /* Every block must be a cuboid with eight distinct corners: loop blocks are cut open
+             * by compute(), otherwise their coarse hexes would be degenerate. */
+            for (const auto& block : MC->blocks()) {
+                ASSERT_TRUE(block.is_cuboid());
+                const auto corners = block.corner_vertices();
+                for (GEO::index_t i = 0; i < 8; ++i) {
+                    for (GEO::index_t j = i + 1; j < 8; ++j)
+                        ASSERT_NE(corners[i], corners[j]);
+                }
+            }
+
             GEO::Attribute<GEO::index_t> hex_c_block(hex_mesh.cells.attributes(), "block");
             MC->label_blocks(hex_c_block);
 
@@ -86,12 +91,42 @@ namespace geolio::test
         std::unique_ptr<HexMotorCycleComplex> MC;
     };
 
-    TEST_F(HexMotorcycleComplexTest, base_complex) {
+    class HexMotorcycleComplexExampleTest : public HexMotorcycleComplexTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(hex_mesh.load(std::string(TEST_DATA_PATH) + "i01c_m1_hex.geogram"));
+            hex_mesh.edges.clear();
+            hex_mesh.facets.clear();
+            MC = std::make_unique<HexMotorCycleComplex>(hex_mesh);
+        }
+    };
+
+    TEST_F(HexMotorcycleComplexExampleTest, base_complex) {
         MC->compute(HexMotorCycleComplex::BASE_COMPLEX);
         save_results();
     }
 
-    TEST_F(HexMotorcycleComplexTest, motorcycle_complex) {
+    TEST_F(HexMotorcycleComplexExampleTest, motorcycle_complex) {
+        MC->compute(HexMotorCycleComplex::MOTORCYCLE_COMPLEX);
+        save_results();
+    }
+
+    class HexMotorcycleComplexSimpleLoopTest : public HexMotorcycleComplexTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(hex_mesh.load(std::string(TEST_DATA_PATH) + "simple_loop_hex.geogram"));
+            hex_mesh.edges.clear();
+            hex_mesh.facets.clear();
+            MC = std::make_unique<HexMotorCycleComplex>(hex_mesh);
+        }
+    };
+
+    TEST_F(HexMotorcycleComplexSimpleLoopTest, base_complex) {
+        MC->compute(HexMotorCycleComplex::BASE_COMPLEX);
+        save_results();
+    }
+
+    TEST_F(HexMotorcycleComplexSimpleLoopTest, motorcycle_complex) {
         MC->compute(HexMotorCycleComplex::MOTORCYCLE_COMPLEX);
         save_results();
     }
