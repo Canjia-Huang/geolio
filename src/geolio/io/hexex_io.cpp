@@ -51,7 +51,6 @@ namespace geolio
             }
         }
 
-
         /* Load tetrahedra */
         {
             in.get_line();

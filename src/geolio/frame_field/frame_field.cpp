@@ -252,6 +252,39 @@ namespace {
     };
 
     /**
+     * @brief Computes the direction in which a dihedron folds.
+     * @details The two facets sharing @p edge meet at that edge, so both of their normals
+     *          are orthogonal to it, and the surface turns in the direction perpendicular
+     *          to the edge inside the (average) tangent plane. That perpendicular is the
+     *          direction a curvature tensor has to accumulate.
+     * @details Accumulating the edge itself instead rotates every principal direction by
+     *          90 degrees in its facet plane. A 4-fold symmetric cross field - the object
+     *          the original formulation of this estimator was written for - is invariant
+     *          under that rotation and therefore does not see the difference, but a 2-fold
+     *          symmetric curvature direction field does: it gets the two directions
+     *          swapped, together with the two magnitudes.
+     * @param[in] M a const reference to the surface mesh
+     * @param[in] f1 the index of the first facet of the dihedron
+     * @param[in] f2 the index of the second facet of the dihedron
+     * @param[in] edge the edge the two facets share, oriented either way
+     * @return a vector perpendicular to @p edge in the average tangent plane, with the
+     *         length of @p edge, so that the weight of the sample does not change.
+     */
+    vec3 fold_direction(const Mesh& M, const index_t f1, const index_t f2, const vec3& edge) {
+        vec3 n = Geom::mesh_facet_normal(M, f1) + Geom::mesh_facet_normal(M, f2);
+        if (length(n) < 1e-30) {
+            // A 180-degree fold has no average normal; either one defines the same
+            // perpendicular.
+            n = Geom::mesh_facet_normal(M, f1);
+        }
+        if (length(n) < 1e-30) {
+            // Degenerate facets: there is no tangent plane to turn in, keep the edge.
+            return edge;
+        }
+        return cross(normalize(n), edge);
+    }
+
+    /**
      * @brief Estimates the directions of minimum and maximum principal curvature, with
      *        their magnitudes.
      * @details Each direction is encoded as the cosine and the sine of the angle it makes
@@ -294,7 +327,7 @@ namespace {
                 const double alpha = Geom::mesh_normal_angle(M, c);
 
                 NC.clear();
-                NC.accumulate_dihedral_angle(e, alpha);
+                NC.accumulate_dihedral_angle(fold_direction(M, f1, f2, e), alpha);
                 NC.add_to_matrix(&matrices[6 * v1]);
                 NC.add_to_matrix(&matrices[6 * v2]);
             }
@@ -338,30 +371,30 @@ namespace {
 namespace geolio
 {
     void FrameField::create_curvature_directions(
-        const GEO::Mesh& M,
+        const GEO::Mesh& mesh,
         const double sharp_angle_threshold,
         const double autoscale
         ) {
         assert(std::isfinite(autoscale));
         assert(autoscale >= 0.0);
 
-        if (M.facets.nb() == 0) {
+        if (mesh.facets.nb() == 0) {
             LOG::WARN("The mesh has no facet: nothing to do, the frame field is left "
                       "untouched.");
             return;
         }
 
-        geo_assert(M.facets.are_simplices());
+        geo_assert(mesh.facets.are_simplices());
 
         // Step 1: the two principal curvature directions and their magnitudes, one of
         // each per facet.
-        std::vector<double> max_sincos_alpha(2 * M.facets.nb(), 0.0);
-        std::vector<double> min_sincos_alpha(2 * M.facets.nb(), 0.0);
-        const GEO::vector<bool> locked(M.facets.nb());
-        certainty_max_.assign(M.facets.nb(), 0.0);
-        certainty_min_.assign(M.facets.nb(), 0.0);
+        std::vector<double> max_sincos_alpha(2 * mesh.facets.nb(), 0.0);
+        std::vector<double> min_sincos_alpha(2 * mesh.facets.nb(), 0.0);
+        const GEO::vector<bool> locked(mesh.facets.nb());
+        certainty_max_.assign(mesh.facets.nb(), 0.0);
+        certainty_min_.assign(mesh.facets.nb(), 0.0);
         estimate_min_max_curvature_direction(
-            M, max_sincos_alpha, min_sincos_alpha, locked,
+            mesh, max_sincos_alpha, min_sincos_alpha, locked,
             certainty_max_, certainty_min_
         );
 
@@ -391,17 +424,17 @@ namespace geolio
             "Initializing the frame storage and the spatial search with the base class' "
             "own field, which the curvature directions then replace"
         );
-        GEO::FrameField::create_from_surface_mesh(M, false, sharp_angle_threshold);
+        GEO::FrameField::create_from_surface_mesh(mesh, false, sharp_angle_threshold);
 
         // Step 4: the frames themselves. Writing through frames() needs a const_cast: it
         // is the only accessor Geogram exposes for its private frames_, and it is well
         // defined here because this member function is non-const, hence the object is not
         // const.
         auto& frames = const_cast<GEO::vector<double>&>(this->frames());
-        geo_assert(frames.size() == 9 * M.facets.nb());
+        geo_assert(frames.size() == 9 * mesh.facets.nb());
 
-        for (const GEO::index_t f : M.facets) {
-            const MeshFacetBasis basis(M, f);
+        for (const GEO::index_t f : mesh.facets) {
+            const MeshFacetBasis basis(mesh, f);
 
             const double max_angle = atan2(
                 max_sincos_alpha[2 * f + 1],
@@ -415,7 +448,7 @@ namespace geolio
             ) / curvature_symd;
             vec3 V = basis.unproject(vec2(cos(min_angle), sin(min_angle)));
 
-            const vec3 W = normalize(Geom::mesh_facet_normal(M, f));
+            const vec3 W = normalize(Geom::mesh_facet_normal(mesh, f));
 
             U *= scale * certainty_max_[f];
             V *= scale * certainty_min_[f];
@@ -429,6 +462,93 @@ namespace geolio
             frames[9 * f + 6] = W.x;
             frames[9 * f + 7] = W.y;
             frames[9 * f + 8] = W.z;
+        }
+    }
+
+    void FrameField::compute_anisotropy_matrices(
+        const GEO::Mesh& mesh,
+        const double max_aspect,
+        std::vector<double>& matrices
+        ) const {
+        LOG::TRACE("{}({})", __FUNCTION__, max_aspect);
+
+        const auto& frames = this->frames();
+
+        if (frames.size() != 9*mesh.facets.nb())
+            throw std::logic_error(
+                "The frame field does not match the mesh ("+std::to_string(frames.size())+" values for "+std::to_string(mesh.facets.nb())+" facets, "+std::to_string(9*mesh.facets.nb())+" expected), "
+               "re-compute it with create_curvature_directions()");
+
+        // The curvature magnitudes give the anisotropy. When the field does not
+        // carry them (a field built by create_from_surface_mesh() or create_curvature_directions(), for instance), fall
+        // back to the lengths of the two frame vectors: the anisotropic variant of
+        // compute_principal_curvature_field() sets them to the certainty values
+        // times a single common scale, so their ratio is the same anisotropy. A
+        // field with unit vectors therefore yields the identity, i.e. an isotropic
+        // metric, which is what it says.
+        const bool with_certainty = (
+            certainty_max_.size() == mesh.facets.nb() &&
+            certainty_min_.size() == mesh.facets.nb());
+        if (!with_certainty)
+            LOG::WARN("The frame field carries no curvature certainty, deriving the "
+                       "anisotropy from the frame vector lengths");
+
+        const double aspect_span = std::max(1.0, max_aspect) - 1.0;
+
+        matrices.clear();
+        matrices.reserve(9*mesh.facets.nb());
+        for (const auto& f : mesh.facets) {
+            // Orthonormal frame (U, V, N): U is the max curvature direction, N the
+            // facet normal. The stored vectors are re-orthonormalized rather than
+            // trusted: the field stores them per facet and floating point error, or
+            // a degenerate eigen decomposition, can leave them slightly off.
+            GEO::vec3 N = GEO::Geom::mesh_facet_normal(mesh, f);
+            if (GEO::length(N) < 1e-30)
+                N = GEO::vec3(0, 0, 1);  // degenerate facet, keep going
+            N = GEO::normalize(N);
+
+            const GEO::vec3 stored_U(frames[9*f], frames[9*f+1], frames[9*f+2]);
+            const GEO::vec3 stored_V(frames[9*f+3], frames[9*f+4], frames[9*f+5]);
+
+            GEO::vec3 U = stored_U;
+            U -= GEO::dot(U, N)*N;  // project into the facet plane
+            if (GEO::length(U) < 1e-12) {
+                // No direction at all: fall back to the first edge of the facet.
+                const GEO::vec3 e = mesh.facets.point(f, 1) - mesh.facets.point(f, 0);
+                U = e - GEO::dot(e, N)*N;
+            }
+            if (GEO::length(U) < 1e-30)
+                U = GEO::cross(N, GEO::vec3(1, 0, 0));
+            U = GEO::normalize(U);
+            const GEO::vec3 V = GEO::normalize(GEO::cross(N, U));
+
+            // Relative anisotropy of the principal curvatures, in [0, 1]:
+            // 0 where the two curvatures are equal (planar regions and umbilic
+            // points carry no direction) and 1 where the smallest one vanishes
+            // (developable regions have a well defined direction).
+            const double k0 = std::fabs(with_certainty ? certainty_max_[f] : GEO::length(stored_U));
+            const double k1 = std::fabs(with_certainty ? certainty_min_[f] : GEO::length(stored_V));
+            const double sum = k0 + k1;
+            const double relative_anisotropy = (sum > 0) ? (k0 - k1)/sum : 0.0;
+
+            // Weights of the two curvature directions, normalized to unit
+            // determinant: no facet is made globally smaller than another, so the
+            // anisotropy cannot turn into a (huge) density bias. The larger weight
+            // goes along the max curvature direction, i.e. cells are short across
+            // a ridge and long along it.
+            const double aspect = 1.0 + aspect_span*std::max(0.0, relative_anisotropy);
+            const double s = std::sqrt(aspect);
+            const GEO::vec3 w(s, 1.0/s, 1.0);
+
+            // M = R diag(w) R^T, R = (U, V, N)
+            for (GEO::index_t i = 0; i < 3; ++i) {
+                for (GEO::index_t j = 0; j < 3; ++j) {
+                    matrices.push_back(
+                        w[0]*U[i]*U[j] +
+                        w[1]*V[i]*V[j] +
+                        w[2]*N[i]*N[j]);
+                }
+            }
         }
     }
 }

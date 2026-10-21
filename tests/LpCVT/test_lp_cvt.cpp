@@ -1443,57 +1443,7 @@ namespace geolio::test
 
         /* Set matrices */
         std::vector<double> matrices;
-        matrices.reserve(9*mesh.facets.nb());
-        for (const auto& f : mesh.facets) {
-            auto d0 = GEO::vec3(frames[9*f], frames[9*f+1], frames[9*f+2]);
-            auto d1 = GEO::vec3(frames[9*f+3], frames[9*f+4], frames[9*f+5]);
-            auto d2 = GEO::vec3(frames[9*f+6], frames[9*f+7], frames[9*f+8]);
-            const auto s0 = d0.length();
-            const auto s1 = d1.length();
-            const auto s2 = d2.length();
-            if (s0 < 1e-10) {
-                if (s1 < 1e-10) {
-                    d0 = GEO::normalize(mesh.facets.point(f, 1)-mesh.facets.point(f, 0));
-                    d1 = GEO::normalize(GEO::cross(d2, d0));
-                }
-                else {
-                    d0 = GEO::normalize(GEO::cross(d1, d2));
-                    d1 = GEO::normalize(d1);
-                }
-            }
-            else {
-                d0 = GEO::normalize(d0);
-                if (s1 < 1e-10)
-                    d1 = GEO::normalize(GEO::cross(d2, d0));
-                else
-                    d1 = GEO::normalize(d1);
-            }
-            assert(s2 > 1e-10);
-            d2 = GEO::normalize(d2);
-
-            GEO::mat3 R;
-            R(0, 0) = d0[0]; R(0, 1) = d1[0]; R(0, 2) = d2[0];
-            R(1, 0) = d0[1]; R(1, 1) = d1[1]; R(1, 2) = d2[1];
-            R(2, 0) = d0[2]; R(2, 1) = d1[2]; R(2, 2) = d2[2];
-
-            GEO::mat3 W;
-            constexpr double MIN_WEIGHT = 1e-4;
-            const double w0 = 1.0/std::max(s0, MIN_WEIGHT);
-            const double w1 = 1.0/std::max(s1, MIN_WEIGHT);
-            const double w2 = 1.0/std::max(s2, MIN_WEIGHT);
-            W(0, 0) = w0; W(1, 1) = w1; W(2, 2) = std::max({w0, w1, w2});
-
-            const GEO::mat3 M = R*W*R.transpose();
-            matrices.push_back(M(0, 0));
-            matrices.push_back(M(0, 1));
-            matrices.push_back(M(0, 2));
-            matrices.push_back(M(1, 0));
-            matrices.push_back(M(1, 1));
-            matrices.push_back(M(1, 2));
-            matrices.push_back(M(2, 0));
-            matrices.push_back(M(2, 1));
-            matrices.push_back(M(2, 2));
-        }
+        frame_field.compute_anisotropy_matrices(mesh, 3, matrices);
         LpCVT->set_matrices(matrices);
 
         compute();

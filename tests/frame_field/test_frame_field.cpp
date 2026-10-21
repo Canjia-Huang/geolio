@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -254,9 +256,11 @@ namespace geolio::test
 
         /**
          * @brief Builds a cylinder whose axis is z, with outward-facing triangles.
-         * @details Used by the diagnostic below only: the long axial diagonals of this striped
-         *          triangulation are exactly what makes the estimator report a direction that
-         *          is not a curvature direction.
+         * @details The triangles of this striped triangulation have long axial diagonals, so
+         *          the only edges whose dihedral angle is not zero run along the axis. That is
+         *          what makes this mesh a sharp test of the direction the curvature tensor
+         *          votes for: the bending of such a fold happens in the direction perpendicular
+         *          to the fold line, i.e. around the tube, not along it.
          * @param[out] M the mesh to fill; it is cleared first
          * @param[in] radius the radius of the tube
          * @param[in] height the height of the tube
@@ -302,12 +306,10 @@ namespace geolio::test
 
         /**
          * @brief Builds a torus around the z axis, with outward-facing triangles.
-         * @details Used by the diagnostic below only. Each quad is split around its own
-         *          centroid when \p regular is true, which keeps the triangles roughly
-         *          isotropic; the striped split otherwise has long diagonal edges. Both give
-         *          the same (wrong) direction, which is the point of the diagnostic: the tensor
-         *          weights a direction by the square of the edge length, so the sampling, not
-         *          the geometry, can decide the ordering.
+         * @details Each quad is split around its own centroid when \p regular is true, which
+         *          keeps the triangles roughly isotropic; the striped split otherwise has long
+         *          diagonal edges. The curvature directions are only as good as the sampling,
+         *          so the anisotropic test below uses the regular split.
          * @param[out] M the mesh to fill; it is cleared first
          * @param[in] big_radius distance from the axis to the center of the tube
          * @param[in] small_radius radius of the tube
@@ -373,6 +375,83 @@ namespace geolio::test
             }
 
             M.facets.connect();
+        }
+
+        /**
+         * @brief Reads the anisotropy matrix of one facet out of the packed output.
+         * @param[in] matrices the 9 * M.facets.nb() coefficients, row-major per facet
+         * @param[in] f the facet index
+         * @return the matrix of facet @p f, as the row-major layout defines it.
+         */
+        GEO::mat3 anisotropy_matrix(const std::vector<double>& matrices, const GEO::index_t f) {
+            GEO::mat3 M;
+            for (GEO::index_t i = 0; i < 3; ++i) {
+                for (GEO::index_t j = 0; j < 3; ++j) {
+                    M(i, j) = matrices[9 * f + 3 * i + j];
+                }
+            }
+            return M;
+        }
+
+        /**
+         * @brief Evaluates a metric in one direction.
+         * @details This is the squared length of @p v in the metric, so the larger it is the
+         *          shorter the edges of a unit mesh are along @p v.
+         * @param[in] M the metric matrix
+         * @param[in] v the direction, not necessarily of unit length
+         * @return @f$v^{\mathsf{T}} M v@f$.
+         */
+        double metric_square(const GEO::mat3& M, const GEO::vec3& v) {
+            return GEO::dot(v, M * v);
+        }
+
+        /**
+         * @brief Projects a direction into the plane of a facet and normalizes it.
+         * @param[in] M the mesh
+         * @param[in] f the facet index
+         * @param[in] v the direction to project; it must not be parallel to the normal
+         * @return the unit in-plane direction along @p v.
+         */
+        GEO::vec3 in_facet_plane(const GEO::Mesh& M, const GEO::index_t f, const GEO::vec3& v) {
+            const GEO::vec3 N = GEO::normalize(GEO::Geom::mesh_facet_normal(M, f));
+            return GEO::normalize(v - GEO::dot(v, N) * N);
+        }
+
+        /**
+         * @brief Computes the direction around the tube of a torus at one of its points.
+         * @details That is the meridian tangent @f$\partial P/\partial v@f$, which is the
+         *          direction of the largest curvature wherever the tube radius is smaller
+         *          than half the big radius. The point of the meridian plane it lives in is
+         *          that the tangent plane of a torus meets that plane along exactly this
+         *          direction, so projecting it onto a facet returns the direction itself.
+         * @param[in] p a point of the surface of the torus
+         * @param[in] big_radius distance from the axis to the center of the tube
+         * @param[in] small_radius radius of the tube
+         * @return a vector along the tube, at @p p.
+         */
+        GEO::vec3 torus_tube_direction(
+            const GEO::vec3& p, const double big_radius, const double small_radius
+            ) {
+            const double rho = std::sqrt(p.x * p.x + p.y * p.y);
+            const GEO::vec3 e_r(p.x / rho, p.y / rho, 0.0);
+            return ((rho - big_radius) / small_radius) * GEO::vec3(0.0, 0.0, 1.0)
+                - (p.z / small_radius) * e_r;
+        }
+
+        /**
+         * @brief Checks that a matrix is the identity.
+         * @param[in] matrices the packed anisotropy matrices
+         * @param[in] f the facet index
+         * @param[in] tolerance the bound on every coefficient
+         */
+        void expect_identity(const std::vector<double>& matrices, const GEO::index_t f,
+                            const double tolerance) {
+            for (GEO::index_t i = 0; i < 3; ++i) {
+                for (GEO::index_t j = 0; j < 3; ++j) {
+                    EXPECT_NEAR(matrices[9 * f + 3 * i + j], (i == j) ? 1.0 : 0.0, tolerance)
+                        << "facet " << f << ", coefficient (" << i << ", " << j << ")";
+                }
+            }
         }
     }
 
@@ -539,6 +618,275 @@ namespace geolio::test
             EXPECT_LT(GEO::length(frame_vector(field, f, 1)), 1e-5);
             EXPECT_NEAR(GEO::length(frame_vector(field, f, 2)), 1.0, 1e-12);
         }
+    }
+
+    /**
+     * @brief The anisotropy matrices are symmetric positive-definite metrics of unit
+     *        determinant whose normal weight is 1.
+     * @details They are built as @f$R\,\mathrm{diag}(s, 1/s, 1)\,R^{\mathsf{T}}@f$ from an
+     *          orthonormal frame, so this pins down the layout, the symmetry, the fact that
+     *          the anisotropy never changes the area of a facet - unit determinant, hence no
+     *          density bias - and the fact that the third axis is left alone.
+     */
+    TEST_F(FrameFieldTest, anisotropy_matrices_are_unit_determinant_metrics) {
+        FrameField field;
+        field.create_curvature_directions(mesh, 45.0, 0.0);
+
+        std::vector<double> matrices;
+        field.compute_anisotropy_matrices(mesh, 3.0, matrices);
+        ASSERT_EQ(matrices.size(), 9 * mesh.facets.nb());
+
+        for (const auto& f : mesh.facets) {
+            const GEO::mat3 M = anisotropy_matrix(matrices, f);
+            for (GEO::index_t i = 0; i < 3; ++i) {
+                for (GEO::index_t j = 0; j < 3; ++j) {
+                    EXPECT_NEAR(M(i, j), M(j, i), 1e-12) << "facet " << f;
+                }
+            }
+
+            EXPECT_NEAR(GEO::det(M), 1.0, 1e-12) << "facet " << f;
+
+            // The normal is left at weight 1, and the two in-plane weights are positive and
+            // multiply to 1, which is what makes the determinant 1.
+            const GEO::vec3 N = GEO::normalize(GEO::Geom::mesh_facet_normal(mesh, f));
+            EXPECT_NEAR(metric_square(M, N), 1.0, 1e-12) << "facet " << f;
+
+            const GEO::vec3 U = GEO::normalize(frame_vector(field, f, 0));
+            const double weight_u = metric_square(M, U);
+            EXPECT_GT(weight_u, 0.0) << "facet " << f;
+            EXPECT_NEAR(
+                weight_u * metric_square(M, GEO::normalize(GEO::cross(N, U))), 1.0, 1e-12
+                ) << "facet " << f;
+        }
+    }
+
+    /**
+     * @brief The large weight goes across a ridge, not along it.
+     * @details A cylinder is curved around its axis and flat along it, so it is the sharpest
+     *          case for the question of which of the two weights belongs to which direction:
+     *          cells have to be short around the tube and long along the axis. The frame says
+     *          the same thing, U carrying the larger magnitude around the tube, and the ratio
+     *          of the two weights reaches @p max_aspect because the smallest curvature
+     *          vanishes.
+     */
+    TEST_F(FrameFieldTest, metric_is_short_around_a_cylinder_and_long_along_it) {
+        constexpr double max_aspect = 4.0;
+
+        GEO::Mesh cylinder;
+        make_cylinder(cylinder, 1.0, 3.0, 32, 18);
+
+        FrameField field;
+        field.create_curvature_directions(cylinder, 45.0, 0.0);
+
+        std::vector<double> matrices;
+        field.compute_anisotropy_matrices(cylinder, max_aspect, matrices);
+        ASSERT_EQ(matrices.size(), 9 * cylinder.facets.nb());
+
+        const GEO::vec3 axis(0.0, 0.0, 1.0);
+        for (const auto& f : cylinder.facets) {
+            const GEO::vec3 N = GEO::normalize(GEO::Geom::mesh_facet_normal(cylinder, f));
+            const GEO::vec3 along = in_facet_plane(cylinder, f, axis);
+            const GEO::vec3 around = GEO::normalize(GEO::cross(N, along));
+
+            // U is the maximum curvature direction, i.e. around the tube.
+            const GEO::vec3 stored_u = frame_vector(field, f, 0);
+            const GEO::vec3 stored_v = frame_vector(field, f, 1);
+            const GEO::vec3 U = GEO::normalize(stored_u);
+            EXPECT_NEAR(::fabs(GEO::dot(U, along)), 0.0, 1e-6) << "facet " << f;
+            EXPECT_NEAR(::fabs(GEO::dot(U, around)), 1.0, 1e-6) << "facet " << f;
+
+            // ... and it carries the larger size. The other one is the direction of the
+            // vanishing curvature, so its magnitude is down at the regularization of the
+            // estimator rather than at a curvature of the surface: an order of magnitude
+            // smaller is what the estimate leaves of it.
+            EXPECT_LT(GEO::length(stored_v), 0.1 * GEO::length(stored_u)) << "facet " << f;
+
+            const GEO::mat3 M = anisotropy_matrix(matrices, f);
+            const double weight_around = metric_square(M, around);
+            const double weight_along = metric_square(M, along);
+            EXPECT_GT(weight_around, weight_along) << "facet " << f;
+            EXPECT_GT(weight_around, 1.0) << "facet " << f;
+            EXPECT_LT(weight_along, 1.0) << "facet " << f;
+
+            // The in-plane weights multiply to 1 whatever the anisotropy, and their ratio is
+            // bounded by max_aspect, which a developable facet reaches up to the accuracy of
+            // the estimate.
+            EXPECT_NEAR(weight_around * weight_along, 1.0, 1e-12) << "facet " << f;
+            EXPECT_LE(weight_around / weight_along, max_aspect * (1.0 + 1e-9)) << "facet " << f;
+            EXPECT_GT(weight_around / weight_along, 0.95 * max_aspect) << "facet " << f;
+        }
+    }
+
+    /**
+     * @brief Where both curvatures are non-zero, the frame and the metric follow the larger
+     *        one, and the sizes follow the two curvatures.
+     * @details On a torus the two principal directions are around the tube and around the big
+     *          circle. With a tube radius smaller than half the big radius, the curvature
+     *          around the tube is the larger one everywhere, so U must be the tube direction
+     *          and carry the larger size, and the metric must be the stronger of the two
+     *          there - cells short along the tube, long around the big circle.
+     */
+    TEST_F(FrameFieldTest, torus_prefers_the_tube_direction) {
+        constexpr double big_radius = 1.0;
+        constexpr double small_radius = 0.35;
+
+        GEO::Mesh torus;
+        make_torus(torus, big_radius, small_radius, 48, 24, true);
+
+        FrameField field;
+        field.create_curvature_directions(torus, 45.0, 0.0);
+
+        std::vector<double> matrices;
+        field.compute_anisotropy_matrices(torus, 2.0, matrices);
+        ASSERT_EQ(matrices.size(), 9 * torus.facets.nb());
+
+        for (const auto& f : torus.facets) {
+            const GEO::vec3 N = GEO::normalize(GEO::Geom::mesh_facet_normal(torus, f));
+            const GEO::vec3 tube = in_facet_plane(
+                torus, f, torus_tube_direction(
+                    GEO::Geom::mesh_facet_center(torus, f), big_radius, small_radius));
+            const GEO::vec3 big_circle = GEO::normalize(GEO::cross(N, tube));
+
+            const GEO::vec3 U = GEO::normalize(frame_vector(field, f, 0));
+            const GEO::vec3 V = frame_vector(field, f, 1);
+            EXPECT_GT(::fabs(GEO::dot(U, tube)), 0.99) << "facet " << f;
+            EXPECT_GT(GEO::length(frame_vector(field, f, 0)), GEO::length(V)) << "facet " << f;
+
+            const GEO::mat3 M = anisotropy_matrix(matrices, f);
+            EXPECT_GT(metric_square(M, tube), metric_square(M, big_circle)) << "facet " << f;
+            EXPECT_GT(metric_square(M, tube) / metric_square(M, big_circle), 1.2)
+                << "facet " << f;
+        }
+    }
+
+    /**
+     * @brief A flat mesh carries no anisotropy and gets the identity.
+     * @details Both eigenvalues of the estimator come back as the same regularization of a
+     *          zero tensor, so the relative anisotropy is 0 and the metric is isotropic.
+     */
+    TEST_F(FrameFieldTest, flat_mesh_gets_the_identity_metric) {
+        GEO::Mesh plane;
+        make_plane(plane, 4);
+
+        FrameField field;
+        field.create_curvature_directions(plane, 45.0, 0.0);
+
+        std::vector<double> matrices;
+        field.compute_anisotropy_matrices(plane, 4.0, matrices);
+        ASSERT_EQ(matrices.size(), 9 * plane.facets.nb());
+        for (const auto& f : plane.facets) {
+            expect_identity(matrices, f, 1e-12);
+        }
+    }
+
+    /**
+     * @brief max_aspect caps the ratio of the two weights, and a value below 1 is the
+     *        identity.
+     * @details The cap is on the ratio of the weights, i.e. on the square of the aspect ratio
+     *          of the cells, and it is reached only where the smallest curvature vanishes.
+     */
+    TEST_F(FrameFieldTest, max_aspect_caps_the_ratio_of_the_weights) {
+        GEO::Mesh cylinder;
+        make_cylinder(cylinder, 1.0, 3.0, 32, 18);
+
+        FrameField field;
+        field.create_curvature_directions(cylinder, 45.0, 0.0);
+
+        const GEO::vec3 axis(0.0, 0.0, 1.0);
+        double previous = 0.0;
+        for (const double max_aspect : {1.5, 2.0, 4.0, 8.0}) {
+            std::vector<double> matrices;
+            field.compute_anisotropy_matrices(cylinder, max_aspect, matrices);
+            ASSERT_EQ(matrices.size(), 9 * cylinder.facets.nb());
+
+            double smallest = std::numeric_limits<double>::max();
+            for (const auto& f : cylinder.facets) {
+                const GEO::mat3 M = anisotropy_matrix(matrices, f);
+                const GEO::vec3 N = GEO::normalize(GEO::Geom::mesh_facet_normal(cylinder, f));
+                const GEO::vec3 along = in_facet_plane(cylinder, f, axis);
+                const double ratio = metric_square(M, GEO::normalize(GEO::cross(N, along)))
+                    / metric_square(M, along);
+                EXPECT_LE(ratio, max_aspect * (1.0 + 1e-9)) << "facet " << f;
+                smallest = std::min(smallest, ratio);
+            }
+            EXPECT_GT(smallest, previous) << "max_aspect = " << max_aspect;
+            previous = smallest;
+        }
+
+        // 1 is the isotropic case, and anything below it is treated as 1.
+        std::vector<double> unit;
+        field.compute_anisotropy_matrices(cylinder, 1.0, unit);
+        std::vector<double> below;
+        field.compute_anisotropy_matrices(cylinder, 0.25, below);
+        ASSERT_EQ(unit.size(), below.size());
+        for (const auto& f : cylinder.facets) {
+            expect_identity(unit, f, 1e-12);
+        }
+        for (std::size_t c = 0; c < unit.size(); ++c) {
+            EXPECT_NEAR(unit[c], below[c], 1e-12);
+        }
+    }
+
+    /**
+     * @brief The matrices depend on the ratio of the two magnitudes, not on their scale, so
+     *        the autoscale of the field does not reach them.
+     */
+    TEST_F(FrameFieldTest, anisotropy_matrices_do_not_depend_on_the_autoscale) {
+        FrameField raw;
+        raw.create_curvature_directions(mesh, 45.0, 0.0);
+        FrameField scaled;
+        scaled.create_curvature_directions(mesh, 45.0, 2.0);
+
+        std::vector<double> from_raw;
+        std::vector<double> from_scaled;
+        raw.compute_anisotropy_matrices(mesh, 3.0, from_raw);
+        scaled.compute_anisotropy_matrices(mesh, 3.0, from_scaled);
+
+        ASSERT_EQ(from_raw.size(), from_scaled.size());
+        for (std::size_t c = 0; c < from_raw.size(); ++c) {
+            EXPECT_NEAR(from_raw[c], from_scaled[c], 1e-12) << "coefficient " << c;
+        }
+    }
+
+    /**
+     * @brief A field that carries no curvature certainty gets its anisotropy from the lengths
+     *        of its own frame vectors.
+     * @details The inherited cross field publishes unit vectors, so it says nothing about any
+     *          anisotropy and the matrices are the identity.
+     */
+    TEST_F(FrameFieldTest, field_without_certainty_gets_the_identity_metric) {
+        FrameField field;
+        field.create_from_surface_mesh(mesh, false, 45.0);
+        ASSERT_TRUE(all_frames_are_unit(field, mesh));
+
+        std::vector<double> matrices;
+        field.compute_anisotropy_matrices(mesh, 4.0, matrices);
+        ASSERT_EQ(matrices.size(), 9 * mesh.facets.nb());
+        for (const auto& f : mesh.facets) {
+            expect_identity(matrices, f, 1e-12);
+        }
+    }
+
+    /**
+     * @brief The matrices are only defined by a field with exactly one frame per facet.
+     * @details The output is left untouched when the check fails, so a caller can reuse its
+     *          buffer for another attempt.
+     */
+    TEST_F(FrameFieldTest, anisotropy_matrices_require_a_field_for_the_same_mesh) {
+        GEO::Mesh plane;
+        make_plane(plane, 2);
+
+        FrameField field;
+        field.create_curvature_directions(plane, 45.0, 0.0);
+
+        std::vector<double> matrices{1.0, 2.0, 3.0};
+        EXPECT_THROW(field.compute_anisotropy_matrices(mesh, 3.0, matrices), std::logic_error);
+
+        // A field that was never built has no frame either.
+        EXPECT_THROW(
+            FrameField().compute_anisotropy_matrices(plane, 3.0, matrices), std::logic_error
+            );
+        EXPECT_EQ(matrices.size(), 3);
     }
 
     /**
