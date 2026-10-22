@@ -14,10 +14,11 @@
 #include <geogram/mesh/mesh_repair.h>
 #include <geolio/common/config.h>
 #include <geolio/common/log.h>
+#include <geolio/common/parse_filepath.h>
+#include <geolio/frame_field/frame_field.h>
 #include <geolio/io/io.h>
 #include <geolio/LpCVT/lp_cvt.h>
 #include <geolio/LpCVT/lp_measure.h>
-#include <geolio/common/parse_filepath.h>
 
 using namespace geolio;
 
@@ -92,6 +93,7 @@ int main(int argc, char** argv) {
 
     GEO::index_t exponent = 2;
     bool volumetric = false;
+    double frame_field_anisotropic = 0;
     GEO::index_t nb_iterations = 100;
     GEO::index_t nb_samples = 10000;
     std::string predicates = "fast";
@@ -125,34 +127,41 @@ int main(int argc, char** argv) {
     app.add_option(
         "-p,--exponent",
         exponent,
-        "Lp norm exponent: a larger even exponent sharpens the tessellation (default: "+std::to_string(exponent)+")."
-        )->check(CLI::IsMember({2, 4, 6, 8, 10, 12, 14, 16}));
+        "Lp norm exponent: a larger even exponent sharpens the tessellation."
+        )->default_val(exponent)->check(CLI::IsMember({2, 4, 6, 8, 10, 12, 14, 16}));
 
     app.add_flag(
         "-v,--volumetric",
         volumetric,
-        "Mesh the volume bounded by the surface instead of the surface itself (default: false); "
+        "Mesh the volume bounded by the surface instead of the surface itself; "
         "the mesh then has to be filled with tetrahedra."
-        );
+        )->default_val(false);
+
+    app.add_option(
+        "-f,--framefield",
+        frame_field_anisotropic,
+        "Align the anisotropic metric with the principal curvature directions; "
+        "cells are made shorter across ridges and longer along them."
+        )->default_val(frame_field_anisotropic)->check(CLI::PositiveNumber);
 
     app.add_option(
         "-m,--iterations",
         nb_iterations,
-        "Maximum number of Newton iterations (default: "+std::to_string(nb_iterations)+")."
-        )->check(CLI::Range(0, 1000000));
+        "Maximum number of Newton iterations."
+        )->default_val(nb_iterations)->check(CLI::Range(0, 1000000));
 
     app.add_option(
         "-s,--samples",
         nb_samples,
-        "Number of points to sample the mesh with when no input point file is given (default: "+std::to_string(nb_samples)+")."
-        )->check(CLI::Range(1, 100000000));
+        "Number of points to sample the mesh with when no input point file is given."
+        )->default_val(nb_samples)->check(CLI::Range(1, 100000000));
 
     app.add_option(
         "--predicates",
         predicates,
         "Geogram's geometric predicate mode for the restricted Voronoi diagram; "
-        "\"exact\" is slower but avoids misclassifications on degenerate configurations (default: "+predicates+")."
-        )->check(CLI::IsMember({"fast", "exact"}));
+        "\"exact\" is slower but avoids misclassifications on degenerate configurations."
+        )->default_val(predicates)->check(CLI::IsMember({"fast", "exact"}));
 
     app.add_option(
         "--o-pts,--out-pts",
@@ -266,6 +275,18 @@ int main(int argc, char** argv) {
             else if (!cvt.compute_initial_sampling(nb_samples, true)) {
                 LOG::ERROR("Initial sampling failed.");
                 return EXIT_FAILURE;
+            }
+
+            if (frame_field_anisotropic > 0) {
+                FrameField frame_field;
+                frame_field.create_curvature_directions(mesh);
+                const auto& frames = frame_field.frames();
+                assert(frames.size() == 9*mesh.facets.nb());
+
+                /* Set matrices */
+                std::vector<double> matrices;
+                frame_field.compute_anisotropy_matrices(mesh, frame_field_anisotropic, matrices);
+                cvt.set_matrices(matrices);
             }
 
             cvt.Newton_iterations(nb_iterations);
