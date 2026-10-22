@@ -64,6 +64,21 @@ namespace geolio::test
             return colormap_texture(index);
         }
 
+        /// Attributes the TEXTURE mode can sample an image with.
+        std::string texture_attributes() const {
+            return texture_attribute_names();
+        }
+
+        /// Selects \p attribute as the texture-coordinate attribute.
+        void select_tex_coords(const std::string& attribute) {
+            set_tex_coords(attribute);
+        }
+
+        /// Store of the selected texture-coordinate attribute.
+        GEO::MeshElementsFlags tex_coords_subelements() const {
+            return tex_coord_subelements_;
+        }
+
         /// Name of the attribute the colormap is sampled with.
         std::string sampled_attribute() { return colormap_attribute_name(); }
 
@@ -303,6 +318,55 @@ namespace geolio::test
         EXPECT_EQ(object.sampled_texture(0), 2u);
         object.set_smooth(true);
         EXPECT_EQ(object.sampled_texture(0), 1u);
+    }
+
+    /**
+     * @brief The TEXTURE mode only offers 2D texture-coordinate attributes.
+     * @details The image is sampled with a 2D vector attribute, the class of
+     *          attribute an OBJ file stores on facet corners. Scalar and 3D
+     *          attributes cannot be used as texture coordinates.
+     */
+    TEST(MeshObjectAttributeRangeTest, TextureAttributesAreListed) {
+        GEO::Mesh mesh;
+        mesh.vertices.set_dimension(3);
+        mesh.vertices.create_vertices(3);
+        mesh.vertices.point(0) = GEO::vec3(0.0, 0.0, 0.0);
+        mesh.vertices.point(1) = GEO::vec3(1.0, 0.0, 0.0);
+        mesh.vertices.point(2) = GEO::vec3(0.0, 1.0, 0.0);
+        mesh.facets.create_triangle(0, 1, 2);
+
+        GEO::Attribute<double> colors;
+        colors.create_vector_attribute(
+            mesh.vertices.attributes(), "color", 3);
+        GEO::Attribute<double> tex_coords;
+        tex_coords.create_vector_attribute(
+            mesh.facet_corners.attributes(), "tex_coord", 2);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+
+        // The 2D texture coordinates are offered...
+        const std::string attributes = object.texture_attributes();
+        EXPECT_NE(attributes.find("facet_corners.tex_coord"),
+                  std::string::npos);
+        // ... but the 3D color and point attributes are not.
+        EXPECT_EQ(attributes.find("vertices.color"), std::string::npos);
+        EXPECT_EQ(attributes.find("vertices.point"), std::string::npos);
+
+        object.select_tex_coords("facet_corners.tex_coord");
+        EXPECT_EQ(object.tex_coords_subelements(), GEO::MESH_FACET_CORNERS);
+    }
+
+    /**
+     * @brief A mesh without texture coordinates cannot be textured.
+     * @details The GUI hides the TEXTURE painting mode then (see
+     *          draw_object_properties()).
+     */
+    TEST(MeshObjectAttributeRangeTest, MeshWithoutTextureCoordinatesIsNotTexturable) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        EXPECT_TRUE(object.texture_attributes().empty());
     }
 
     /**

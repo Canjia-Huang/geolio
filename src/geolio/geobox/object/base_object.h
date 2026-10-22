@@ -7,6 +7,7 @@
 
 #include <geolio/common/utils.h>
 #include <geolio/common/parse_filepath.h>
+#include <geogram/basic/geometry.h>
 
 namespace geolio::geobox
 {
@@ -74,6 +75,14 @@ namespace geolio::geobox
         const std::string unique_id_;
 
         bool visible_ = true;
+
+        /**
+         * @brief Color of the section titles in the object property panels.
+         * @details Kept here so that every object class uses the same style and
+         *          the color is defined in a single place. MeshObject uses it
+         *          for its "Painting" title (see draw_object_properties()).
+         */
+        GEO::vec4f title_color_ = GEO::vec4f(0.05f, 0.18f, 0.50f, 1.0f);
     };
 }
 

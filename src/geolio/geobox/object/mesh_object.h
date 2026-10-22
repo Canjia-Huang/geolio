@@ -15,6 +15,28 @@
 namespace geolio::geobox
 {
     /**
+     * @brief How the elements of a mesh are colored.
+     * @details The painting modes of Graphite's MeshGrobShader:
+     *          - SOLID_COLOR colors the surface with surface_color_;
+     *          - ATTRIBUTE maps a scalar attribute through a colormap;
+     *          - TEXTURE samples an image through a 2D texture-coordinate
+     *            attribute.
+     */
+    enum class PaintingMode {
+        SOLID_COLOR,
+        ATTRIBUTE,
+        TEXTURE
+    };
+
+    /**
+     * @brief Releases the GL textures loaded for the TEXTURE painting mode.
+     * @details The textures are shared by all the objects (they are cached by
+     *          image file name), so they cannot be owned by a MeshObject. The
+     *          application calls this while its GL context is still current.
+     */
+    void release_texture_cache();
+
+    /**
      * @brief Mesh-backed object rendered by GeoBox.
      * @details This class wraps a GEO::Mesh and exposes the viewer controls needed to
      *          display vertices, surface facets, edges, and volume cells.
@@ -113,6 +135,47 @@ namespace geolio::geobox
          * @ref <geogram_gfx/gui/simple_mesh_application.cpp> draw_volume()
          */
         void draw_volume(bool lighting);
+
+        /**
+         * @brief Returns the image texture sampled in TEXTURE painting mode.
+         * @details The image is loaded on first use and cached by file name, so
+         *          that several objects that display the same image share the
+         *          same GL texture (see release_texture_cache()).
+         * @return The GL texture, or 0 when no image is selected or the image
+         *         could not be loaded.
+         */
+        GLuint texture();
+
+        /**
+         * @brief Selects the texture-coordinate attribute used in TEXTURE mode.
+         * @details The attribute must be a vector attribute of dimension 2, such
+         *          as "facet_corners.tex_coord" (as loaded from an OBJ file).
+         * @param[in] attribute Full attribute name, e.g. "facet_corners.tex_coord".
+         */
+        void set_tex_coords(const std::string& attribute);
+
+        /**
+         * @brief Lists the attributes that can be used as texture coordinates.
+         * @details Only the 2D vector attributes MeshGfx can feed to a 2D
+         *          texture are listed, on the element stores it can texture.
+         *          As in Graphite, an attribute stored as a vector of scalars
+         *          and one stored as an array of vec2 are both supported.
+         * @return Semicolon-separated full attribute names; empty when the
+         *         mesh cannot be textured, in which case the TEXTURE painting
+         *         mode is not offered by the GUI.
+         */
+        std::string texture_attribute_names() const;
+
+        /**
+         * @brief Returns the number of scalar components of an attribute.
+         * @param[in] subelements Store the attribute belongs to.
+         * @param[in] name Base name of the attribute.
+         * @return 2 for a 2D vector attribute, 3 for a 3D one, 0 when the
+         *         attribute does not exist.
+         */
+        GEO::index_t attribute_dimension(
+            GEO::MeshElementsFlags subelements,
+            const std::string& name) const;
 
         /**
          * @brief Tests whether the displayed attribute exists in the mesh.
@@ -533,7 +596,32 @@ namespace geolio::geobox
         float volume_mesh_width_ = 0.1f;
         GEO::vec4f volume_mesh_color_ = GEO::vec4f(0.05f, 0.05f, 0.05f, 1.0f);
 
-        bool show_attributes_ = false;
+        /**
+         * @brief How the mesh elements are colored (see PaintingMode).
+         */
+        PaintingMode painting_mode_ = PaintingMode::SOLID_COLOR;
+
+        /**
+         * @brief Path of the image sampled in TEXTURE mode.
+         * @details Empty when no image is selected; the GL texture is built
+         *          lazily from it (see texture()).
+         */
+        std::string texture_filename_;
+
+        /**
+         * @brief Repeat count of the image in the unit texture space.
+         * @details 1 samples the image once over [0,1] x [0,1]; larger values
+         *          repeat it, as Graphite's tex_repeat property.
+         */
+        int tex_repeat_ = 1;
+
+        /** Full name of the texture-coordinate attribute (e.g. "facet_corners.tex_coord"). */
+        std::string tex_coord_full_name_;
+        /** Base name of the texture-coordinate attribute (e.g. "tex_coord"). */
+        std::string tex_coord_attribute_name_;
+        /** Store the texture-coordinate attribute lives in. */
+        GEO::MeshElementsFlags tex_coord_subelements_ = GEO::MESH_NONE;
+
         GEO::index_t current_colormap_index_ = 0;
 
         /**

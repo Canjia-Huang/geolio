@@ -9,11 +9,14 @@
 #include "application.h"
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <random>
+#include <unordered_set>
 #include <vector>
 #include <geogram/basic/command_line.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram_gfx/GLUP/GLUP.h>
+#include <geogram_gfx/third_party/imgui/imgui_internal.h>
 #include "imoguizmo.hpp"
 #include "geolio/common/log.h"
 #include "geolio/common/parse_filepath.h"
@@ -29,6 +32,55 @@
 
 namespace geolio::geobox
 {
+    namespace
+    {
+        /**
+         * @brief Enlarges the file dialogs drawn during the current frame.
+         * @details GeoGram's FileDialog asks for a 400x415 window (times the UI
+         *          scaling), which is small on high-DPI screens. The size is
+         *          hard-coded in the GeoGram version GeoBox builds against, so
+         *          the windows are resized after they were drawn instead: a
+         *          dialog is enlarged only the first time it appears, and a
+         *          size the user chose afterwards is kept.
+         */
+        void enlarge_file_dialogs() {
+            static std::unordered_set<ImGuiID> enlarged;
+            ImGuiContext& context = *ImGui::GetCurrentContext();
+            const ImVec2 display = context.IO.DisplaySize;
+            // About 55% of the width and 65% of the height, with sensible
+            // bounds and always within the viewport.
+            const float desired_width = std::min(
+                std::clamp(0.55f * display.x, 640.0f, 900.0f),
+                std::max(320.0f, display.x - 40.0f));
+            const float desired_height = std::min(
+                std::clamp(0.65f * display.y, 500.0f, 750.0f),
+                std::max(240.0f, display.y - 60.0f));
+            for (ImGuiWindow* window : context.Windows) {
+                if (window == nullptr ||
+                    window->LastFrameActive != context.FrameCount) {
+                    continue;
+                }
+                // The directory and file lists of the dialog are child windows
+                // named "<dialog name>/...": only resize the dialog itself.
+                if (window->Flags & ImGuiWindowFlags_ChildWindow)
+                    continue;
+                if (window->Name == nullptr ||
+                    (std::strncmp(window->Name, "Load...##", 9) != 0 &&
+                     std::strncmp(window->Name, "Save as...##", 12) != 0)) {
+                    continue;
+                }
+                if (!enlarged.insert(window->ID).second)
+                    continue;
+                ImGui::SetWindowSize(
+                    window,
+                    ImVec2(
+                        std::max(window->SizeFull.x, desired_width),
+                        std::max(window->SizeFull.y, desired_height)),
+                    ImGuiCond_Always);
+            }
+        }
+    }
+
     GeoBoxApplication::GeoBoxApplication(
         ) : SimpleMeshApplication("Geolio - GeoBox")
     {
@@ -221,6 +273,9 @@ namespace geolio::geobox
                 colormap.texture = 0;
             }
         }
+        // The images displayed by the TEXTURE painting mode are cached by
+        // file name and shared by the objects (see MeshObject::texture()).
+        release_texture_cache();
         delete_scene_framebuffer();
         SimpleMeshApplication::GL_terminate();
     }
@@ -301,6 +356,11 @@ namespace geolio::geobox
         }
 
         draw_rotation_gizmo();
+
+        // All the file dialogs of the frame (Load/Save menu entries, texture
+        // image pickers, ...) have been drawn at this point: give the ones
+        // that just appeared a comfortable size.
+        enlarge_file_dialogs();
 
         // Redraw-on-demand: any real widget interaction (click, slider drag,
         // text edit) may have changed the render state, so schedule a full

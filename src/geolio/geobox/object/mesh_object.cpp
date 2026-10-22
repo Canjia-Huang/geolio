@@ -3,9 +3,12 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "mesh_object.h"
+#include <map>
 #include <geogram_gfx/imgui_ext/imgui_ext.h>
 #include <geogram_gfx/imgui_ext/icon_font.h>
 #include <geogram_gfx/third_party/imgui/imgui.h>
+#include <geogram/image/image.h>
+#include <geogram/image/image_library.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram_gfx/GLUP/GLUP.h>
 // glupPrivateVertex*()/glupPrivateTexCoord*(): the immediate-mode entry points
@@ -18,6 +21,149 @@
 
 namespace geolio::geobox
 {
+    namespace
+    {
+        /**
+         * @brief GL textures built for the TEXTURE painting mode, indexed by
+         *        image file name.
+         * @details Shared by all the objects, and released by
+         *          release_texture_cache() while the GL context is current.
+         */
+        std::map<std::string, GLuint> texture_cache;
+
+        /**
+         * @brief Builds a GL texture from an image file.
+         * @details The image is converted to RGBA8, uploaded and mipmapped.
+         *          Images are tiled (GL_REPEAT), as Graphite does for texture
+         *          painting.
+         * @param[in] filename Path of the image file.
+         * @return The GL texture, or 0 if the image could not be loaded or has
+         *         an unsupported encoding.
+         */
+        GLuint create_texture_from_image(const std::string& filename) {
+            GEO::Image_var image =
+                GEO::ImageLibrary::instance()->load_image(filename);
+            if (image.is_null()) {
+                LOG::ERROR("Cannot load texture image `{}`!", filename);
+                return 0;
+            }
+            if (image->component_encoding() != GEO::Image::BYTE) {
+                LOG::ERROR(
+                    "Unsupported component encoding in texture image `{}`!",
+                    filename);
+                return 0;
+            }
+
+            const std::size_t width = image->width();
+            const std::size_t height = image->height();
+            const std::size_t nb_pixels = width * height;
+            const std::size_t bpp = image->bytes_per_pixel();
+            const GEO::Memory::byte* source = image->base_mem_byte_ptr();
+
+            std::vector<GLubyte> rgba(4 * nb_pixels);
+            for (std::size_t i = 0; i < nb_pixels; ++i) {
+                GLubyte r = 0;
+                GLubyte g = 0;
+                GLubyte b = 0;
+                GLubyte a = 255;
+                switch (image->color_encoding()) {
+                case GEO::Image::GRAY:
+                    r = g = b = source[0];
+                    break;
+                case GEO::Image::RGB:
+                    r = source[0];
+                    g = source[1];
+                    b = source[2];
+                    break;
+                case GEO::Image::BGR:
+                    b = source[0];
+                    g = source[1];
+                    r = source[2];
+                    break;
+                case GEO::Image::RGBA:
+                    r = source[0];
+                    g = source[1];
+                    b = source[2];
+                    a = source[3];
+                    break;
+                default:
+                    LOG::ERROR(
+                        "Unsupported color encoding in texture image `{}`!",
+                        filename);
+                    return 0;
+                }
+                rgba[4 * i + 0] = r;
+                rgba[4 * i + 1] = g;
+                rgba[4 * i + 2] = b;
+                rgba[4 * i + 3] = a;
+                source += bpp;
+            }
+
+            GLuint texture = 0;
+            glGenTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(
+                GL_TEXTURE_2D, 0, GL_RGBA, GLsizei(width), GLsizei(height), 0,
+                GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+            glGenerateMipmap(GL_TEXTURE_2D);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            glTexParameteri(
+                GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            return texture;
+        }
+
+        /**
+         * @brief Tests whether MeshGfx can sample an attribute on a store as
+         *        texture coordinates.
+         * @details The volume cell-facet path is handled by GeoBox itself for
+         *          scalar attributes only, so vector attributes on that store
+         *          are not offered (see cell_facets_attribute_active()).
+         */
+        bool can_be_textured(const GEO::MeshElementsFlags subelements) {
+            switch (subelements) {
+            case GEO::MESH_VERTICES:
+            case GEO::MESH_EDGES:
+            case GEO::MESH_FACETS:
+            case GEO::MESH_FACET_CORNERS:
+            case GEO::MESH_CELLS:
+            case GEO::MESH_CELL_CORNERS:
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        /**
+         * @brief Splits a full attribute name into its store and base name.
+         */
+        void split_attribute_name(
+            const std::string& full_name,
+            GEO::MeshElementsFlags& subelements,
+            std::string& name
+            ) {
+            GEO::index_t component = 0;
+            subelements = GEO::MESH_NONE;
+            name.clear();
+            if (!GEO::Mesh::parse_attribute_name(
+                    full_name, subelements, name, component)) {
+                subelements = GEO::MESH_NONE;
+                name.clear();
+            }
+        }
+    }
+
+    void release_texture_cache() {
+        for (const auto& [name, texture] : texture_cache) {
+            if (texture != 0)
+                glDeleteTextures(1, &texture);
+        }
+        texture_cache.clear();
+    }
+
     MeshObject::MeshObject(
         const std::string& name,
         const std::vector<ColormapInfo>& colormaps,
@@ -38,7 +184,7 @@ namespace geolio::geobox
         if (mesh_.vertices.nb() != 0) {
             if (const float diag = bbox_diagonal();
                 diag > 0.0f)
-                vertices_size_ = 0.01f * diag;
+                vertices_size_ = 0.003f * diag;
         }
 
         if (mesh_.edges.nb() == 0)
@@ -120,9 +266,54 @@ namespace geolio::geobox
         if (ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) {
             const auto s = static_cast<float>(ImGui::scaling());
 
-            /* == Attributes ======================================================================================= */
-            ImGui::Checkbox("attributes", &show_attributes_);
-            if (show_attributes_) {
+            /* == Painting mode ==================================================================================== */
+            // TEXTURE can only be offered when the mesh has a 2D vector
+            // attribute to sample the image with. A mode left over from a
+            // reloaded mesh that lost its texture coordinates falls back to
+            // SOLID_COLOR.
+            const std::string texture_attributes = texture_attribute_names();
+            const bool can_texture = !texture_attributes.empty();
+            if (painting_mode_ == PaintingMode::TEXTURE && !can_texture)
+                painting_mode_ = PaintingMode::SOLID_COLOR;
+
+            // Same layout as Graphite for the properties below: the name on
+            // its own line, then the value widget. "Painting" is the title of
+            // the block, so it is rendered as separator text in a dark blue
+            // accent to stand out from the property labels.
+            static const char* PAINTING_MODE_NAMES[] = {
+                "SOLID_COLOR", "ATTRIBUTE", "TEXTURE"
+            };
+            const int nb_painting_modes = can_texture ? 3 : 2;
+            int painting_mode = static_cast<int>(painting_mode_);
+            ImGui::PushStyleColor(
+                ImGuiCol_Text,
+                ImVec4(
+                    title_color_.x,
+                    title_color_.y,
+                    title_color_.z,
+                    title_color_.w));
+            ImGui::SeparatorText("Painting");
+            ImGui::PopStyleColor();
+            ImGui::PushItemWidth(-10.0f);
+            if (ImGui::Combo(
+                    "##painting", &painting_mode,
+                    PAINTING_MODE_NAMES, nb_painting_modes)) {
+                painting_mode_ = static_cast<PaintingMode>(painting_mode);
+                // Select the first texture-coordinate attribute the first time
+                // the mode is chosen, as Graphite does.
+                if (painting_mode_ == PaintingMode::TEXTURE &&
+                    tex_coord_full_name_.empty()) {
+                    set_tex_coords(texture_attributes.substr(
+                        0, texture_attributes.find(';')));
+                }
+            }
+            ImGui::PopItemWidth();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Painting mode: SOLID_COLOR, ATTRIBUTE or TEXTURE "
+                    "(same modes as Graphite).");
+
+            if (painting_mode_ == PaintingMode::ATTRIBUTE) {
                 if (attribute_min_ == 0.0f && attribute_max_ == 0.0f)
                     autorange();
 
@@ -208,9 +399,110 @@ namespace geolio::geobox
                         "the range then takes its last color and the maximum "
                         "its first one.");
             }
+            else if (painting_mode_ == PaintingMode::TEXTURE) {
+                // Layout copied from Graphite's shader properties: the
+                // tex_image text field with a folder button on its right, then
+                // the tex_coords combo and the tex_repeat number.
+                const std::string dialog_label =
+                    "##TextureImageDialog_" + unique_id_;
+
+                ImGui::TextUnformatted("tex_image");
+                const std::string folder_icon = GEO::icon_UTF8("folder-open");
+                const float folder_width =
+                    ImGui::CalcTextSize(folder_icon.c_str()).x +
+                    2.0f * ImGui::GetStyle().FramePadding.x;
+                std::string image_filename = texture_filename_;
+                ImGui::PushItemWidth(
+                    ImGui::GetContentRegionAvail().x - folder_width -
+                    ImGui::GetStyle().ItemSpacing.x);
+                if (ImGui::InputText("##tex_image", &image_filename)) {
+                    if (image_filename != texture_filename_) {
+                        // The file may have been edited on disk: drop the
+                        // cached texture so that it is uploaded again.
+                        const auto cached = texture_cache.find(image_filename);
+                        if (cached != texture_cache.end()) {
+                            if (cached->second != 0)
+                                glDeleteTextures(1, &cached->second);
+                            texture_cache.erase(cached);
+                        }
+                        texture_filename_ = image_filename;
+                    }
+                }
+                ImGui::PopItemWidth();
+                ImGui::SameLine();
+                if (ImGui::Button(
+                        (folder_icon + "##tex_image_browse").c_str()))
+                    ImGui::OpenFileDialog(
+                        dialog_label.c_str(),
+                        "png;jpg;jpeg;bmp;tga;xpm",
+                        texture_filename_.c_str(),
+                        ImGuiExtFileDialogFlags_Load);
+
+                char selected_filename[GEO::geo_imgui_string_length];
+                if (ImGui::FileDialog(
+                        dialog_label.c_str(), selected_filename,
+                        sizeof(selected_filename))) {
+                    // Selecting a file again reloads it, so that an image
+                    // edited on disk is uploaded again. The UI is drawn after
+                    // the scene, so no draw is using the old texture now.
+                    const auto cached = texture_cache.find(selected_filename);
+                    if (cached != texture_cache.end()) {
+                        if (cached->second != 0)
+                            glDeleteTextures(1, &cached->second);
+                        texture_cache.erase(cached);
+                    }
+                    texture_filename_ = selected_filename;
+                }
+
+                ImGui::TextUnformatted("tex_coords");
+                std::vector<std::string> attributes;
+                GEO::String::split_string(
+                    texture_attributes, ';', attributes);
+                int selected = 0;
+                bool found = false;
+                std::string items;
+                for (std::size_t i = 0; i < attributes.size(); ++i) {
+                    items += attributes[i];
+                    items.push_back('\0');
+                    if (attributes[i] == tex_coord_full_name_) {
+                        selected = static_cast<int>(i);
+                        found = true;
+                    }
+                }
+                // ImGui expects the item list to end with a double '\0'; an
+                // empty list is a single '\0' plus the string terminator.
+                if (attributes.empty())
+                    items.push_back('\0');
+                ImGui::PushItemWidth(-10.0f);
+                if (ImGui::Combo(
+                        "##tex_coords", &selected, items.c_str())) {
+                    set_tex_coords(attributes[selected]);
+                }
+                ImGui::PopItemWidth();
+                // As Graphite does, fall back to the first attribute when the
+                // selected one is not in the mesh any more.
+                if (!found && !attributes.empty())
+                    set_tex_coords(attributes[0]);
+
+                ImGui::TextUnformatted("tex_repeat");
+                ImGui::PushItemWidth(-10.0f);
+                ImGui::InputInt("##tex_repeat", &tex_repeat_);
+                ImGui::PopItemWidth();
+                tex_repeat_ = std::max(tex_repeat_, 1);
+            }
+
+            ImGui::Separator();
+            ImGui::PushStyleColor(
+                ImGuiCol_Text,
+                ImVec4(
+                    title_color_.x,
+                    title_color_.y,
+                    title_color_.z,
+                    title_color_.w));
+            ImGui::SeparatorText("Elements");
+            ImGui::PopStyleColor();
 
             /* == Vertices ========================================================================================= */
-            ImGui::Separator();
             ImGui::Checkbox("##VertOnOff", &show_vertices_);
             ImGui::SameLine();
             ImGui::ColorEdit3WithPalette("Vert.", vertices_color_.data());
@@ -241,7 +533,6 @@ namespace geolio::geobox
 
             /* == Edges (explicit mesh.edges) ========================================================================= */
             if (mesh_.edges.nb() != 0) {
-                ImGui::Separator();
                 ImGui::Checkbox("##EdgeOnOff", &show_edges_);
                 ImGui::SameLine();
                 ImGui::ColorEdit3WithPalette("Edge.", edges_color_.data());
@@ -256,7 +547,6 @@ namespace geolio::geobox
 
             /* == Facets =========================================================================================== */
             if (mesh_.facets.nb() != 0) {
-                ImGui::Separator();
                 ImGui::Checkbox("##SurfOnOff", &show_surface_);
                 ImGui::SameLine();
                 ImGui::ColorEdit3WithPalette("Surf.", surface_color_.data());
@@ -300,7 +590,6 @@ namespace geolio::geobox
 
             /* == Cells ============================================================================================ */
             if (mesh_.cells.nb() != 0) {
-                ImGui::Separator();
                 ImGui::Checkbox("##VolumeOnOff", &show_volume_);
                 ImGui::SameLine();
                 ImGui::ColorEdit3WithPalette("Volume", volume_color_.data());
@@ -340,7 +629,15 @@ namespace geolio::geobox
 
         mesh_gfx_.set_lighting(lighting);
 
-        if (show_attributes_) {
+        // Choose how the elements are colored, as Graphite's painting mode
+        // does: a solid color, a scalar attribute through a colormap, or an
+        // image through texture coordinates (see PaintingMode).
+        switch (painting_mode_) {
+        case PaintingMode::SOLID_COLOR:
+            mesh_gfx_.unset_scalar_attribute();
+            break;
+
+        case PaintingMode::ATTRIBUTE:
             mesh_gfx_.set_scalar_attribute(
                 attribute_subelements_,
                 colormap_attribute_name(),
@@ -348,19 +645,43 @@ namespace geolio::geobox
                 colormap_mapping_max(),
                 colormap_texture(),
                 1);
-        }
-        else
-            mesh_gfx_.unset_scalar_attribute();
+            break;
 
-        // The "transparent" colormap encodes the values it hides in the alpha
-        // channel: discard the fragments colored with a transparent texel
-        // instead of drawing them black, as Graphite does for that colormap.
-        // The state is global to GLUP, so it is restored after the draws.
-        const bool transparent_colormap =
-            show_attributes_ && colormap_is_transparent();
+        case PaintingMode::TEXTURE: {
+            // A texture image is sampled through a 2D texture-coordinate
+            // attribute (e.g. "facet_corners.tex_coord" loaded from an OBJ
+            // file), exactly as Graphite's TEXTURE painting mode does.
+            const GLuint image_texture = texture();
+            const bool ready =
+                image_texture != 0 &&
+                tex_coord_subelements_ != GEO::MESH_NONE &&
+                attribute_dimension(
+                    tex_coord_subelements_, tex_coord_attribute_name_) == 2;
+            if (ready) {
+                mesh_gfx_.set_texturing(
+                    tex_coord_subelements_, tex_coord_attribute_name_,
+                    image_texture, 2,
+                    static_cast<GEO::index_t>(std::max(tex_repeat_, 1)));
+            }
+            else
+                mesh_gfx_.unset_scalar_attribute();
+            break;
+        }
+        }
+
+        // Transparent texels are discarded instead of being drawn black: the
+        // "transparent" colormap encodes the hidden values in its alpha
+        // channel, and a texture image may have transparent pixels too (as
+        // Graphite does for its TEXTURE painting mode). The state is global to
+        // GLUP, so it is restored after the draws.
+        const bool discard_transparent_fragments =
+            (painting_mode_ == PaintingMode::ATTRIBUTE &&
+             colormap_is_transparent()) ||
+            (painting_mode_ == PaintingMode::TEXTURE &&
+             surface_transparency_ == 0.0f);
         GLboolean saved_alpha_discard = GL_FALSE;
         GLUPfloat saved_alpha_threshold = 0.0f;
-        if (transparent_colormap) {
+        if (discard_transparent_fragments) {
             saved_alpha_discard = glupIsEnabled(GLUP_ALPHA_DISCARD);
             saved_alpha_threshold = glupGetAlphaThreshold();
             glupEnable(GLUP_ALPHA_DISCARD);
@@ -375,7 +696,7 @@ namespace geolio::geobox
         draw_volume(lighting);
         draw_points();
 
-        if (transparent_colormap) {
+        if (discard_transparent_fragments) {
             if (!saved_alpha_discard)
                 glupDisable(GLUP_ALPHA_DISCARD);
             glupSetAlphaThreshold(saved_alpha_threshold);
@@ -479,38 +800,80 @@ namespace geolio::geobox
 
         const double radius = 0.5 * static_cast<double>(vertices_size_);
 
-        // When a scalar attribute is displayed on the vertices, color each
-        // marker through GLUP's 1-D colormap texturing (the same state
-        // MeshGfx::begin_attributes() sets up), so the markers keep the
-        // attribute coloring; otherwise use the plain vertex color.
+        // When a painting mode colors the vertices, color each marker through
+        // GLUP's texturing (the same state MeshGfx::begin_attributes() sets
+        // up): a 1-D colormap for scalar attributes, or the image for texture
+        // coordinates. Otherwise use the plain vertex color.
         GEO::ReadOnlyScalarAttributeAdapter scalar_attribute;
-        bool textured = false;
-        if (show_attributes_ &&
+        GEO::ReadOnlyScalarAttributeAdapter tex_coord_attributes[2];
+        int marker_texture_dim = 0;
+        GLuint marker_texture = 0;
+        int marker_repeat = 1;
+
+        if (painting_mode_ == PaintingMode::ATTRIBUTE &&
             attribute_subelements_ == GEO::MESH_VERTICES) {
             scalar_attribute.bind_if_is_defined(
                 mesh_.vertices.attributes(), colormap_attribute_name()
             );
             if (scalar_attribute.is_bound()) {
-                textured = true;
-                glupEnable(GLUP_TEXTURING);
-                glupTextureMode(GLUP_TEXTURE_REPLACE);
+                marker_texture_dim = 1;
+                marker_texture = colormap_texture();
+            }
+        }
+        else if (painting_mode_ == PaintingMode::TEXTURE &&
+                 tex_coord_subelements_ == GEO::MESH_VERTICES &&
+                 attribute_dimension(
+                     tex_coord_subelements_, tex_coord_attribute_name_) == 2) {
+            for (GEO::index_t c = 0; c < 2; ++c) {
+                tex_coord_attributes[c].bind_if_is_defined(
+                    mesh_.vertices.attributes(),
+                    tex_coord_attribute_name_ + "[" + std::to_string(c) + "]");
+            }
+            if (tex_coord_attributes[0].is_bound() &&
+                tex_coord_attributes[1].is_bound()) {
+                marker_texture_dim = 2;
+                marker_texture = texture();
+                marker_repeat = std::max(tex_repeat_, 1);
+            }
+        }
+
+        const bool textured = marker_texture_dim != 0 && marker_texture != 0;
+        if (textured) {
+            glupEnable(GLUP_TEXTURING);
+            glupTextureMode(GLUP_TEXTURE_REPLACE);
+            switch (marker_texture_dim) {
+            case 1:
                 glupTextureType(GLUP_TEXTURE_1D);
                 glActiveTexture(GL_TEXTURE0 + GLUP_TEXTURE_1D_UNIT);
-                glBindTexture(
-                    GL_TEXTURE_2D,
-                    colormap_texture()
-                );
+                glBindTexture(GLUP_TEXTURE_1D_TARGET, marker_texture);
                 GEO::glupMapTexCoords1d(
                     colormap_mapping_min(),
                     colormap_mapping_max(),
                     1
                 );
-                glupSetColor3f(
-                    GLUP_FRONT_AND_BACK_COLOR, 1.0f, 1.0f, 1.0f
-                );
+                break;
+            case 2:
+                glupTextureType(GLUP_TEXTURE_2D);
+                glActiveTexture(GL_TEXTURE0 + GLUP_TEXTURE_2D_UNIT);
+                glBindTexture(GLUP_TEXTURE_2D_TARGET, marker_texture);
+                break;
+            default:
+                break;
             }
+            if (marker_texture_dim > 1) {
+                glupMatrixMode(GLUP_TEXTURE_MATRIX);
+                glupLoadIdentity();
+                if (marker_repeat > 1) {
+                    glupScalef(
+                        GLUPfloat(marker_repeat),
+                        GLUPfloat(marker_repeat),
+                        GLUPfloat(marker_repeat));
+                }
+                glupMatrixMode(GLUP_MODELVIEW_MATRIX);
+            }
+            glupSetColor3f(GLUP_FRONT_AND_BACK_COLOR, 1.0f, 1.0f, 1.0f);
         }
-        if (!textured) {
+        else {
             const float rgba[4] = {
                 vertices_color_.x,
                 vertices_color_.y,
@@ -538,8 +901,20 @@ namespace geolio::geobox
                     for (GEO::coord_index_t c = 0; c < dim && c < 3; ++c)
                         p[c] = pp[c];
                 }
-                if (textured)
-                    glupTexCoord1d(scalar_attribute[v]);
+                if (textured) {
+                    switch (marker_texture_dim) {
+                    case 1:
+                        glupTexCoord1d(scalar_attribute[v]);
+                        break;
+                    case 2:
+                        glupTexCoord2d(
+                            tex_coord_attributes[0][v],
+                            tex_coord_attributes[1][v]);
+                        break;
+                    default:
+                        break;
+                    }
+                }
                 glupVertex4d(p[0], p[1], p[2], radius);
             }
         }
@@ -722,7 +1097,7 @@ namespace geolio::geobox
         // GeoGram PR #386 also requires MeshGfx's picking mode to be MESH_NONE;
         // GeoBox never picks in the mesh (MeshGfx::set_picking_mode() is not
         // called anywhere in the application), so there is nothing to test here.
-        return show_attributes_ &&
+        return painting_mode_ == PaintingMode::ATTRIBUTE &&
                attribute_subelements_ == GEO::MESH_CELL_FACETS &&
                // The mesh may have lost the attribute since it was selected
                // (see reload()): the pass then has no value to color the facets
@@ -1250,5 +1625,82 @@ namespace geolio::geobox
         // range (GEO::NO_INDEX included) at any time.
         if (attribute_min_ == 0.0f && attribute_max_ == 0.0f)
             autorange();
+    }
+
+    GLuint MeshObject::texture(
+        ) {
+        if (texture_filename_.empty())
+            return 0;
+
+        auto it = texture_cache.find(texture_filename_);
+        if (it == texture_cache.end()) {
+            it = texture_cache.emplace(
+                texture_filename_,
+                create_texture_from_image(texture_filename_)).first;
+        }
+        return it->second;
+    }
+
+    void MeshObject::set_tex_coords(
+        const std::string& attribute
+        ) {
+        tex_coord_full_name_ = attribute;
+        split_attribute_name(
+            attribute, tex_coord_subelements_, tex_coord_attribute_name_);
+    }
+
+    GEO::index_t MeshObject::attribute_dimension(
+        const GEO::MeshElementsFlags subelements,
+        const std::string& name
+        ) const {
+        if (subelements == GEO::MESH_NONE || name.empty())
+            return 0;
+
+        const GEO::MeshSubElementsStore& store =
+            mesh_.get_subelements_by_type(subelements);
+        const GEO::AttributeStore* attribute =
+            store.attributes().find_attribute_store(name);
+        if (attribute == nullptr)
+            return 0;
+
+        // A vector<vec3> store holds three scalar components per element, and
+        // MeshGfx addresses them as "name[0]", "name[1]" and "name[2]" (see
+        // ReadOnlyScalarAttributeAdapter), so it counts as a 3D attribute.
+        GEO::index_t dimension = attribute->dimension();
+        const std::string type = attribute->element_typeid_name();
+        if (type == typeid(GEO::vec2).name())
+            dimension *= 2;
+        else if (type == typeid(GEO::vec3).name())
+            dimension *= 3;
+        return dimension;
+    }
+
+    std::string MeshObject::texture_attribute_names(
+        ) const {
+        std::vector<std::string> attributes;
+        GEO::String::split_string(
+            mesh_.get_vector_attributes(), ';', attributes);
+
+        std::vector<std::string> kept;
+        for (const std::string& attribute : attributes) {
+            GEO::MeshElementsFlags subelements = GEO::MESH_NONE;
+            std::string name;
+            split_attribute_name(attribute, subelements, name);
+            if (subelements == GEO::MESH_NONE ||
+                !can_be_textured(subelements) ||
+                attribute_dimension(subelements, name) != 2)
+                continue;
+            if (std::ranges::find(kept, attribute) != kept.end())
+                continue;
+            kept.push_back(attribute);
+        }
+
+        std::string result;
+        for (const std::string& attribute : kept) {
+            if (!result.empty())
+                result += ';';
+            result += attribute;
+        }
+        return result;
     }
 }
