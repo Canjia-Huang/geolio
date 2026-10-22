@@ -79,6 +79,52 @@ namespace geolio::test
             return tex_coord_subelements_;
         }
 
+        /// Enables and sets the U/V scale applied to the texture coordinates.
+        void set_uv_scale(const float u, const float v) {
+            uv_scale_enabled_ = true;
+            uv_scale_u_ = u;
+            uv_scale_v_ = v;
+        }
+
+        /// Enables or disables the U/V scale.
+        void enable_uv_scale(const bool enabled) {
+            uv_scale_enabled_ = enabled;
+        }
+
+        /// Sets the texture repeat factor and whether it is applied.
+        void set_tex_repeat(const int repeat, const bool enabled) {
+            tex_repeat_ = repeat;
+            tex_repeat_enabled_ = enabled;
+        }
+
+        /// Repeat factor actually passed to the texture sampling.
+        GEO::index_t repeat() const { return texture_repeat(); }
+
+        /// Name of the texture-coordinate attribute the image is sampled with.
+        std::string drawing_tex_coord_name() {
+            return tex_coord_attribute_name_for_drawing();
+        }
+
+        /// Component \p component of the scaled texture coordinates of
+        /// \p element.
+        double scaled_tex_coord(
+            const GEO::index_t component,
+            const GEO::index_t element
+            ) {
+            const GEO::MeshSubElementsStore& subelements =
+                mesh().get_subelements_by_type(tex_coord_subelements_);
+            GEO::ReadOnlyScalarAttributeAdapter attribute(
+                subelements.attributes(),
+                std::string(DISPLAY_TEX_COORD_NAME) + "[" +
+                    std::to_string(component) + "]");
+            return attribute[element];
+        }
+
+        /// Name of the attribute holding the scaled texture coordinates.
+        static std::string display_tex_coord_name() {
+            return DISPLAY_TEX_COORD_NAME;
+        }
+
         /// Name of the attribute the colormap is sampled with.
         std::string sampled_attribute() { return colormap_attribute_name(); }
 
@@ -354,6 +400,98 @@ namespace geolio::test
 
         object.select_tex_coords("facet_corners.tex_coord");
         EXPECT_EQ(object.tex_coords_subelements(), GEO::MESH_FACET_CORNERS);
+    }
+
+    /**
+     * @brief The U/V scale stretches the texture coordinates independently.
+     * @details MeshGfx only has a single repeat factor, so the scale is applied
+     *          by materializing the scaled coordinates in a display attribute
+     *          (see update_display_tex_coords()), which is hidden from the
+     *          attribute chooser.
+     */
+    TEST(MeshObjectAttributeRangeTest, UvScaleStretchesTextureCoordinates) {
+        GEO::Mesh mesh;
+        mesh.vertices.set_dimension(3);
+        mesh.vertices.create_vertices(3);
+        mesh.vertices.point(0) = GEO::vec3(0.0, 0.0, 0.0);
+        mesh.vertices.point(1) = GEO::vec3(1.0, 0.0, 0.0);
+        mesh.vertices.point(2) = GEO::vec3(0.0, 1.0, 0.0);
+        mesh.facets.create_triangle(0, 1, 2);
+
+        GEO::Attribute<double> tex_coords;
+        tex_coords.create_vector_attribute(
+            mesh.facet_corners.attributes(), "tex_coord", 2);
+        for (GEO::index_t c = 0; c < mesh.facet_corners.nb(); ++c) {
+            tex_coords[2 * c] = 0.1 * double(c + 1);
+            tex_coords[2 * c + 1] = 0.2 * double(c + 1);
+        }
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        object.select_tex_coords("facet_corners.tex_coord");
+
+        // Disabled by default: the selected attribute is sampled directly.
+        EXPECT_EQ(object.drawing_tex_coord_name(), "tex_coord");
+
+        object.set_uv_scale(2.0f, 3.0f);
+        EXPECT_EQ(object.drawing_tex_coord_name(),
+                  TestMeshObject::display_tex_coord_name());
+        for (GEO::index_t c = 0; c < mesh.facet_corners.nb(); ++c) {
+            EXPECT_NEAR(object.scaled_tex_coord(0, c),
+                        0.1 * double(c + 1) * 2.0, 1.0e-6);
+            EXPECT_NEAR(object.scaled_tex_coord(1, c),
+                        0.2 * double(c + 1) * 3.0, 1.0e-6);
+        }
+
+        // The display copy must not be offered as a texture-coordinate
+        // attribute, nor as a scalar attribute in ATTRIBUTE mode (its
+        // components are listed by get_scalar_attributes()).
+        EXPECT_EQ(object.texture_attributes().find(
+                      TestMeshObject::display_tex_coord_name()),
+                  std::string::npos);
+        EXPECT_EQ(object.offered_attributes().find(
+                      TestMeshObject::display_tex_coord_name()),
+                  std::string::npos);
+
+        // Without scaling, the selected attribute is sampled directly.
+        object.set_uv_scale(1.0f, 1.0f);
+        EXPECT_EQ(object.drawing_tex_coord_name(), "tex_coord");
+
+        // Non-uniform scale, the other way round.
+        object.set_uv_scale(2.0f, 0.5f);
+        EXPECT_EQ(object.drawing_tex_coord_name(),
+                  TestMeshObject::display_tex_coord_name());
+        EXPECT_NEAR(object.scaled_tex_coord(0, 0), 0.2, 1.0e-6);
+        EXPECT_NEAR(object.scaled_tex_coord(1, 0), 0.1, 1.0e-6);
+
+        // Disabling the feature goes back to the unscaled coordinates, and
+        // re-enabling it rebuilds the copy with the same scales.
+        object.enable_uv_scale(false);
+        EXPECT_EQ(object.drawing_tex_coord_name(), "tex_coord");
+        object.enable_uv_scale(true);
+        EXPECT_EQ(object.drawing_tex_coord_name(),
+                  TestMeshObject::display_tex_coord_name());
+        EXPECT_NEAR(object.scaled_tex_coord(0, 0), 0.2, 1.0e-6);
+    }
+
+    /**
+     * @brief The repeat factor is only applied when its checkbox is set.
+     * @details While it is disabled the image is sampled once, as if
+     *          tex_repeat were 1.
+     */
+    TEST(MeshObjectAttributeRangeTest, TextureRepeatIsOnlyAppliedWhenEnabled) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+
+        object.set_tex_repeat(4, false);
+        EXPECT_EQ(object.repeat(), 1u);
+
+        object.set_tex_repeat(4, true);
+        EXPECT_EQ(object.repeat(), 4u);
+
+        object.set_tex_repeat(0, true);
+        EXPECT_EQ(object.repeat(), 1u);
     }
 
     /**

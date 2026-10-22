@@ -147,6 +147,17 @@ namespace geolio::geobox
         GLuint texture();
 
         /**
+         * @brief Repeat factor applied to the image in TEXTURE mode.
+         * @details tex_repeat_ while tex_repeat_enabled_ is set, and 1
+         *          otherwise (the image is then sampled once over the texture
+         *          coordinate range).
+         */
+        GEO::index_t texture_repeat() const {
+            return tex_repeat_enabled_ ?
+                static_cast<GEO::index_t>(std::max(tex_repeat_, 1)) : 1;
+        }
+
+        /**
          * @brief Selects the texture-coordinate attribute used in TEXTURE mode.
          * @details The attribute must be a vector attribute of dimension 2, such
          *          as "facet_corners.tex_coord" (as loaded from an OBJ file).
@@ -513,6 +524,63 @@ namespace geolio::geobox
         std::string colormap_attribute_name();
 
         /**
+         * @brief Name of the display-only attribute that holds the texture
+         *        coordinates after the U/V scale is applied.
+         * @details MeshGfx samples the image with the texture coordinates it
+         *          finds in the mesh, so scaling U and V independently cannot
+         *          be expressed through its texturing API (which only has a
+         *          single repeat factor). The scaled coordinates are therefore
+         *          materialized in this attribute, built on the store of the
+         *          selected texture-coordinate attribute (see
+         *          update_display_tex_coords()), and sampled with a repeat of
+         *          1. Like DISPLAY_ATTRIBUTE_NAME, the name starts with "__"
+         *          and is hidden from the GUI.
+         */
+        static constexpr const char* DISPLAY_TEX_COORD_NAME = "__geobox_uv";
+
+        /**
+         * @brief Inputs the scaled copy of the texture coordinates was built
+         *        from.
+         */
+        struct DisplayTexCoords {
+            /** Store of the source attribute; nullptr when there is none. */
+            const void* store = nullptr;
+            /** Name of the source attribute (e.g. "tex_coord"). */
+            std::string name;
+            /** Number of elements of its store. */
+            GEO::index_t nb_elements = 0;
+            /** Scale applied to U. */
+            float scale_u = 1.0f;
+            /** Scale applied to V. */
+            float scale_v = 1.0f;
+            /** True while the copy holds the values the fields above describe. */
+            bool up_to_date = false;
+        };
+        /** State of the scaled copy of the texture coordinates. */
+        DisplayTexCoords display_tex_coords_;
+
+        /**
+         * @brief Rebuilds the scaled copy of the texture coordinates when one
+         *        of its inputs changed.
+         * @details The copy holds (u * uv_scale_u_, v * uv_scale_v_) for every
+         *          element of the store the selected texture-coordinate
+         *          attribute lives in, and is stored in DISPLAY_TEX_COORD_NAME.
+         *          It is only rebuilt when DisplayTexCoords changed.
+         */
+        void update_display_tex_coords();
+
+        /**
+         * @brief Name of the texture-coordinate attribute the image is sampled
+         *        with.
+         * @details DISPLAY_TEX_COORD_NAME while the scaled copy is up to date,
+         *          and the name of the selected attribute otherwise (the scale
+         *          is then 1, so no copy is needed).
+         * @return Name to pass to MeshGfx's set_texturing() or to bind as
+         *         "name[0]"/"name[1]".
+         */
+        std::string tex_coord_attribute_name_for_drawing();
+
+        /**
          * @brief Returns a list of available scalar attribute names.
          * @return Semicolon-separated attribute names for the mesh, the display
          *         copy excluded (see DISPLAY_ATTRIBUTE_NAME).
@@ -611,9 +679,46 @@ namespace geolio::geobox
         /**
          * @brief Repeat count of the image in the unit texture space.
          * @details 1 samples the image once over [0,1] x [0,1]; larger values
-         *          repeat it, as Graphite's tex_repeat property.
+         *          repeat it, as Graphite's tex_repeat property. Only applied
+         *          while tex_repeat_enabled_ is set (see texture_repeat()).
          */
         int tex_repeat_ = 1;
+
+        /**
+         * @brief Whether tex_repeat_ is applied in TEXTURE mode.
+         * @details Disabled by default: the image is sampled once over the
+         *          texture-coordinate range, as if tex_repeat_ were 1.
+         */
+        bool tex_repeat_enabled_ = false;
+
+        /**
+         * @brief Whether the U/V scale is applied in TEXTURE mode.
+         * @details Disabled by default: the parameterization is used as it is,
+         *          as if uv_scale_u_ and uv_scale_v_ were 1.
+         */
+        bool uv_scale_enabled_ = false;
+
+        /**
+         * @brief Scale applied to the U coordinate of the texture parameterization.
+         * @details The image is sampled with (u * uv_scale_u_, v * uv_scale_v_);
+         *          a value larger than 1 stretches the parameterization, i.e.
+         *          repeats the image along that axis. Only applied while
+         *          uv_scale_enabled_ is set.
+         */
+        float uv_scale_u_ = 1.0f;
+
+        /**
+         * @brief Scale applied to the V coordinate of the texture parameterization.
+         * @see uv_scale_u_
+         */
+        float uv_scale_v_ = 1.0f;
+
+        /**
+         * @brief If true, U and V are scaled by the same factor.
+         * @details Editing one of the two scales then updates the other one,
+         *          so that the image is stretched uniformly.
+         */
+        bool uniform_uv_scale_ = true;
 
         /** Full name of the texture-coordinate attribute (e.g. "facet_corners.tex_coord"). */
         std::string tex_coord_full_name_;

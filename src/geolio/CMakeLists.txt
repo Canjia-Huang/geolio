@@ -59,6 +59,14 @@ target_link_libraries(${CURRENT_LIB_NAME}
         ${PROJECT_NAME}::third_party
 )
 
+# Directory of the texture images bundled with GeoBox: the texture picker
+# starts there and the default texture image lives in it. Recorded at configure
+# time so that the viewer finds it whatever its working directory is.
+target_compile_definitions(${CURRENT_LIB_NAME}
+        PRIVATE
+        GEOLIO_TEXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/geobox/textures"
+)
+
 if(COMMAND geolio_end_file)
     geolio_end_file()
 endif()

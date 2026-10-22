@@ -1,0 +1,9 @@
+/* XPM */
+/* Ported from Graphite's lib/icons/colormaps/transparent.xpm: the lower half
+ * of the ramp is transparent (c None), the upper half is gray. */
+static const char *transparent_xpm[] = {
+/* columns rows colors chars-per-pixel */
+"32 1 2 1",
+"a c None",
+"b c #808080",
+"aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb"};

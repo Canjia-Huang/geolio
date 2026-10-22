@@ -4,6 +4,7 @@
 //
 #include "mesh_object.h"
 #include <map>
+#include <geogram/basic/file_system.h>
 #include <geogram_gfx/imgui_ext/imgui_ext.h>
 #include <geogram_gfx/imgui_ext/icon_font.h>
 #include <geogram_gfx/third_party/imgui/imgui.h>
@@ -60,43 +61,55 @@ namespace geolio::geobox
             const std::size_t bpp = image->bytes_per_pixel();
             const GEO::Memory::byte* source = image->base_mem_byte_ptr();
 
-            std::vector<GLubyte> rgba(4 * nb_pixels);
-            for (std::size_t i = 0; i < nb_pixels; ++i) {
-                GLubyte r = 0;
-                GLubyte g = 0;
-                GLubyte b = 0;
-                GLubyte a = 255;
-                switch (image->color_encoding()) {
-                case GEO::Image::GRAY:
-                    r = g = b = source[0];
-                    break;
-                case GEO::Image::RGB:
-                    r = source[0];
-                    g = source[1];
-                    b = source[2];
-                    break;
-                case GEO::Image::BGR:
-                    b = source[0];
-                    g = source[1];
-                    r = source[2];
-                    break;
-                case GEO::Image::RGBA:
-                    r = source[0];
-                    g = source[1];
-                    b = source[2];
-                    a = source[3];
-                    break;
-                default:
-                    LOG::ERROR(
-                        "Unsupported color encoding in texture image `{}`!",
-                        filename);
-                    return 0;
+            // stb decodes PNG/JPEG as RGBA8, so the common case can be
+            // uploaded directly instead of allocating a second buffer (an 8K
+            // image alone is 256 MiB).
+            std::vector<GLubyte> converted;
+            const GLubyte* pixels = nullptr;
+            if (image->color_encoding() == GEO::Image::RGBA && bpp == 4) {
+                pixels = reinterpret_cast<const GLubyte*>(source);
+            }
+            else {
+                converted.resize(4 * nb_pixels);
+                for (std::size_t i = 0; i < nb_pixels; ++i) {
+                    GLubyte r = 0;
+                    GLubyte g = 0;
+                    GLubyte b = 0;
+                    GLubyte a = 255;
+                    switch (image->color_encoding()) {
+                    case GEO::Image::GRAY:
+                        r = g = b = source[0];
+                        break;
+                    case GEO::Image::RGB:
+                        r = source[0];
+                        g = source[1];
+                        b = source[2];
+                        break;
+                    case GEO::Image::BGR:
+                        b = source[0];
+                        g = source[1];
+                        r = source[2];
+                        break;
+                    case GEO::Image::RGBA:
+                        r = source[0];
+                        g = source[1];
+                        b = source[2];
+                        a = source[3];
+                        break;
+                    default:
+                        LOG::ERROR(
+                            "Unsupported color encoding in texture image "
+                            "`{}`!",
+                            filename);
+                        return 0;
+                    }
+                    converted[4 * i + 0] = r;
+                    converted[4 * i + 1] = g;
+                    converted[4 * i + 2] = b;
+                    converted[4 * i + 3] = a;
+                    source += bpp;
                 }
-                rgba[4 * i + 0] = r;
-                rgba[4 * i + 1] = g;
-                rgba[4 * i + 2] = b;
-                rgba[4 * i + 3] = a;
-                source += bpp;
+                pixels = converted.data();
             }
 
             GLuint texture = 0;
@@ -104,7 +117,7 @@ namespace geolio::geobox
             glBindTexture(GL_TEXTURE_2D, texture);
             glTexImage2D(
                 GL_TEXTURE_2D, 0, GL_RGBA, GLsizei(width), GLsizei(height), 0,
-                GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+                GL_RGBA, GL_UNSIGNED_BYTE, pixels);
             glGenerateMipmap(GL_TEXTURE_2D);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -154,6 +167,62 @@ namespace geolio::geobox
                 name.clear();
             }
         }
+
+        /**
+         * @brief Directory of the texture images bundled with GeoBox.
+         * @details The source directory is recorded at configure time
+         *          (GEOLIO_TEXTURES_DIR); the path relative to the working
+         *          directory is a fallback for builds that do not define it.
+         *          The result is absolute, so that it keeps designating the
+         *          same directory after the working directory is restored.
+         */
+        std::string texture_directory() {
+#ifdef GEOLIO_TEXTURES_DIR
+            if (GEO::FileSystem::is_directory(GEOLIO_TEXTURES_DIR))
+                return GEOLIO_TEXTURES_DIR;
+#endif
+            return GEO::FileSystem::normalized_path(
+                GEO::FileSystem::get_current_working_directory() +
+                "/src/geolio/geobox/textures");
+        }
+
+        /**
+         * @brief Opens the texture image picker in the texture directory.
+         * @details GeoGram's FileDialog starts in the working directory of the
+         *          process when it is created. The working directory is
+         *          therefore changed for the duration of this call (the dialog
+         *          is created and lists its first directory there) and
+         *          restored right after, so the rest of the application is not
+         *          affected. Later openings keep the directory the user chose.
+         */
+        void open_texture_file_dialog(
+            const char* label,
+            const char* extensions,
+            const char* filename
+            ) {
+            const std::string previous_directory =
+                GEO::FileSystem::get_current_working_directory();
+            const bool changed =
+                GEO::FileSystem::set_current_working_directory(
+                    texture_directory());
+            ImGui::OpenFileDialog(
+                label, extensions, filename, ImGuiExtFileDialogFlags_Load);
+            if (changed) {
+                GEO::FileSystem::set_current_working_directory(
+                    previous_directory);
+            }
+        }
+
+        /**
+         * @brief Image displayed by the TEXTURE painting mode by default.
+         * @details The bundled 8K UV checker.
+         */
+        std::string default_texture_filename() {
+            std::string directory = texture_directory();
+            if (!directory.empty() && directory.back() != '/')
+                directory += '/';
+            return directory + "CustomUVChecker_byValle_8K_Normals.png";
+        }
     }
 
     void release_texture_cache() {
@@ -195,6 +264,10 @@ namespace geolio::geobox
             show_volume_ = false;
 
         set_attribute(vertices_point_attribute_name_);
+
+        // Default image of the TEXTURE painting mode: the UV checker bundled
+        // in the texture directory (see default_texture_filename()).
+        texture_filename_ = default_texture_filename();
     }
 
     void MeshObject::draw_object_properties(
@@ -431,12 +504,12 @@ namespace geolio::geobox
                 ImGui::PopItemWidth();
                 ImGui::SameLine();
                 if (ImGui::Button(
-                        (folder_icon + "##tex_image_browse").c_str()))
-                    ImGui::OpenFileDialog(
+                        (folder_icon + "##tex_image_browse").c_str())) {
+                    open_texture_file_dialog(
                         dialog_label.c_str(),
                         "png;jpg;jpeg;bmp;tga;xpm",
-                        texture_filename_.c_str(),
-                        ImGuiExtFileDialogFlags_Load);
+                        texture_filename_.c_str());
+                }
 
                 char selected_filename[GEO::geo_imgui_string_length];
                 if (ImGui::FileDialog(
@@ -454,41 +527,108 @@ namespace geolio::geobox
                     texture_filename_ = selected_filename;
                 }
 
-                ImGui::TextUnformatted("tex_coords");
-                std::vector<std::string> attributes;
-                GEO::String::split_string(
-                    texture_attributes, ';', attributes);
-                int selected = 0;
-                bool found = false;
-                std::string items;
-                for (std::size_t i = 0; i < attributes.size(); ++i) {
-                    items += attributes[i];
-                    items.push_back('\0');
-                    if (attributes[i] == tex_coord_full_name_) {
-                        selected = static_cast<int>(i);
-                        found = true;
+                // The texture-coordinate, scale and repeat controls only make
+                // sense once an image has been chosen: until then only the
+                // image picker is shown.
+                if (!texture_filename_.empty()) {
+                    ImGui::TextUnformatted("tex_coords");
+                    std::vector<std::string> attributes;
+                    GEO::String::split_string(
+                        texture_attributes, ';', attributes);
+                    int selected = 0;
+                    bool found = false;
+                    std::string items;
+                    for (std::size_t i = 0; i < attributes.size(); ++i) {
+                        items += attributes[i];
+                        items.push_back('\0');
+                        if (attributes[i] == tex_coord_full_name_) {
+                            selected = static_cast<int>(i);
+                            found = true;
+                        }
+                    }
+                    // ImGui expects the item list to end with a double '\0'; an
+                    // empty list is a single '\0' plus the string terminator.
+                    if (attributes.empty())
+                        items.push_back('\0');
+                    ImGui::PushItemWidth(-10.0f);
+                    if (ImGui::Combo(
+                            "##tex_coords", &selected, items.c_str())) {
+                        set_tex_coords(attributes[selected]);
+                    }
+                    ImGui::PopItemWidth();
+                    // As Graphite does, fall back to the first attribute when
+                    // the selected one is not in the mesh any more.
+                    if (!found && !attributes.empty())
+                        set_tex_coords(attributes[0]);
+
+                    // Independent U/V scale of the parameterization, applied
+                    // by pre-multiplying the texture coordinates (MeshGfx only
+                    // has a single repeat factor). Like the element sections
+                    // below, a checkbox enables the feature and indents its
+                    // controls; while it is off, U and V are used as they are.
+                    ImGui::Checkbox("uv_scale", &uv_scale_enabled_);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip(
+                            "Enable the U/V scale of the texture coordinates.");
+                    if (uv_scale_enabled_) {
+                        ImGui::Indent();
+                        const float uv_scale_width =
+                            0.5f * (ImGui::GetContentRegionAvail().x -
+                                    ImGui::GetStyle().ItemSpacing.x);
+                        ImGui::PushItemWidth(uv_scale_width);
+                        const bool u_changed = ImGui::DragFloat(
+                            "##uv_scale_u", &uv_scale_u_,
+                            0.001f, 0.001f, 1000.0f, "u %.3f");
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip(
+                                "Scale applied to the U coordinate.");
+                        ImGui::SameLine();
+                        const bool v_changed = ImGui::DragFloat(
+                            "##uv_scale_v", &uv_scale_v_,
+                            0.001f, 0.001f, 1000.0f, "v %.3f");
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip(
+                                "Scale applied to the V coordinate.");
+                        ImGui::PopItemWidth();
+                        if (u_changed)
+                            uv_scale_u_ = std::max(uv_scale_u_, 0.01f);
+                        if (v_changed)
+                            uv_scale_v_ = std::max(uv_scale_v_, 0.01f);
+                        if (ImGui::Checkbox(
+                                "uniform##uv_scale", &uniform_uv_scale_)) {
+                            // Locking adopts U as the reference; unlocking
+                            // leaves the two scales independent.
+                            if (uniform_uv_scale_)
+                                uv_scale_v_ = uv_scale_u_;
+                        }
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip(
+                                "Scale U and V by the same factor.");
+                        if (uniform_uv_scale_) {
+                            if (u_changed)
+                                uv_scale_v_ = uv_scale_u_;
+                            else if (v_changed)
+                                uv_scale_u_ = uv_scale_v_;
+                        }
+                        ImGui::Unindent();
+                    }
+
+                    // Texture repeat: same checkbox + indented controls
+                    // pattern. While it is off, the image is sampled once
+                    // (repeat of 1).
+                    ImGui::Checkbox("tex_repeat", &tex_repeat_enabled_);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip(
+                            "Enable the texture repeat factor.");
+                    if (tex_repeat_enabled_) {
+                        ImGui::Indent();
+                        ImGui::PushItemWidth(-10.0f);
+                        ImGui::InputInt("##tex_repeat", &tex_repeat_);
+                        ImGui::PopItemWidth();
+                        tex_repeat_ = std::max(tex_repeat_, 1);
+                        ImGui::Unindent();
                     }
                 }
-                // ImGui expects the item list to end with a double '\0'; an
-                // empty list is a single '\0' plus the string terminator.
-                if (attributes.empty())
-                    items.push_back('\0');
-                ImGui::PushItemWidth(-10.0f);
-                if (ImGui::Combo(
-                        "##tex_coords", &selected, items.c_str())) {
-                    set_tex_coords(attributes[selected]);
-                }
-                ImGui::PopItemWidth();
-                // As Graphite does, fall back to the first attribute when the
-                // selected one is not in the mesh any more.
-                if (!found && !attributes.empty())
-                    set_tex_coords(attributes[0]);
-
-                ImGui::TextUnformatted("tex_repeat");
-                ImGui::PushItemWidth(-10.0f);
-                ImGui::InputInt("##tex_repeat", &tex_repeat_);
-                ImGui::PopItemWidth();
-                tex_repeat_ = std::max(tex_repeat_, 1);
             }
 
             ImGui::Separator();
@@ -659,9 +799,9 @@ namespace geolio::geobox
                     tex_coord_subelements_, tex_coord_attribute_name_) == 2;
             if (ready) {
                 mesh_gfx_.set_texturing(
-                    tex_coord_subelements_, tex_coord_attribute_name_,
-                    image_texture, 2,
-                    static_cast<GEO::index_t>(std::max(tex_repeat_, 1)));
+                    tex_coord_subelements_,
+                    tex_coord_attribute_name_for_drawing(),
+                    image_texture, 2, texture_repeat());
             }
             else
                 mesh_gfx_.unset_scalar_attribute();
@@ -718,6 +858,9 @@ namespace geolio::geobox
             // gone from the file, which the drawing tests for before sampling it
             // (see displayed_attribute_is_defined()).
             display_attribute_ = DisplayAttribute();
+            // Same for the scaled texture coordinates: the reloaded mesh has
+            // its own store and attributes (see update_display_tex_coords()).
+            display_tex_coords_ = DisplayTexCoords();
             // MeshGfx caches the geometry and the attributes it draws in buffer
             // objects, which it only re-uploads once it is told the mesh changed:
             // without this, the object would keep displaying the mesh the file
@@ -824,16 +967,18 @@ namespace geolio::geobox
                  tex_coord_subelements_ == GEO::MESH_VERTICES &&
                  attribute_dimension(
                      tex_coord_subelements_, tex_coord_attribute_name_) == 2) {
+            const std::string tex_coord_name =
+                tex_coord_attribute_name_for_drawing();
             for (GEO::index_t c = 0; c < 2; ++c) {
                 tex_coord_attributes[c].bind_if_is_defined(
                     mesh_.vertices.attributes(),
-                    tex_coord_attribute_name_ + "[" + std::to_string(c) + "]");
+                    tex_coord_name + "[" + std::to_string(c) + "]");
             }
             if (tex_coord_attributes[0].is_bound() &&
                 tex_coord_attributes[1].is_bound()) {
                 marker_texture_dim = 2;
                 marker_texture = texture();
-                marker_repeat = std::max(tex_repeat_, 1);
+                marker_repeat = static_cast<int>(texture_repeat());
             }
         }
 
@@ -1577,16 +1722,95 @@ namespace geolio::geobox
             DISPLAY_ATTRIBUTE_NAME : point_attribute_name_;
     }
 
+    void MeshObject::update_display_tex_coords(
+        ) {
+        // Nothing to scale, or no scale to apply: MeshGfx can sample the
+        // selected attribute directly.
+        if (tex_coord_subelements_ == GEO::MESH_NONE ||
+            tex_coord_attribute_name_.empty() ||
+            !uv_scale_enabled_ ||
+            (uv_scale_u_ == 1.0f && uv_scale_v_ == 1.0f)) {
+            display_tex_coords_.up_to_date = false;
+            return;
+        }
+
+        GEO::MeshSubElementsStore& subelements =
+            mesh_.get_subelements_by_type(tex_coord_subelements_);
+        GEO::ReadOnlyScalarAttributeAdapter source_u(
+            subelements.attributes(), tex_coord_attribute_name_ + "[0]");
+        GEO::ReadOnlyScalarAttributeAdapter source_v(
+            subelements.attributes(), tex_coord_attribute_name_ + "[1]");
+        // Reading the copy as its own source would destroy the values it has to
+        // hold; a mesh that does not have the attribute cannot be scaled either.
+        if (!source_u.is_bound() || !source_v.is_bound() ||
+            tex_coord_attribute_name_ == DISPLAY_TEX_COORD_NAME) {
+            display_tex_coords_.up_to_date = false;
+            return;
+        }
+
+        const GEO::index_t nb_elements = subelements.nb();
+        if (display_tex_coords_.up_to_date &&
+            display_tex_coords_.store == source_u.attribute_store() &&
+            display_tex_coords_.name == tex_coord_attribute_name_ &&
+            display_tex_coords_.nb_elements == nb_elements &&
+            display_tex_coords_.scale_u == uv_scale_u_ &&
+            display_tex_coords_.scale_v == uv_scale_v_) {
+            return;
+        }
+
+        // The copy is GeoBox's own: replace an attribute of the same name the
+        // mesh happens to carry, whatever its type.
+        if (subelements.attributes().is_defined(DISPLAY_TEX_COORD_NAME))
+            subelements.attributes().delete_attribute_store(
+                DISPLAY_TEX_COORD_NAME);
+
+        // A float vector attribute: MeshGfx samples its two components as
+        // "name[0]" and "name[1]", like any 2D texture-coordinate attribute.
+        GEO::Attribute<float> display;
+        display.create_vector_attribute(
+            subelements.attributes(), DISPLAY_TEX_COORD_NAME, 2);
+        for (GEO::index_t i = 0; i < nb_elements; ++i) {
+            display[2 * i] = uv_scale_u_ * static_cast<float>(source_u[i]);
+            display[2 * i + 1] =
+                uv_scale_v_ * static_cast<float>(source_v[i]);
+        }
+
+        // As in update_display_attribute(): MeshGfx only re-uploads the
+        // attribute through its buffer objects when it is told the mesh changed.
+        mesh_gfx_.set_mesh(&mesh_);
+
+        display_tex_coords_.store = source_u.attribute_store();
+        display_tex_coords_.name = tex_coord_attribute_name_;
+        display_tex_coords_.nb_elements = nb_elements;
+        display_tex_coords_.scale_u = uv_scale_u_;
+        display_tex_coords_.scale_v = uv_scale_v_;
+        display_tex_coords_.up_to_date = true;
+    }
+
+    std::string MeshObject::tex_coord_attribute_name_for_drawing(
+        ) {
+        update_display_tex_coords();
+        return display_tex_coords_.up_to_date ?
+            DISPLAY_TEX_COORD_NAME : tex_coord_attribute_name_;
+    }
+
     std::string MeshObject::attribute_names(
         ) const {
         std::vector<std::string> attributes;
         GEO::String::split_string(
             mesh_.get_scalar_attributes(), ';', attributes);
 
-        // The display copy is not an attribute of the mesh: it only carries the
-        // values the current min/max fields ask for (see
-        // update_display_attribute()) and must not be selectable.
-        const std::string hidden = std::string(".") + DISPLAY_ATTRIBUTE_NAME;
+        // The display copies are not attributes of the mesh: they only carry
+        // the values the current display settings ask for (see
+        // update_display_attribute() and update_display_tex_coords()) and must
+        // not be selectable. get_scalar_attributes() expands a vector attribute
+        // into its components ("...__geobox_uv[0]" and "[1]"), so the base name
+        // of the scaled texture coordinates is matched rather than the whole
+        // name.
+        const std::string hidden =
+            std::string(".") + DISPLAY_ATTRIBUTE_NAME;
+        const std::string hidden_uv =
+            std::string(".") + DISPLAY_TEX_COORD_NAME;
         std::string result;
         for (const std::string& attribute : attributes) {
             if (attribute.size() >= hidden.size() &&
@@ -1594,6 +1818,15 @@ namespace geolio::geobox
                     attribute.size() - hidden.size(),
                     hidden.size(), hidden) == 0) {
                 continue;
+            }
+            const std::size_t uv_position = attribute.find(hidden_uv);
+            if (uv_position != std::string::npos) {
+                const std::size_t after =
+                    uv_position + hidden_uv.size();
+                if (after == attribute.size() ||
+                    attribute[after] == '[') {
+                    continue;
+                }
             }
             if (!result.empty())
                 result += ';';
@@ -1647,6 +1880,9 @@ namespace geolio::geobox
         tex_coord_full_name_ = attribute;
         split_attribute_name(
             attribute, tex_coord_subelements_, tex_coord_attribute_name_);
+        // The scaled copy is built on the store of the selected attribute (see
+        // update_display_tex_coords()).
+        display_tex_coords_ = DisplayTexCoords();
     }
 
     GEO::index_t MeshObject::attribute_dimension(
@@ -1686,8 +1922,11 @@ namespace geolio::geobox
             GEO::MeshElementsFlags subelements = GEO::MESH_NONE;
             std::string name;
             split_attribute_name(attribute, subelements, name);
+            // The scaled copy is a display artefact, not a texture-coordinate
+            // attribute the user can select (see DISPLAY_TEX_COORD_NAME).
             if (subelements == GEO::MESH_NONE ||
                 !can_be_textured(subelements) ||
+                name == DISPLAY_TEX_COORD_NAME ||
                 attribute_dimension(subelements, name) != 2)
                 continue;
             if (std::ranges::find(kept, attribute) != kept.end())
