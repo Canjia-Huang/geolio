@@ -221,7 +221,7 @@ namespace geolio::geobox
             std::string directory = texture_directory();
             if (!directory.empty() && directory.back() != '/')
                 directory += '/';
-            return directory + "CustomUVChecker_byValle_8K_Normals.png";
+            return directory + "CustomUVChecker_byValle_8K_checker_Normals.png";
         }
     }
 
