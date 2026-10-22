@@ -274,15 +274,17 @@ namespace geolio::geobox
          * @brief Lower bound of the range the colormap spans.
          * @details The range is the one the min/max fields read, so the
          *          colormap covers exactly the values the user asked for: the
-         *          value at that bound is colored with the first color of the
-         *          colormap, the value at the other bound with its last color,
+         *          two bounds are colored with the two ends of the colormap
+         *          (see colormap_mapping_min() for which bound gets which end),
          *          and every value outside of the range takes the color of the
          *          nearest end (see update_display_attribute()).
          * @details The two bounds are ordered here: a range filled in the other
-         *          way round would mirror the colormap (see
-         *          GEO::glupMapTexCoords1d()) and invert the clamping.
-         * @return Bound to pass to GEO::glupMapTexCoords1d() (or to
-         *         MeshGfx::set_scalar_attribute()).
+         *          way round is read in increasing order. They are the bounds
+         *          the displayed values are clamped to; the bounds the colormap
+         *          is sampled with are colormap_mapping_min() and
+         *          colormap_mapping_max(), which swap these while the colormap
+         *          is flipped.
+         * @return Lower bound of the displayed range.
          */
         double colormap_range_min() const {
             return static_cast<double>(
@@ -296,6 +298,60 @@ namespace geolio::geobox
         double colormap_range_max() const {
             return static_cast<double>(
                 std::max(attribute_min_, attribute_max_));
+        }
+
+        /**
+         * @brief Bound the attribute values are mapped onto the colormap from.
+         * @details Same as colormap_range_min() while the colormap is not
+         *          flipped (flip_colormap_). Flipping swaps the two bounds
+         *          instead of modifying the colormap: GEO::glupMapTexCoords1d()
+         *          maps a value with (value - min) / (max - min), so feeding it
+         *          the range back to front makes the minimum sample the last
+         *          color of the colormap and the maximum its first one. The
+         *          displayed values themselves keep being clamped to the
+         *          ordered range (see update_display_attribute()), so flipping
+         *          only mirrors the colors.
+         * @return Lower bound of the mapping, which may be greater than the
+         *         upper one.
+         */
+        double colormap_mapping_min() const {
+            return flip_colormap_ ? colormap_range_max() : colormap_range_min();
+        }
+
+        /**
+         * @brief Upper bound of the colormap mapping, see
+         *        colormap_mapping_min().
+         */
+        double colormap_mapping_max() const {
+            return flip_colormap_ ? colormap_range_min() : colormap_range_max();
+        }
+
+        /**
+         * @brief Returns the colormap texture the attribute is sampled with.
+         * @details The smoothed texture while smooth_colormap_ is set, and its
+         *          nearest-filtered variant otherwise (see
+         *          ColormapInfo::nearest_texture): GL_LINEAR blends the
+         *          neighboring colormap entries into a gradient, while
+         *          GL_NEAREST gives each entry a flat color band separated from
+         *          the next one by a hard boundary.
+         * @param[in] index Index of the colormap in the colormap list.
+         * @return The texture to bind, or 0 when @p index is out of range.
+         */
+        GLuint colormap_texture(GEO::index_t index) const {
+            if (index >= colormaps_.size())
+                return 0;
+            const ColormapInfo& colormap = colormaps_[index];
+            if (smooth_colormap_ || colormap.nearest_texture == 0)
+                return colormap.texture;
+            return colormap.nearest_texture;
+        }
+
+        /**
+         * @brief Returns the texture of the selected colormap, see
+         *        colormap_texture(GEO::index_t).
+         */
+        GLuint colormap_texture() const {
+            return colormap_texture(current_colormap_index_);
         }
 
         /**
@@ -444,6 +500,26 @@ namespace geolio::geobox
 
         bool show_attributes_ = false;
         GEO::index_t current_colormap_index_ = 0;
+
+        /**
+         * @brief Whether the colormap is interpolated between its entries.
+         * @details True: the colormap is sampled with GL_LINEAR filtering, so
+         *          the colors of the attribute vary smoothly. False: it is
+         *          sampled with GL_NEAREST filtering, so every colormap entry
+         *          is a flat color band and the boundaries between the bands
+         *          are hard (see colormap_texture()).
+         */
+        bool smooth_colormap_ = true;
+
+        /**
+         * @brief Whether the colormap is flipped, i.e. sampled back to front.
+         * @details The colormap texture itself is left alone: the bounds it is
+         *          sampled with are swapped instead (see
+         *          colormap_mapping_min()), which reverses the mapping from
+         *          values to colors.
+         */
+        bool flip_colormap_ = false;
+
         std::string vertices_point_attribute_name_ = "vertices.point[0]";
         std::string point_attribute_name_ = "point[0]";
         GEO::MeshElementsFlags attribute_subelements_ = GEO::MESH_VERTICES;

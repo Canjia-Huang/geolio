@@ -49,6 +49,21 @@ namespace geolio::test
 
         double colormap_max() const { return colormap_range_max(); }
 
+        /// The "smooth" and "flip" checkboxes of the GUI.
+        void set_smooth(const bool smooth) { smooth_colormap_ = smooth; }
+
+        void set_flip(const bool flip) { flip_colormap_ = flip; }
+
+        /// Bounds the colormap is sampled with, swapped while it is flipped.
+        double mapping_min() const { return colormap_mapping_min(); }
+
+        double mapping_max() const { return colormap_mapping_max(); }
+
+        /// Texture the colormap at \p index is sampled with.
+        GLuint sampled_texture(const GEO::index_t index) const {
+            return colormap_texture(index);
+        }
+
         /// Name of the attribute the colormap is sampled with.
         std::string sampled_attribute() { return colormap_attribute_name(); }
 
@@ -128,6 +143,24 @@ namespace geolio::test
         }
 
         /**
+         * @brief Colormaps with distinct smoothed and nearest-filtered
+         *        textures.
+         * @details The ids stand for the two textures of a colormap in the
+         *          application; colormap_texture() only picks one of them, so
+         *          no OpenGL call is made here.
+         */
+        const std::vector<geobox::ColormapInfo>& filtered_test_colormaps() {
+            static const std::vector<geobox::ColormapInfo> colormaps = [] {
+                std::vector<geobox::ColormapInfo> result(1);
+                result[0].name = "viridis";
+                result[0].texture = 1;
+                result[0].nearest_texture = 2;
+                return result;
+            }();
+            return colormaps;
+        }
+
+        /**
          * @brief Fills \p mesh with the scenario of the tests below.
          * @details Twelve vertices at the origin, with an index attribute
          *          "v_cell" holding the cell indices 0..10 and GEO::NO_INDEX
@@ -195,8 +228,11 @@ namespace geolio::test
 
     /**
      * @brief A range filled in the other way round is read in increasing order.
-     * @details A decreasing range would mirror the colormap (see
-     *          GEO::glupMapTexCoords1d()) and invert the clamping.
+     * @details The min/max fields describe which values to display, not which
+     *          way round to sample the colormap: reversing the colors is what
+     *          the "flip" checkbox is for (see
+     *          FlipReversesTheColormapMapping). Reading the fields in
+     *          increasing order also keeps the clamping consistent.
      */
     TEST(MeshObjectAttributeRangeTest, BoundsAreOrdered) {
         GEO::Mesh mesh;
@@ -208,6 +244,65 @@ namespace geolio::test
 
         EXPECT_DOUBLE_EQ(object.colormap_min(), 0.0);
         EXPECT_DOUBLE_EQ(object.colormap_max(), 3.0);
+    }
+
+    /**
+     * @brief The "flip" checkbox swaps the ends of the colormap.
+     * @details It swaps the bounds the colormap is sampled with, which maps the
+     *          displayed range back to front: the minimum then takes the last
+     *          color of the colormap and the maximum its first one. The
+     *          displayed values keep being clamped to the ordered range, so the
+     *          source attribute and the display copy are unaffected.
+     */
+    TEST(MeshObjectAttributeRangeTest, FlipReversesTheColormapMapping) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", test_colormaps(), mesh);
+        object.select("vertices.v_cell");
+        object.select_colormap(VIRIDIS);
+        object.set_field(0.0f, 3.0f);
+
+        // Unflipped, the range is sampled front to back.
+        EXPECT_DOUBLE_EQ(object.mapping_min(), 0.0);
+        EXPECT_DOUBLE_EQ(object.mapping_max(), 3.0);
+
+        // Flipped, the same range is sampled back to front.
+        object.set_flip(true);
+        EXPECT_DOUBLE_EQ(object.mapping_min(), 3.0);
+        EXPECT_DOUBLE_EQ(object.mapping_max(), 0.0);
+
+        // The values themselves are still clamped to the ordered range, so
+        // flipping mirrors the colors without changing what is displayed.
+        EXPECT_DOUBLE_EQ(object.sampled_value(NO_INDEX_VERTEX), 3.0);
+        EXPECT_DOUBLE_EQ(object.source_value(0), 0.0);
+
+        // Unchecking the box restores the original mapping.
+        object.set_flip(false);
+        EXPECT_DOUBLE_EQ(object.mapping_min(), 0.0);
+        EXPECT_DOUBLE_EQ(object.mapping_max(), 3.0);
+    }
+
+    /**
+     * @brief The "smooth" checkbox selects the colormap texture.
+     * @details Smooth sampling interpolates between the colormap entries;
+     *          hard boundaries need the nearest-filtered texture instead.
+     */
+    TEST(MeshObjectAttributeRangeTest, SmoothToggleSelectsTheColormapTexture) {
+        GEO::Mesh mesh;
+        make_zero_to_three_mesh(mesh);
+
+        TestMeshObject object("test", filtered_test_colormaps(), mesh);
+        object.select("vertices.v_cell");
+
+        // Smooth by default: the interpolating texture is sampled...
+        EXPECT_EQ(object.sampled_texture(0), 1u);
+        // ... and the nearest-filtered one when the hard boundaries are asked
+        // for.
+        object.set_smooth(false);
+        EXPECT_EQ(object.sampled_texture(0), 2u);
+        object.set_smooth(true);
+        EXPECT_EQ(object.sampled_texture(0), 1u);
     }
 
     /**

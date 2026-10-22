@@ -4,6 +4,7 @@
 //
 #include "mesh_object.h"
 #include <geogram_gfx/imgui_ext/imgui_ext.h>
+#include <geogram_gfx/imgui_ext/icon_font.h>
 #include <geogram_gfx/third_party/imgui/imgui.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram_gfx/GLUP/GLUP.h>
@@ -147,10 +148,21 @@ namespace geolio::geobox
                 if (ImGui::Button("autorange", ImVec2(-1, 0)))
                     autorange();
 
+                // The preview shows the colormap as the attribute samples it:
+                // its nearest-filtered variant when "smooth" is unchecked, and
+                // back to front when "flip" is (the image is not modified, its
+                // texture coordinates are reversed). The popup below keeps
+                // showing the colormaps in their canonical orientation, so they
+                // stay identifiable while selecting one.
+                const ImVec2 preview_uv0(
+                    flip_colormap_ ? 1.0f : 0.0f, 0.0f);
+                const ImVec2 preview_uv1(
+                    flip_colormap_ ? 0.0f : 1.0f, 1.0f);
                 if (ImGui::ImageButton(
                     "choose_colormap",
-                    static_cast<ImTextureID>(colormaps_[current_colormap_index_].texture),
-                    ImVec2(0.95f * ImGui::GetContentRegionAvail().x, 8.0f*s))
+                    static_cast<ImTextureID>(colormap_texture()),
+                    ImVec2(0.95f * ImGui::GetContentRegionAvail().x, 8.0f*s),
+                    preview_uv0, preview_uv1)
                     ) {
                     ImGui::OpenPopup("##Colormap");
                 }
@@ -158,7 +170,7 @@ namespace geolio::geobox
                     for (GEO::index_t i = 0; i < colormaps_.size(); ++i) {
                         if (ImGui::ImageButton(
                             colormaps_[i].name.c_str(),
-			                static_cast<ImTextureID>(colormaps_[i].texture),
+			                static_cast<ImTextureID>(colormap_texture(i)),
                             ImVec2(100.0f*s, 8.0f*s))
                             ) {
                             current_colormap_index_   = i;
@@ -167,6 +179,33 @@ namespace geolio::geobox
                     }
                     ImGui::EndPopup();
                 }
+
+                // The text labels are replaced by icons, as in Graphite: the
+                // checkbox box next to the glyph is the toggle, and the glyph
+                // shows what the current state does. "smooth" is a smooth
+                // gradient (chart area) or flat color bands (chart bars);
+                // "flip" points along the direction the colormap is sampled in.
+                ImGui::Checkbox(
+                    (GEO::icon_UTF8(
+                        smooth_colormap_ ? "chart-area" : "chart-bar") +
+                     "##smooth").c_str(),
+                    &smooth_colormap_);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip(
+                        "Smooth: interpolate the colormap between its "
+                        "entries. Unchecked, every entry is a flat color "
+                        "band, with hard boundaries between the bands.");
+                ImGui::SameLine();
+                ImGui::Checkbox(
+                    (GEO::icon_UTF8(
+                        flip_colormap_ ? "left-right" : "right-left") +
+                     "##flip").c_str(),
+                    &flip_colormap_);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip(
+                        "Flip: swap the ends of the colormap: the minimum of "
+                        "the range then takes its last color and the maximum "
+                        "its first one.");
             }
 
             /* == Vertices ========================================================================================= */
@@ -296,9 +335,9 @@ namespace geolio::geobox
             mesh_gfx_.set_scalar_attribute(
                 attribute_subelements_,
                 colormap_attribute_name(),
-                colormap_range_min(),
-                colormap_range_max(),
-                colormaps_[current_colormap_index_].texture,
+                colormap_mapping_min(),
+                colormap_mapping_max(),
+                colormap_texture(),
                 1);
         }
         else
@@ -426,11 +465,11 @@ namespace geolio::geobox
                 glActiveTexture(GL_TEXTURE0 + GLUP_TEXTURE_1D_UNIT);
                 glBindTexture(
                     GL_TEXTURE_2D,
-                    colormaps_[current_colormap_index_].texture
+                    colormap_texture()
                 );
                 GEO::glupMapTexCoords1d(
-                    colormap_range_min(),
-                    colormap_range_max(),
+                    colormap_mapping_min(),
+                    colormap_mapping_max(),
                     1
                 );
                 glupSetColor3f(
@@ -973,17 +1012,19 @@ namespace geolio::geobox
         glActiveTexture(GL_TEXTURE0 + GLUP_TEXTURE_1D_UNIT);
         glBindTexture(
             GLUP_TEXTURE_1D_TARGET,
-            colormaps_[current_colormap_index_].texture
+            colormap_texture()
         );
 
-        // Rescale the displayed range [colormap_range_min(),
-        // colormap_range_max()] to [0,1], i.e. onto the whole colormap. The
+        // Rescale the displayed range [colormap_mapping_min(),
+        // colormap_mapping_max()] to [0,1], i.e. onto the whole colormap. The
         // values sampled here are the clamped ones (see
         // update_display_attribute()), so the range is never exceeded and the
-        // elements outside of it have the color of its nearest end.
+        // elements outside of it have the color of its nearest end. The bounds
+        // are swapped while the colormap is flipped, which maps the range back
+        // to front (see colormap_mapping_min()).
         GEO::glupMapTexCoords1d(
-            colormap_range_min(),
-            colormap_range_max(),
+            colormap_mapping_min(),
+            colormap_mapping_max(),
             1
         );
 

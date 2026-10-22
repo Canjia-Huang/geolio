@@ -190,6 +190,22 @@ namespace geolio::geobox
 
     void GeoBoxApplication::GL_terminate(
         ) {
+        // Release the hard-boundary colormap variants built in
+        // init_colormaps(). The smoothed textures they were copied from belong
+        // to the base class (and are deleted by its GL_terminate()), except the
+        // random one, which GeoBox creates itself.
+        for (auto& colormap : my_colormaps_) {
+            if (colormap.nearest_texture != 0 &&
+                colormap.nearest_texture != colormap.texture) {
+                glDeleteTextures(1, &colormap.nearest_texture);
+            }
+            colormap.nearest_texture = 0;
+            if (colormap.name == RANDOM_COLORMAP_NAME &&
+                colormap.texture != 0) {
+                glDeleteTextures(1, &colormap.texture);
+                colormap.texture = 0;
+            }
+        }
         delete_scene_framebuffer();
         SimpleMeshApplication::GL_terminate();
     }
@@ -294,6 +310,12 @@ namespace geolio::geobox
         for (const auto& cm : colormaps_) {
             geolio::geobox::ColormapInfo info;
             info.texture = cm.texture;
+            // The base's textures are smoothed (linear filtering and
+            // mipmaps). The attribute display can ask for hard color
+            // boundaries instead, so build the nearest-filtered variant of
+            // each colormap once, here, rather than per draw.
+            info.nearest_texture =
+                geolio::geobox::create_nearest_colormap_texture(cm.texture);
             info.name = cm.name;
             my_colormaps_.push_back(info);
         }
@@ -324,6 +346,11 @@ namespace geolio::geobox
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        // This texture already samples with GL_NEAREST: it is its own
+        // hard-boundary variant. Interpolating the random texels would erase
+        // the distinct color each value is meant to get.
+        info.nearest_texture = info.texture;
 
         my_colormaps_.push_back(info);
     }
