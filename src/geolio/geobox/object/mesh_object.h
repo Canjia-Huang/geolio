@@ -85,6 +85,18 @@ namespace geolio::geobox
         void draw_surface();
 
         /**
+         * @brief Tests whether the surface has border edges to draw.
+         * @details Same criterion as MeshGfx::draw_surface_borders(), which
+         *          draws the facet edges without an adjacent facet: an edge is
+         *          on the border when the facet corner it comes from has
+         *          GEO::NO_FACET as its adjacent facet. A closed surface has no
+         *          such edge, so its border controls are hidden (see
+         *          draw_object_properties()).
+         * @return true if at least one facet edge is on the border.
+         */
+        bool compute_surface_has_borders() const;
+
+        /**
          * @brief Draws the explicit 1-D edges of the mesh (mesh.edges).
          * @details Unlike the facet/cell wireframes, which are derived on the
          *          fly from mesh.facets/mesh.cells while drawing, this pass
@@ -496,6 +508,16 @@ namespace geolio::geobox
         bool show_surface_borders_ = true;
         float surface_borders_width_ = 0.3f;
         GEO::vec4f surface_borders_color_ = GEO::vec4f(0.0f, 0.85f, 0.85f, 1.0f);
+
+        /**
+         * @brief Whether the surface has border edges, i.e. whether
+         *        MeshGfx::draw_surface_borders() has anything to draw.
+         * @details Cached when the mesh is set (constructor) or reloaded:
+         *          scanning every facet corner on each GUI frame would be
+         *          wasteful on large meshes. The border controls are hidden
+         *          while it is false (see draw_object_properties()).
+         */
+        bool surface_has_borders_ = false;
 
         bool show_volume_ = true;
         float cells_shrink_ = 0.0f;

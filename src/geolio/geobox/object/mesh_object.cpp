@@ -27,6 +27,7 @@ namespace geolio::geobox
     {
         mesh_.copy(mesh);
         mesh_gfx_.set_mesh(&mesh_);
+        surface_has_borders_ = compute_surface_has_borders();
 
         if (mesh_.edges.nb() == 0 && mesh_.facets.nb() == 0 && mesh_.cells.nb() == 0)
             show_vertices_ = true;
@@ -279,11 +280,19 @@ namespace geolio::geobox
                     if (show_surface_mesh_)
                         ImGui::SliderFloat("wid.##mesh", &surface_mesh_width_, 0.1f, 2.0f, "%.1f");
 
-                    ImGui::Checkbox("##BordersOnOff", &show_surface_borders_);
-                    ImGui::SameLine();
-                    ImGui::ColorEdit3WithPalette("borders", surface_borders_color_.data());
-                    if (show_surface_borders_)
-                        ImGui::SliderFloat("wid.##borders", &surface_borders_width_, 0.1f, 2.0f, "%.1f");
+                    // A closed surface has no border edge, so the border pass
+                    // has nothing to draw: its controls are hidden then (see
+                    // compute_surface_has_borders()).
+                    if (surface_has_borders_) {
+                        ImGui::Checkbox("##BordersOnOff", &show_surface_borders_);
+                        ImGui::SameLine();
+                        ImGui::ColorEdit3WithPalette(
+                            "borders", surface_borders_color_.data());
+                        if (show_surface_borders_)
+                            ImGui::SliderFloat(
+                                "wid.##borders", &surface_borders_width_,
+                                0.1f, 2.0f, "%.1f");
+                    }
 
                     ImGui::Unindent();
                 }
@@ -379,6 +388,9 @@ namespace geolio::geobox
             mesh.load(filepath_)) {
             mesh_.copy(mesh);
             bbox_diag_ = -1.0f; // invalidate the cached bounding-box diagonal
+            // The new mesh has its own connectivity: whether it has borders to
+            // draw may have changed too (see draw_object_properties()).
+            surface_has_borders_ = compute_surface_has_borders();
             // The new mesh has its own attributes: the display copy of the
             // displayed one has to be rebuilt on next draw (see
             // update_display_attribute()). The displayed attribute itself may be
@@ -551,6 +563,20 @@ namespace geolio::geobox
         }
     }
 
+    bool MeshObject::compute_surface_has_borders(
+        ) const {
+        // MeshGfx::draw_surface_borders() emits, for every facet, the edges
+        // whose facet corner has no adjacent facet (see its implementation):
+        // the same test tells whether that pass would draw anything at all.
+        for (const GEO::index_t f : mesh_.facets) {
+            for (const GEO::index_t c : mesh_.facets.corners(f)) {
+                if (mesh_.facet_corners.adjacent_facet(c) == GEO::NO_FACET)
+                    return true;
+            }
+        }
+        return false;
+    }
+
     void MeshObject::draw_surface(
         ) {
         mesh_gfx_.set_mesh_color(0.0, 0.0, 0.0);
@@ -582,7 +608,9 @@ namespace geolio::geobox
             mesh_gfx_.draw_surface();
             glupSetSpecular(specular_backup);
 
-            if (show_surface_borders_) {
+            // Nothing to draw when the surface is closed (see
+            // compute_surface_has_borders()).
+            if (show_surface_borders_ && surface_has_borders_) {
                 mesh_gfx_.set_mesh_color(
                     surface_borders_color_.x,
                     surface_borders_color_.y,
