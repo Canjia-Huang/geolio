@@ -32,6 +32,15 @@ namespace geolio::geobox
     inline constexpr const char* RANDOM_COLORMAP_NAME = "random";
 
     /**
+     * @brief Name of the colormap that hides the values it colors by making
+     *        them transparent.
+     * @details Its alpha channel is 0 for the lower half of the colormap. The
+     *          attribute display discards the fragments colored with such a
+     *          texel instead of drawing them black (see MeshObject::draw_scene()).
+     */
+    inline constexpr const char* TRANSPARENT_COLORMAP_NAME = "transparent";
+
+    /**
      * @brief Stores a generated OpenGL colormap texture and its display name.
      */
     struct ColormapInfo {

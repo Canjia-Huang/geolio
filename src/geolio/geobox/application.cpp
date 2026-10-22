@@ -8,6 +8,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "application.h"
 #include <algorithm>
+#include <array>
 #include <random>
 #include <vector>
 #include <geogram/basic/command_line.h>
@@ -17,6 +18,11 @@
 #include "geolio/common/log.h"
 #include "geolio/common/parse_filepath.h"
 #include "object/mesh_object.h"
+// Colormaps GeoBox adds to the GeoGram ones, as embedded XPM definitions (see
+// init_colormaps()). They are the 5th, 17th and 18th colormaps of Graphite.
+#include "colormaps/turbo.xpm"
+#include "colormaps/transparent.xpm"
+#include "colormaps/grayscale.xpm"
 #include <geolio/geobox/application/register_applications.h>
 #include <geogram_gfx/full_screen_effects/ambient_occlusion.h>
 #include <geogram_gfx/full_screen_effects/unsharp_masking.h>
@@ -190,18 +196,27 @@ namespace geolio::geobox
 
     void GeoBoxApplication::GL_terminate(
         ) {
-        // Release the hard-boundary colormap variants built in
-        // init_colormaps(). The smoothed textures they were copied from belong
-        // to the base class (and are deleted by its GL_terminate()), except the
-        // random one, which GeoBox creates itself.
+        // Release the colormap textures GeoBox owns: the nearest-filtered
+        // variant of every colormap, and the smoothed texture of every
+        // colormap the base class does not know about (random, and the turbo,
+        // transparent and grayscale colormaps added in init_colormaps()). The
+        // smoothed textures of the GeoGram colormaps belong to the base class,
+        // which releases them in SimpleMeshApplication::GL_terminate().
         for (auto& colormap : my_colormaps_) {
             if (colormap.nearest_texture != 0 &&
                 colormap.nearest_texture != colormap.texture) {
                 glDeleteTextures(1, &colormap.nearest_texture);
             }
             colormap.nearest_texture = 0;
-            if (colormap.name == RANDOM_COLORMAP_NAME &&
-                colormap.texture != 0) {
+
+            bool belongs_to_base = false;
+            for (const auto& base_colormap : colormaps_) {
+                if (base_colormap.texture == colormap.texture) {
+                    belongs_to_base = true;
+                    break;
+                }
+            }
+            if (!belongs_to_base && colormap.texture != 0) {
                 glDeleteTextures(1, &colormap.texture);
                 colormap.texture = 0;
             }
@@ -301,13 +316,33 @@ namespace geolio::geobox
 
     void GeoBoxApplication::init_colormaps(
         ) {
+        // GeoBox offers a subset of the GeoGram colormaps: the 1st, 4th, 5th,
+        // 6th and 10th of the list it builds (french, rainbow, cei_60757,
+        // inferno, blue_red). The turbo, transparent and grayscale colormaps
+        // (the 5th, 17th and 18th of Graphite) and the random colormap are
+        // appended below as well. The names are matched rather than the
+        // indices, so the subset still selects the same colormaps if GeoGram
+        // reorders its table.
+        static constexpr std::array<const char*, 5> KEPT_COLORMAPS = {
+            "french", "rainbow", "cei_60757", "inferno", "blue_red"
+        };
+        const auto is_kept = [](const std::string& name) {
+            for (const char* kept : KEPT_COLORMAPS) {
+                if (name == kept)
+                    return true;
+            }
+            return false;
+        };
+
         // The base's SimpleApplication::init_colormaps() (non-virtual) already
         // created the 10 colormap textures into its own colormaps_ member
         // during GL_initialize(). Reuse those texture IDs instead of creating a
         // second set of GL textures, so no extra GL state is touched at startup.
         my_colormaps_.clear();
-        my_colormaps_.reserve(colormaps_.size() + 1);
+        my_colormaps_.reserve(KEPT_COLORMAPS.size() + 4);
         for (const auto& cm : colormaps_) {
+            if (!is_kept(cm.name))
+                continue;
             geolio::geobox::ColormapInfo info;
             info.texture = cm.texture;
             // The base's textures are smoothed (linear filtering and
@@ -319,6 +354,14 @@ namespace geolio::geobox
             info.name = cm.name;
             my_colormaps_.push_back(info);
         }
+
+        // Colormaps GeoBox adds to the GeoGram ones (see the XPM definitions
+        // included at the top of this file). init_colormap() builds both the
+        // smoothed texture and its nearest-filtered variant.
+        geolio::geobox::init_colormap("turbo", turbo_xpm, my_colormaps_);
+        geolio::geobox::init_colormap(
+            "transparent", transparent_xpm, my_colormaps_);
+        geolio::geobox::init_colormap("grayscale", grayscale_xpm, my_colormaps_);
 
         // A colormap whose every texel is a random color; sampled with
         // GL_NEAREST so the individual random pixels stay distinct instead of

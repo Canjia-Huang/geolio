@@ -355,6 +355,19 @@ namespace geolio::geobox
         }
 
         /**
+         * @brief Tests whether the selected colormap hides values through its
+         *        alpha channel.
+         * @details The "transparent" colormap is the only one: its lower half
+         *          is fully transparent, so the fragments it colors have to be
+         *          discarded instead of drawn black (see draw_scene()).
+         */
+        bool colormap_is_transparent() const {
+            return current_colormap_index_ < colormaps_.size() &&
+                   colormaps_[current_colormap_index_].name ==
+                       TRANSPARENT_COLORMAP_NAME;
+        }
+
+        /**
          * @brief Name of the display-only attribute that holds the values the
          *        colormap is sampled with.
          * @details MeshGfx colors the mesh with the values it finds in the

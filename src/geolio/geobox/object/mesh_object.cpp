@@ -343,6 +343,21 @@ namespace geolio::geobox
         else
             mesh_gfx_.unset_scalar_attribute();
 
+        // The "transparent" colormap encodes the values it hides in the alpha
+        // channel: discard the fragments colored with a transparent texel
+        // instead of drawing them black, as Graphite does for that colormap.
+        // The state is global to GLUP, so it is restored after the draws.
+        const bool transparent_colormap =
+            show_attributes_ && colormap_is_transparent();
+        GLboolean saved_alpha_discard = GL_FALSE;
+        GLUPfloat saved_alpha_threshold = 0.0f;
+        if (transparent_colormap) {
+            saved_alpha_discard = glupIsEnabled(GLUP_ALPHA_DISCARD);
+            saved_alpha_threshold = glupGetAlphaThreshold();
+            glupEnable(GLUP_ALPHA_DISCARD);
+            glupSetAlphaThreshold(0.05f);
+        }
+
         // Opaque geometry first, then the points on top: transparent points do
         // not write depth, so drawing them first would let the surface occlude
         // them; drawing them last keeps them visible on the surface.
@@ -350,6 +365,12 @@ namespace geolio::geobox
         draw_edges();
         draw_volume(lighting);
         draw_points();
+
+        if (transparent_colormap) {
+            if (!saved_alpha_discard)
+                glupDisable(GLUP_ALPHA_DISCARD);
+            glupSetAlphaThreshold(saved_alpha_threshold);
+        }
     }
 
     void MeshObject::reload(
