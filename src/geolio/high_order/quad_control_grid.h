@@ -724,7 +724,6 @@ namespace geolio
          * @param[out] mesh_out_f_facet Optional facet attribute storing the source cell index
          *                             for each generated output facet element.
          */
-        template<GEO::index_t DIM>
         void append_discretized_high_order_facets(
             GEO::Mesh& mesh_out,
             const GEO::index_t resolution = 10,
@@ -732,7 +731,6 @@ namespace geolio
             GEO::Attribute<GEO::vec2>* mesh_out_v_uv = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_f_facet = nullptr
             ) const {
-            assert(DIM <= this->control_nodes.dimension());
             if (mesh_out_v_facet != nullptr) {
                 assert(mesh_out_v_facet->is_bound());
                 assert(mesh_out_v_facet->size() == mesh_out.vertices.nb());
@@ -746,17 +744,10 @@ namespace geolio
                 assert(mesh_out_f_facet->size() == mesh_out.facets.nb());
             }
 
+            const GEO::index_t DIM = control_nodes.dimension();
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
-            const GEO::index_t QUANTITIES_DIM = DIM-mesh_dimension_;
 
-            mesh_out.vertices.set_dimension(mesh_dimension_);
-            GEO::Attribute<double> mesh_out_v_quantities;
-            if (QUANTITIES_DIM > 0)
-                mesh_out_v_quantities.create_vector_attribute(
-                    mesh_out.vertices.attributes(),
-                    this->attribute_id_+":quantities",
-                    QUANTITIES_DIM);
-
+            mesh_out.vertices.set_dimension(DIM + (mesh_dimension_ == 2 ? 1 : 0));
             GEO::index_t new_v = mesh_out.vertices.create_vertices(this->control_nodes.mesh().facets.nb() * (resolution+1) * (resolution+1));
             GEO::index_t new_f = mesh_out.facets.create_quads(this->control_nodes.mesh().facets.nb() * resolution * resolution);
             for (const auto& f : this->control_nodes.mesh().facets) {
@@ -779,11 +770,7 @@ namespace geolio
 
                         const GEO::vec2 uv(u, v);
 
-                        const auto& p = compute_facet_uv_position<DIM>(f, uv);
-                        std::copy_n(p.data(), mesh_dimension_, mesh_out.vertices.point_ptr(new_v));
-
-                        if (QUANTITIES_DIM > 0)
-                            std::copy_n(&p[mesh_dimension_], QUANTITIES_DIM, &mesh_out_v_quantities[QUANTITIES_DIM*new_v]);
+                        compute_facet_uv_position(f, uv, DIM, mesh_out.vertices.point_ptr(new_v));
 
                         if (mesh_out_v_facet != nullptr)
                             (*mesh_out_v_facet)[new_v] = f;
@@ -823,6 +810,14 @@ namespace geolio
 
                         ++new_f;
                     }
+                }
+            }
+            if (mesh_dimension_ == 2) {
+                for (const auto& v : mesh_out.vertices) {
+                    const auto p = mesh_out.vertices.point_ptr(v);
+                    for (GEO::index_t d = DIM; d > 2; --d)
+                        p[d] = p[d-1];
+                    p[2] = 0;
                 }
             }
 

@@ -488,7 +488,7 @@ namespace geolio::test
             GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
             GEO::Attribute<GEO::index_t> mesh_out_f_facet(mesh_out.facets.attributes(), "facet");
 
-            control_grid->append_discretized_high_order_facets<DIM>(
+            control_grid->append_discretized_high_order_facets(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
                 &mesh_out_v_facet,
@@ -637,7 +637,7 @@ namespace geolio::test
                 ++new_e;
             }
 
-            this->control_grid->template append_discretized_high_order_facets<3>(mesh_out, BACKGROUND_RESOLUTION);
+            this->control_grid->append_discretized_high_order_facets(mesh_out, BACKGROUND_RESOLUTION);
             EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
         }
     }
@@ -676,7 +676,7 @@ namespace geolio::test
             new_e += 2;
         }
 
-        this->control_grid->template append_discretized_high_order_facets<TypeParam::value>(mesh_out, BACKGROUND_RESOLUTION);
+        this->control_grid->append_discretized_high_order_facets(mesh_out, BACKGROUND_RESOLUTION);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
     }
 

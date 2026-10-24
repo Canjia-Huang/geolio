@@ -688,7 +688,7 @@ namespace geolio::test
             GEO::Attribute<GEO::vec3> mesh_out_v_uvw(mesh_out.vertices.attributes(), "uvw");
             GEO::Attribute<GEO::index_t> mesh_out_f_cell(mesh_out.facets.attributes(), "cell");
 
-            control_grid->append_discretized_high_order_cells_border<DIM>(
+            control_grid->append_discretized_high_order_cells_border(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
                 &mesh_out_v_cell,
@@ -717,7 +717,7 @@ namespace geolio::test
             GEO::Attribute<GEO::vec3> mesh_out_v_uvw(mesh_out.vertices.attributes(), "uvw");
             GEO::Attribute<GEO::index_t> mesh_out_c_cell(mesh_out.cells.attributes(), "cell");
 
-            control_grid->append_discretized_high_order_cells<DIM>(
+            control_grid->append_discretized_high_order_cells(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
                 &mesh_out_v_cell,
@@ -901,7 +901,7 @@ namespace geolio::test
             }
         }
 
-        control_grid->append_discretized_high_order_cells_border<DIM>(mesh_out, BACKGROUND_RESOLUTION);
+        control_grid->append_discretized_high_order_cells_border(mesh_out, BACKGROUND_RESOLUTION);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
     }
 
@@ -943,7 +943,7 @@ namespace geolio::test
             new_e += 3;
         }
 
-        control_grid->append_discretized_high_order_cells<DIM>(mesh_out, BACKGROUND_RESOLUTION);
+        control_grid->append_discretized_high_order_cells(mesh_out, BACKGROUND_RESOLUTION);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
     }
 

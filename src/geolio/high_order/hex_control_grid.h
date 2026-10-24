@@ -715,7 +715,6 @@ namespace geolio
          * @param[out] mesh_out_f_cell Optional face attribute storing the source cell index
          *                             for each generated output facet.
          */
-        template<GEO::index_t DIM>
         void append_discretized_high_order_cells_border(
             GEO::Mesh& mesh_out,
             const GEO::index_t resolution = 10,
@@ -723,7 +722,6 @@ namespace geolio
             GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_f_cell = nullptr
             ) const {
-            assert(DIM <= control_nodes.dimension());
             if (mesh_out_v_cell != nullptr) {
                 assert(mesh_out_v_cell->is_bound());
                 assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
@@ -737,6 +735,7 @@ namespace geolio
                 assert(mesh_out_f_cell->size() == mesh_out.facets.nb());
             }
 
+            const GEO::index_t DIM = control_nodes.dimension();
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
 
             mesh_out.vertices.set_dimension(DIM);
@@ -763,7 +762,7 @@ namespace geolio
 
                             const GEO::vec3 uvw = project_hex_lf_uv_to_uvw(GEO::vec2(u,v), lf);
 
-                            mesh_out.vertices.point<DIM>(new_v) = compute_cell_uvw_position<DIM>(c, uvw);
+                            compute_cell_uvw_position(c, uvw, DIM, mesh_out.vertices.point_ptr(new_v));
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;
@@ -827,7 +826,6 @@ namespace geolio
          * @param[out] mesh_out_c_cell Optional cell attribute storing the source cell index
          *                             for each generated output volume element.
          */
-        template<GEO::index_t DIM>
         void append_discretized_high_order_cells(
             GEO::Mesh& mesh_out,
             const GEO::index_t resolution = 10,
@@ -835,7 +833,6 @@ namespace geolio
             GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_c_cell = nullptr
             ) const {
-            assert(DIM <= control_nodes.dimension());
             if (mesh_out_v_cell != nullptr) {
                 assert(mesh_out_v_cell->is_bound());
                 assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
@@ -849,8 +846,10 @@ namespace geolio
                 assert(mesh_out_c_cell->size() == mesh_out.cells.nb());
             }
 
+            const GEO::index_t DIM = control_nodes.dimension();
             const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
             const GEO::index_t VERTICES_NB_PER_FACET = VERTICES_NB_PER_EDGE * VERTICES_NB_PER_EDGE;
+
             mesh_out.vertices.set_dimension(DIM);
             GEO::index_t new_v = mesh_out.vertices.create_vertices(this->control_nodes.mesh().cells.nb() * (resolution+1) * (resolution+1) * (resolution+1));
             GEO::index_t new_c = mesh_out.cells.create_hexes(this->control_nodes.mesh().cells.nb() * resolution * resolution * resolution);
@@ -866,7 +865,7 @@ namespace geolio
                             const double w = static_cast<double>(k)/resolution;
                             const GEO::vec3 uvw(u, v, w);
 
-                            mesh_out.vertices.point<DIM>(new_v) = compute_cell_uvw_position<DIM>(c, uvw);
+                            compute_cell_uvw_position(c, uvw, DIM, mesh_out.vertices.point_ptr(new_v));
 
                             if (mesh_out_v_cell != nullptr)
                                 (*mesh_out_v_cell)[new_v] = c;
