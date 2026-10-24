@@ -378,14 +378,14 @@ namespace geolio
          *
          * @param[in] c Index of the hexahedral cell.
          * @param[in] uvw Cell-local parametric coordinate in [0,1]^3.
+         * @param[in] DIM Number of coordinate components to evaluate. Must not
+         *            exceed the dimension of the control-node coordinates.
          * @param[out] du Output buffer for the partial derivative with respect
          *                 to `u`; it must contain at least `DIM` values.
          * @param[out] dv Output buffer for the partial derivative with respect
          *                 to `v`; it must contain at least `DIM` values.
          * @param[out] dw Output buffer for the partial derivative with respect
          *                 to `w`; it must contain at least `DIM` values.
-         * @param[in] DIM Number of coordinate components to evaluate. Must not
-         *            exceed the dimension of the control-node coordinates.
          * @param[out] Bu 1D Lagrange basis values in the `u` direction.
          * @param[out] Bv 1D Lagrange basis values in the `v` direction.
          * @param[out] Bw 1D Lagrange basis values in the `w` direction.
@@ -396,10 +396,10 @@ namespace geolio
         void compute_cell_uvw_dudvdw(
             const GEO::index_t c,
             const GEO::vec3& uvw,
+            const GEO::index_t DIM,
             double* du,
             double* dv,
             double* dw,
-            const GEO::index_t DIM,
             std::vector<double>& Bu,
             std::vector<double>& Bv,
             std::vector<double>& Bw,
@@ -485,8 +485,8 @@ namespace geolio
             ) const {
             compute_cell_uvw_dudvdw(
                 c, uvw,
-                du.data(), dv.data(), dw.data(),
                 DIM,
+                du.data(), dv.data(), dw.data(),
                 Bu, Bv, Bw, dBu, dBv, dBw);
         }
 

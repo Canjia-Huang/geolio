@@ -281,12 +281,12 @@ namespace geolio
          *
          * @param[in] f Index of the quadrilateral facet.
          * @param[in] uv Facet-local parametric coordinate in [0,1]^2.
+         * @param[in] DIM Number of coordinate components to evaluate. Must not
+         *            exceed the dimension of the control-node coordinates.
          * @param[out] du Output buffer for the partial derivative with respect
          *                 to `u`; it must contain at least `DIM` values.
          * @param[out] dv Output buffer for the partial derivative with respect
          *                 to `v`; it must contain at least `DIM` values.
-         * @param[in] DIM Number of coordinate components to evaluate. Must not
-         *            exceed the dimension of the control-node coordinates.
          * @param[out] Bu 1D Lagrange basis values in the `u` direction.
          * @param[out] Bv 1D Lagrange basis values in the `v` direction.
          * @param[out] dBu Derivatives of the 1D basis values in the `u` direction.
@@ -295,9 +295,9 @@ namespace geolio
         void compute_facet_uv_dudv(
             const GEO::index_t f,
             const GEO::vec2& uv,
+            const GEO::index_t DIM,
             double* du,
             double* dv,
-            const GEO::index_t DIM,
             std::vector<double>& Bu,
             std::vector<double>& Bv,
             std::vector<double>& dBu,
@@ -362,8 +362,8 @@ namespace geolio
             ) const {
             compute_facet_uv_dudv(
                 f, uv,
-                du.data(), dv.data(),
                 DIM,
+                du.data(), dv.data(),
                 Bu, Bv, dBu, dBv);
         }
 
