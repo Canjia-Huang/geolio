@@ -105,6 +105,49 @@ namespace geolio
         }
 
         /**
+         * @brief Evaluate the high-order mapping of a quadrilateral facet.
+         *
+         * Computes the physical-space position corresponding to the parametric
+         * coordinate `uv` by evaluating the tensor-product Lagrange basis over
+         * the facet's control nodes. The result is written to the first `DIM`
+         * entries of `p`.
+         *
+         * @param[in] f Index of the quadrilateral facet.
+         * @param[in] uv Facet-local parametric coordinate in [0,1]^2.
+         * @param[in] DIM Number of coordinate components to evaluate. Must not
+         *            exceed the dimension of the control-node coordinates.
+         * @param[out] p Output buffer containing the mapped physical position.
+         *               It must provide space for at least `DIM` values.
+         */
+        void compute_facet_uv_position(
+            const GEO::index_t f,
+            const GEO::vec2& uv,
+            const GEO::index_t DIM,
+            double* p
+            ) const {
+            assert(DIM <= this->control_nodes.dimension());
+            assert(f < this->control_nodes.mesh().facets.nb());
+            assert(uv.x >= 0 && uv.x <= 1);
+            assert(uv.y >= 0 && uv.y <= 1);
+
+            std::fill_n(p, DIM, 0.0);
+
+            std::vector<double> Bu(this->order_+1);
+            std::vector<double> Bv(this->order_+1);
+            Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
+
+            for (GEO::index_t i = 0; i <= this->order_; ++i) {
+                for (GEO::index_t j = 0; j <= this->order_; ++j) {
+                    const double lag_basis = Bu[i] * Bv[j];
+                    const double* nd_ptr = this->control_nodes.point_ptr(this->facet_nd(f, i, j));
+                    for (GEO::index_t d = 0; d < DIM; ++d)
+                        p[d] += lag_basis * nd_ptr[d];
+                }
+            }
+        }
+
+        /**
          * @brief Map a parametric coordinate inside a facet to physical space.
          *
          * Evaluates the high-order facet mapping at the given parametric coordinate
@@ -127,25 +170,8 @@ namespace geolio
             const GEO::index_t f,
             const GEO::vec2& uv
             ) const {
-            assert(DIM <= this->control_nodes.dimension());
-            assert(f < this->control_nodes.mesh().facets.nb());
-            assert(uv.x >= 0 && uv.x <= 1);
-            assert(uv.y >= 0 && uv.y <= 1);
-
             GEO::vecng<DIM, double> p;
-
-            std::vector<double> Bu(this->order_+1);
-            std::vector<double> Bv(this->order_+1);
-            Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
-
-            for (GEO::index_t i = 0; i <= this->order_; ++i) {
-                for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const double lag_basis = Bu[i] * Bv[j];
-                    p += lag_basis * this->control_nodes.point<DIM>(this->facet_nd(f, i, j));
-                }
-            }
-
+            compute_facet_uv_position(f, uv, DIM, p.data());
             return p;
         }
 

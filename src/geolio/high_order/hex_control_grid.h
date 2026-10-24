@@ -183,6 +183,55 @@ namespace geolio
         }
 
         /**
+         * @brief Evaluate the high-order mapping of a hexahedral cell.
+         *
+         * Computes the physical-space position corresponding to the parametric
+         * coordinate `uvw` by evaluating the tensor-product Lagrange basis over
+         * the cell's control nodes. The result is written to the first `DIM`
+         * entries of `p`.
+         *
+         * @param[in] c Index of the hexahedral cell.
+         * @param[in] uvw Cell-local parametric coordinate in [0,1]^3.
+         * @param[in] DIM Number of coordinate components to evaluate. Must not
+         *            exceed the dimension of the control-node coordinates.
+         * @param[out] p Output buffer containing the mapped physical position.
+         *               It must provide space for at least `DIM` values.
+         */
+        void compute_cell_uvw_position(
+            const GEO::index_t c,
+            const GEO::vec3& uvw,
+            const GEO::index_t DIM,
+            double* p
+            ) const {
+            assert(DIM <= control_nodes.dimension());
+            assert(c < this->control_nodes.mesh().cells.nb());
+            assert(uvw.x >= 0 && uvw.x <= 1);
+            assert(uvw.y >= 0 && uvw.y <= 1);
+            assert(uvw.z >= 0 && uvw.z <= 1);
+
+            std::fill_n(p, DIM, 0.0);
+
+            std::vector<double> Bu(this->order_+1);
+            std::vector<double> Bv(this->order_+1);
+            std::vector<double> Bw(this->order_+1);
+            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
+
+            for (GEO::index_t i = 0; i <= this->order_; ++i) {
+                for (GEO::index_t j = 0; j <= this->order_; ++j) {
+                    const double basis_uv = Bu[i] * Bv[j];
+                    for (GEO::index_t k = 0; k <= this->order_; ++k) {
+                        const double lag_basis = basis_uv * Bw[k];
+                        const double* nd_ptr = this->control_nodes.point_ptr(this->cell_nd(c, i, j, k));
+                        for (GEO::index_t d = 0; d < DIM; ++d)
+                            p[d] += lag_basis * nd_ptr[d];
+                    }
+                }
+            }
+        }
+
+        /**
          * @brief Map a parametric coordinate inside a cell to physical space.
          *
          * Evaluates the high-order cell mapping at the given parametric coordinate
@@ -205,32 +254,8 @@ namespace geolio
             const GEO::index_t c,
             const GEO::vec3& uvw
             ) const {
-            assert(DIM <= control_nodes.dimension());
-            assert(c < this->control_nodes.mesh().cells.nb());
-            assert(uvw.x >= 0 && uvw.x <= 1);
-            assert(uvw.y >= 0 && uvw.y <= 1);
-            assert(uvw.z >= 0 && uvw.z <= 1);
-
             GEO::vecng<DIM, double> p;
-            std::fill_n(p.data(), DIM, 0.0);
-
-            std::vector<double> Bu(this->order_+1);
-            std::vector<double> Bv(this->order_+1);
-            std::vector<double> Bw(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
-
-            for (GEO::index_t i = 0; i <= this->order_; ++i) {
-                for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const double basis_uv = Bu[i] * Bv[j];
-                    for (GEO::index_t k = 0; k <= this->order_; ++k) {
-                        const double lag_basis = basis_uv * Bw[k];
-                        p += lag_basis * this->control_nodes.point<DIM>(this->cell_nd(c, i, j, k));
-                    }
-                }
-            }
-
+            compute_cell_uvw_position(c, uvw, DIM, p.data());
             return p;
         }
 
