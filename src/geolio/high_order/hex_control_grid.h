@@ -368,6 +368,89 @@ namespace geolio
         }
 
         /**
+         * @brief Evaluate the first-order derivatives of a cell's high-order mapping.
+         *
+         * Computes the physical-space tangent vectors of the tensor-product
+         * Lagrange mapping at the parametric point `uvw`: `du = ∂p/∂u`,
+         * `dv = ∂p/∂v`, and `dw = ∂p/∂w`. The 1D basis values and their
+         * derivatives are also resized and written to the supplied buffers for
+         * reuse by the caller.
+         *
+         * @param[in] c Index of the hexahedral cell.
+         * @param[in] uvw Cell-local parametric coordinate in [0,1]^3.
+         * @param[out] du Output buffer for the partial derivative with respect
+         *                 to `u`; it must contain at least `DIM` values.
+         * @param[out] dv Output buffer for the partial derivative with respect
+         *                 to `v`; it must contain at least `DIM` values.
+         * @param[out] dw Output buffer for the partial derivative with respect
+         *                 to `w`; it must contain at least `DIM` values.
+         * @param[in] DIM Number of coordinate components to evaluate. Must not
+         *            exceed the dimension of the control-node coordinates.
+         * @param[out] Bu 1D Lagrange basis values in the `u` direction.
+         * @param[out] Bv 1D Lagrange basis values in the `v` direction.
+         * @param[out] Bw 1D Lagrange basis values in the `w` direction.
+         * @param[out] dBu Derivatives of the 1D basis values in the `u` direction.
+         * @param[out] dBv Derivatives of the 1D basis values in the `v` direction.
+         * @param[out] dBw Derivatives of the 1D basis values in the `w` direction.
+         */
+        void compute_cell_uvw_dudvdw(
+            const GEO::index_t c,
+            const GEO::vec3& uvw,
+            double* du,
+            double* dv,
+            double* dw,
+            const GEO::index_t DIM,
+            std::vector<double>& Bu,
+            std::vector<double>& Bv,
+            std::vector<double>& Bw,
+            std::vector<double>& dBu,
+            std::vector<double>& dBv,
+            std::vector<double>& dBw
+            ) const {
+            assert(DIM <= control_nodes.dimension());
+            assert(c < this->control_nodes.mesh().cells.nb());
+            assert(uvw.x >= 0 && uvw.x <= 1);
+            assert(uvw.y >= 0 && uvw.y <= 1);
+            assert(uvw.z >= 0 && uvw.z <= 1);
+
+            std::fill_n(du, DIM, 0.0);
+            std::fill_n(dv, DIM, 0.0);
+            std::fill_n(dw, DIM, 0.0);
+
+            Bu.resize(this->order_+1);
+            Bv.resize(this->order_+1);
+            Bw.resize(this->order_+1);
+            dBu.resize(this->order_+1);
+            dBv.resize(this->order_+1);
+            dBw.resize(this->order_+1);
+            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
+            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D_, dBu);
+            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D_, dBv);
+            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D_, dBw);
+
+            for (GEO::index_t k = 0; k <= this->order_; ++k) {
+                for (GEO::index_t j = 0; j <= this->order_; ++j) {
+                    const double basis_vw = Bv[j] * Bw[k];
+                    const double basis_dvw= dBv[j] * Bw[k];
+                    const double basis_vdw= Bv[j] * dBw[k];
+                    for (GEO::index_t i = 0; i <= this->order_; ++i) {
+                        const double lag_basis_duvw = dBu[i] * basis_vw;
+                        const double lag_basis_udvw = Bu[i] * basis_dvw;
+                        const double lag_basis_uvdw = Bu[i] * basis_vdw;
+                        const auto nd_ptr = this->control_nodes.point_ptr(this->cell_nd(c, i, j, k));
+                        for (GEO::index_t d = 0; d < DIM; ++d) {
+                            du[d] += lag_basis_duvw * nd_ptr[d];
+                            dv[d] += lag_basis_udvw * nd_ptr[d];
+                            dw[d] += lag_basis_uvdw * nd_ptr[d];
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
          * Evaluate the first-order parametric derivatives of the cell mapping at a parameter point.
          *
          * This helper computes the physical-space tangent vectors with respect to the three parametric
@@ -400,44 +483,11 @@ namespace geolio
             std::vector<double>& dBv,
             std::vector<double>& dBw
             ) const {
-            assert(DIM <= control_nodes.dimension());
-            assert(c < this->control_nodes.mesh().cells.nb());
-            assert(uvw.x >= 0 && uvw.x <= 1);
-            assert(uvw.y >= 0 && uvw.y <= 1);
-            assert(uvw.z >= 0 && uvw.z <= 1);
-
-            std::fill_n(du.data(), DIM, 0.0);
-            std::fill_n(dv.data(), DIM, 0.0);
-            std::fill_n(dw.data(), DIM, 0.0);
-
-            Bu.resize(this->order_+1);
-            Bv.resize(this->order_+1);
-            Bw.resize(this->order_+1);
-            dBu.resize(this->order_+1);
-            dBv.resize(this->order_+1);
-            dBw.resize(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
-            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D_, dBu);
-            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D_, dBv);
-            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D_, dBw);
-
-            for (GEO::index_t k = 0; k <= this->order_; ++k) {
-                for (GEO::index_t j = 0; j <= this->order_; ++j) {
-                    const double basis_vw = Bv[j] * Bw[k];
-                    const double basis_dvw= dBv[j] * Bw[k];
-                    const double basis_vdw= Bv[j] * dBw[k];
-                    for (GEO::index_t i = 0; i <= this->order_; ++i) {
-                        const double lag_basis_duvw = dBu[i] * basis_vw;
-                        const double lag_basis_udvw = Bu[i] * basis_dvw;
-                        const double lag_basis_uvdw = Bu[i] * basis_vdw;
-                        du += lag_basis_duvw * this->control_nodes.point<DIM>(this->cell_nd(c, i, j, k));
-                        dv += lag_basis_udvw * this->control_nodes.point<DIM>(this->cell_nd(c, i, j, k));
-                        dw += lag_basis_uvdw * this->control_nodes.point<DIM>(this->cell_nd(c, i, j, k));
-                    }
-                }
-            }
+            compute_cell_uvw_dudvdw(
+                c, uvw,
+                du.data(), dv.data(), dw.data(),
+                DIM,
+                Bu, Bv, Bw, dBu, dBv, dBw);
         }
 
         /**
