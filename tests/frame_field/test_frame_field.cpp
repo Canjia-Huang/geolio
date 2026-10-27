@@ -12,7 +12,7 @@
 #include <vector>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/mesh/mesh_io.h>
-#include <geolio/frame_field/frame_field.h>
+#include <geolio/directional/frame_field.h>
 #include <gtest/gtest.h>
 #include "../utils.h"
 

@@ -17,7 +17,7 @@
 #include <geogram/mesh/mesh_repair.h>
 #include <geogram/voronoi/CVT.h>
 #include <geolio/common/Gauss_Legendre_quadrature.h>
-#include <geolio/frame_field/frame_field.h>
+#include <geolio/directional/frame_field.h>
 #include <geolio/LpCVT/lp_cvt.h>
 #include <geolio/LpCVT/lp_integration_simplex.h>
 #include <geolio/LpCVT/lp_measure.h>
