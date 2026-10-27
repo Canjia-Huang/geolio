@@ -25,6 +25,11 @@ namespace geolio
 
         void move_forward();
 
+        void append_tracing_points_to_mesh(
+            GEO::Mesh& mesh,
+            GEO::Attribute<GEO::index_t>* mesh_v_tracing_times = nullptr,
+            GEO::Attribute<GEO::index_t>* mesh_e_point_idx = nullptr) const;
+
     protected:
         virtual void initialize_points_locate_element() = 0;
 

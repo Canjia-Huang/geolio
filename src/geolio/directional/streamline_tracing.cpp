@@ -23,7 +23,7 @@ namespace geolio
 
     void StreamlineTracing::move_forward(
         ) {
-        const GEO::index_t p_start_idx = 3*points_nb_*tracing_times_;
+        const GEO::index_t next_start_idx = 3*points_nb_*(tracing_times_+1);
 
         points_.reserve(points_.size()+3*points_nb_);
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
@@ -34,10 +34,54 @@ namespace geolio
             points_locate_element_.emplace_back();
 
             /* Trace */
-            trace_point(v, &points_[p_start_idx+3*v], points_locate_element_[v]);
+            trace_point(v, &points_[next_start_idx+3*v], points_locate_element_[v]);
         }
 
         ++tracing_times_;
+    }
+
+    void StreamlineTracing::append_tracing_points_to_mesh(
+        GEO::Mesh& mesh,
+        GEO::Attribute<GEO::index_t>* mesh_v_tracing_times,
+        GEO::Attribute<GEO::index_t>* mesh_e_point_idx
+        ) const {
+        if (mesh.vertices.dimension() < 3)
+            mesh.vertices.set_dimension(3);
+
+        GEO::index_t new_v = mesh.vertices.create_vertices(points_nb_*(tracing_times_+1));
+        GEO::index_t new_e = mesh.edges.create_edges(points_nb_*tracing_times_);
+
+        if (mesh_v_tracing_times != nullptr) {
+            assert(mesh_v_tracing_times->is_bound());
+            assert(mesh_v_tracing_times->size() == mesh.vertices.nb());
+        }
+        if (mesh_e_point_idx != nullptr) {
+            assert(mesh_e_point_idx->is_bound());
+            assert(mesh_e_point_idx->size() == mesh.edges.nb());
+        }
+
+        for (GEO::index_t v = 0; v < points_nb_; ++v) {
+            for (GEO::index_t n = 0; n < tracing_times_+1; ++n) {
+                double* p = mesh.vertices.point_ptr(new_v+n);
+                p[0] = points_[3*points_nb_*n + 3*v];
+                p[1] = points_[3*points_nb_*n + 3*v+1];
+                p[2] = points_[3*points_nb_*n + 3*v+2];
+
+                if (mesh_v_tracing_times != nullptr)
+                    (*mesh_v_tracing_times)[new_v+n] = n;
+
+                if (n < tracing_times_) {
+                    mesh.edges.set_vertex(new_e, 0, new_v+n);
+                    mesh.edges.set_vertex(new_e, 1, new_v+n+1);
+
+                    if (mesh_e_point_idx != nullptr)
+                        (*mesh_e_point_idx)[new_e] = v;
+
+                    ++new_e;
+                }
+            }
+            new_v += tracing_times_+1;
+        }
     }
 
     GEO::vec3 StreamlineTracing::get_point_direction(
