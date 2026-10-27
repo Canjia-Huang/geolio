@@ -35,7 +35,7 @@ namespace geolio
 
         GEO::vec3 get_point_direction(GEO::index_t v);
 
-        virtual void trace_point(GEO::index_t v, double* next_point, GEO::index_t& next_element) = 0;
+        virtual void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element) = 0;
 
         const std::string attribute_id_;
 
@@ -80,7 +80,7 @@ namespace geolio
     protected:
         void initialize_points_locate_element() override;
 
-        void trace_point(GEO::index_t v, double* next_point, GEO::index_t& next_element) override;
+        void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element) override;
 
         GEO::MeshFacetsAABB mesh_AABB_;
         GEO::Attribute<GEO::vec3> mesh_f_unit_normal_;
@@ -103,7 +103,7 @@ namespace geolio
     protected:
         void initialize_points_locate_element() override;
 
-        void trace_point(GEO::index_t v, double* next_point, GEO::index_t& next_element) override;
+        void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element) override;
 
         GEO::MeshCellsAABB mesh_AABB_;
     };

@@ -47,17 +47,14 @@ namespace geolio::test
     };
 
     TEST_F(StreamlineSurficialTracingTest, example) {
-        GEO::Mesh mesh_out;
         {
             StreamlineSurficialTracing tracer(mesh_);
             tracer.set_initial_points(points_nb_, points_.data());
             tracer.set_per_facet_directions(N_, directions_.data());
-            for (GEO::index_t i = 0; i < 1; ++i)
+            for (GEO::index_t i = 0; i < 100; ++i)
                 tracer.move_forward();
-
-
-            tracer.append_tracing_points_to_mesh(mesh_out);
+            tracer.append_tracing_points_to_mesh(mesh_);
         }
-        EXPECT_TRUE(mesh_out.save(get_current_test_name()+".geogram"));
+        EXPECT_TRUE(mesh_.save(get_current_test_name()+".geogram"));
     }
 }
