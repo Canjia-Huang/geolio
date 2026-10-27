@@ -37,24 +37,34 @@ namespace geolio::test
             ASSERT_EQ(frames.size(), frames_size);
             directions_.resize(frames_size);
             std::ranges::copy_n(frame_field.frames().data(), frames_size, directions_.data());
+
+            /* Tracer */
+            tracer = std::make_unique<StreamlineSurficialTracing>(mesh_);
+            tracer->set_initial_points(points_nb_, points_.data());
+            tracer->set_per_facet_directions(N_, directions_.data());
+        }
+
+        void save_result() {
+            GEO::Attribute<GEO::index_t> mesh_v_tracing_times(mesh_.vertices.attributes(), "tracing_times");
+            GEO::Attribute<GEO::index_t> mesh_e_point_idx(mesh_.edges.attributes(), "point_idx");
+            tracer->append_tracing_points_to_mesh(mesh_, &mesh_v_tracing_times, &mesh_e_point_idx);
+            EXPECT_TRUE(mesh_.save(get_current_test_name()+".geogram"));
         }
 
         GEO::Mesh mesh_;
-        const GEO::index_t points_nb_ = 1e2;
+
+        const GEO::index_t points_nb_ = 1e3;
         std::vector<double> points_;
+
         const GEO::index_t N_ = 3;
         std::vector<double> directions_;
+
+        std::unique_ptr<StreamlineSurficialTracing> tracer;
     };
 
-    TEST_F(StreamlineSurficialTracingTest, example) {
-        {
-            StreamlineSurficialTracing tracer(mesh_);
-            tracer.set_initial_points(points_nb_, points_.data());
-            tracer.set_per_facet_directions(N_, directions_.data());
-            for (GEO::index_t i = 0; i < 100; ++i)
-                tracer.move_forward();
-            tracer.append_tracing_points_to_mesh(mesh_);
-        }
-        EXPECT_TRUE(mesh_.save(get_current_test_name()+".geogram"));
+    TEST_F(StreamlineSurficialTracingTest, constant_steps) {
+        for (GEO::index_t i = 0; i < 30; ++i)
+            tracer->move_forward();
+        save_result();
     }
 }
