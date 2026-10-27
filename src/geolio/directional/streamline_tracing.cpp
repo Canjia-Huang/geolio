@@ -21,28 +21,33 @@ namespace geolio
         initialize_points_locate_element();
     }
 
-    void StreamlineTracing::move_forward(
+    void StreamlineTracing::tracing(
+        const GEO::index_t iterations
         ) {
-        const GEO::index_t next_start_idx = 3*points_nb_*(tracing_times_+1);
+        assert(iterations > 0);
 
-        points_.reserve(points_.size()+3*points_nb_);
-        for (GEO::index_t v = 0; v < points_nb_; ++v) {
-            /* Pre-allocated */
-            points_.emplace_back();
-            points_.emplace_back();
-            points_.emplace_back();
+        points_.reserve(points_.size()+3*points_nb_ * iterations);
+        for (GEO::index_t iter = 0; iter < iterations; ++iter) {
+            const GEO::index_t next_start_idx = 3*points_nb_*(tracing_times_+1);
 
-            /* Trace */
-            GEO::vec3 next_point;
-            GEO::index_t next_element;
-            trace_point(v, next_point, next_element);
-            points_[next_start_idx + 3*v]   = next_point[0];
-            points_[next_start_idx + 3*v+1] = next_point[1];
-            points_[next_start_idx + 3*v+2] = next_point[2];
-            points_locate_element_[v] = next_element;
+            for (GEO::index_t v = 0; v < points_nb_; ++v) {
+                /* Pre-allocated */
+                points_.emplace_back();
+                points_.emplace_back();
+                points_.emplace_back();
+
+                /* Trace */
+                GEO::vec3 next_point;
+                GEO::index_t next_element;
+                trace_point(v, next_point, next_element);
+                points_[next_start_idx + 3*v]   = next_point[0];
+                points_[next_start_idx + 3*v+1] = next_point[1];
+                points_[next_start_idx + 3*v+2] = next_point[2];
+                points_locate_element_[v] = next_element;
+            }
+
+            ++tracing_times_;
         }
-
-        ++tracing_times_;
     }
 
     void StreamlineTracing::append_tracing_points_to_mesh(

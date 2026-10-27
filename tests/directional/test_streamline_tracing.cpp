@@ -63,8 +63,7 @@ namespace geolio::test
     };
 
     TEST_F(StreamlineSurficialTracingTest, constant_steps) {
-        for (GEO::index_t i = 0; i < 30; ++i)
-            tracer->move_forward();
+        tracer->tracing(30);
         save_result();
     }
 }
