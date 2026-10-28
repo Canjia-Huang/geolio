@@ -28,27 +28,23 @@ namespace geolio
         ) {
         assert(iterations > 0);
 
-        points_.reserve(points_.size() + 3*points_nb_ * iterations);
-        points_locate_element_.reserve(points_locate_element_.size() + points_nb_ * iterations);
+        points_.resize(points_.size() + 3*points_nb_ * iterations);
+        points_locate_element_.resize(points_locate_element_.size() + points_nb_ * iterations);
         for (GEO::index_t iter = 0; iter < iterations; ++iter) {
-            const GEO::index_t next_start_idx = 3*points_nb_*(tracing_times_+1);
+            const GEO::index_t next_p_start_idx = 3*points_nb_*(tracing_times_+1);
+            const GEO::index_t next_ele_start_idx = points_nb_*(tracing_times_+1);
 
             for (GEO::index_t v = 0; v < points_nb_; ++v) {
-                /* Pre-allocated */
-                points_.emplace_back();
-                points_.emplace_back();
-                points_.emplace_back();
-
                 /* Trace */
                 GEO::vec3 next_point;
                 GEO::index_t next_element;
                 GEO::index_t next_local_idx;
                 trace_point(v, next_point, next_element, next_local_idx);
-                points_[next_start_idx + 3*v]   = next_point[0];
-                points_[next_start_idx + 3*v+1] = next_point[1];
-                points_[next_start_idx + 3*v+2] = next_point[2];
-                points_locate_element_[v].first = next_element;
-                points_locate_element_[v].second = next_local_idx;
+                points_[next_p_start_idx + 3*v]   = next_point[0];
+                points_[next_p_start_idx + 3*v+1] = next_point[1];
+                points_[next_p_start_idx + 3*v+2] = next_point[2];
+                points_locate_element_[next_ele_start_idx + v].first = next_element;
+                points_locate_element_[next_ele_start_idx + v].second = next_local_idx;
             }
 
             ++tracing_times_;
@@ -107,7 +103,7 @@ namespace geolio
         assert(mesh_element_direction_.is_bound());
         assert(mesh_element_direction_.dimension() == 3*N_);
 
-        const auto& ele = points_locate_element_[v].first;
+        const auto& ele = points_locate_element_[points_nb_*tracing_times_ + v].first;
         if (ele == GEO::NO_INDEX)
             return {0, 0, 0};
 
@@ -259,7 +255,7 @@ namespace geolio
 
     void StreamlineSurficialTracer::initialize_points_locate_element(
         ) {
-        points_locate_element_.assign(points_nb_, std::pair(GEO::NO_FACET, GEO::NO_FACET));
+        points_locate_element_.assign(points_nb_, std::pair(GEO::NO_FACET, GEO::NO_INDEX));
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
             const GEO::vec3 p(points_[3*v], points_[3*v+1], points_[3*v+2]);
 
@@ -291,7 +287,7 @@ namespace geolio
         next_element = GEO::NO_FACET;
         next_local_idx = GEO::NO_INDEX;
 
-        const auto [loc_f, loc_lv] = points_locate_element_[v];
+        const auto [loc_f, loc_lv] = points_locate_element_[points_nb_*tracing_times_ + v];
         if (loc_f == GEO::NO_FACET)
             return;
         assert(loc_f < mesh_.facets.nb());
@@ -417,7 +413,7 @@ namespace geolio
 
     void StreamlineVolumetricTracer::initialize_points_locate_element(
         ) {
-        points_locate_element_.assign(points_nb_, std::pair(GEO::NO_CELL, GEO::NO_CELL));
+        points_locate_element_.assign(points_nb_, std::pair(GEO::NO_CELL, GEO::NO_INDEX));
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
             const GEO::vec3 p(points_[3*v], points_[3*v+1], points_[3*v+2]);
 
