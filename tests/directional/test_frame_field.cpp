@@ -3,18 +3,20 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include <algorithm>
-#include <cmath>
-#include <cstdio>
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
+#include <geogram/basic/command_line.h>
+#include <geogram/basic/command_line_args.h>
+#include <geogram/basic/progress.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geolio/directional/frame_field.h>
 #include <gtest/gtest.h>
 #include "../utils.h"
+#include <geogram/mesh/mesh_tetrahedralize.h>
+#include <geogram/voronoi/CVT.h>
 
 // geolio::FrameField adds one entry point to the inherited ones, and the ways of building a
 // field differ in what they put in the frame vectors and in where they attach them:
@@ -1171,7 +1173,7 @@ namespace geolio::test
         }
     }
 
-    TEST(FrameFieldExampleTest, example) {
+    TEST(FrameFieldSurfaceExampleTest, example) {
         GEO::Mesh mesh;
         ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes.geogram"));
 
@@ -1192,6 +1194,44 @@ namespace geolio::test
             mesh.vertices.point(new_v+3) = center - GEO::vec3(frames[9*f+3], frames[9*f+4], frames[9*f+5]);
             mesh.vertices.point(new_v+4) = center + GEO::vec3(frames[9*f+6], frames[9*f+7], frames[9*f+8]);
             mesh.vertices.point(new_v+5) = center - GEO::vec3(frames[9*f+6], frames[9*f+7], frames[9*f+8]);
+            mesh.edges.set_vertex(new_e, 0, new_v);
+            mesh.edges.set_vertex(new_e, 1, new_v+1);
+            mesh.edges.set_vertex(new_e+1, 0, new_v+2);
+            mesh.edges.set_vertex(new_e+1, 1, new_v+3);
+            mesh.edges.set_vertex(new_e+2, 0, new_v+4);
+            mesh.edges.set_vertex(new_e+2, 1, new_v+5);
+            mesh_e_axis[new_e] = 0;
+            mesh_e_axis[new_e+1] = 1;
+            mesh_e_axis[new_e+2] = 2;
+            new_v += 6;
+            new_e += 3;
+        }
+
+        EXPECT_TRUE(mesh.save(get_current_test_name()+".geogram"));
+    }
+
+    TEST(FrameFieldVolumeExampleTest, example) {
+        GEO::Mesh mesh;
+        ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes_tets.geogram"));
+        mesh.cells.compute_borders();
+
+        FrameField frame_field;
+        frame_field.create_curvature_directions(mesh, true, 45.0);
+        const auto& frames = frame_field.frames();
+        ASSERT_EQ(frames.size(), 9*mesh.cells.nb());
+
+        /* Append frame field */
+        GEO::Attribute<GEO::index_t> mesh_e_axis(mesh.edges.attributes(), "axis");
+        GEO::index_t new_v = mesh.vertices.create_vertices(6*mesh.cells.nb());
+        GEO::index_t new_e = mesh.edges.create_edges(3*mesh.cells.nb());
+        for (const auto& c : mesh.cells) {
+            const GEO::vec3 center = (mesh.cells.point(c, 0)+mesh.cells.point(c, 1)+mesh.cells.point(c, 2)+mesh.cells.point(c, 3))/4;
+            mesh.vertices.point(new_v)   = center + GEO::vec3(frames[9*c], frames[9*c+1], frames[9*c+2]);
+            mesh.vertices.point(new_v+1) = center - GEO::vec3(frames[9*c], frames[9*c+1], frames[9*c+2]);
+            mesh.vertices.point(new_v+2) = center + GEO::vec3(frames[9*c+3], frames[9*c+4], frames[9*c+5]);
+            mesh.vertices.point(new_v+3) = center - GEO::vec3(frames[9*c+3], frames[9*c+4], frames[9*c+5]);
+            mesh.vertices.point(new_v+4) = center + GEO::vec3(frames[9*c+6], frames[9*c+7], frames[9*c+8]);
+            mesh.vertices.point(new_v+5) = center - GEO::vec3(frames[9*c+6], frames[9*c+7], frames[9*c+8]);
             mesh.edges.set_vertex(new_e, 0, new_v);
             mesh.edges.set_vertex(new_e, 1, new_v+1);
             mesh.edges.set_vertex(new_e+1, 0, new_v+2);

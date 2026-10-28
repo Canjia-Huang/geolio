@@ -422,19 +422,18 @@ namespace geolio
         // Volumetric frames are attached to the cells, so a mesh that has none cannot hold
         // them. Rather than publish an empty field, fall back to the surface field that the
         // curvature estimate defines directly.
-        bool volumetric_mode = volumetric;
-        if (volumetric_mode && mesh.cells.nb() == 0) {
+        volumetric_ = volumetric;
+        if (volumetric_ && mesh.cells.nb() == 0) {
             LOG::WARN("volumetric was requested but the mesh has no cell: building the "
                       "surface frame field instead.");
-            volumetric_mode = false;
+            volumetric_ = false;
         }
-        if (volumetric_mode) {
+        if (volumetric_) {
             // The base class' volumetric mode puts the points of its search structure at
             // mesh_tet_center() of every cell, which is the centroid of the cell only for a
             // tetrahedron.
             assert(mesh.cells.are_simplices());
         }
-        volumetric_ = volumetric_mode;
 
         // Step 1: the two principal curvature directions and their magnitudes, one of
         // each per facet. The curvature is a surface quantity: in volumetric mode these
@@ -454,7 +453,7 @@ namespace geolio
         // The lookup uses the facet centers, as in the base class' extrapolation; the frames
         // themselves are inherited after they are built, in Step 5.
         std::vector<GEO::index_t> cell_facet;
-        if (volumetric_mode) {
+        if (volumetric_) {
             cell_facet = nearest_facet_per_cell(mesh);
             certainty_max_.resize(mesh.cells.nb());
             certainty_min_.resize(mesh.cells.nb());
@@ -498,7 +497,7 @@ namespace geolio
             "Initializing the frame storage and the spatial search with the base class' "
             "own field, which the curvature directions then replace"
         );
-        GEO::FrameField::create_from_surface_mesh(mesh, volumetric_mode, sharp_angle_threshold);
+        GEO::FrameField::create_from_surface_mesh(mesh, volumetric_, sharp_angle_threshold);
 
         // Step 5: the frames themselves. Writing through frames() needs a const_cast: it
         // is the only accessor Geogram exposes for its private frames_, and it is well
@@ -537,15 +536,15 @@ namespace geolio
             frame[8] = W.z;
         };
 
-        if (!volumetric_mode) {
-            geo_assert(frames.size() == 9 * mesh.facets.nb());
+        if (!volumetric_) {
+            assert(frames.size() == 9 * mesh.facets.nb());
             for (const GEO::index_t f : mesh.facets) {
                 write_facet_frame(f, &frames[9 * f]);
             }
             return;
         }
 
-        geo_assert(frames.size() == 9 * mesh.cells.nb());
+        assert(frames.size() == 9 * mesh.cells.nb());
 
         // A facet frame is shared by every cell it is the nearest facet of, so each one is
         // computed once and then copied to the cells that inherit it.
