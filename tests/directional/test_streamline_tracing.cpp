@@ -80,7 +80,7 @@ namespace geolio::test
     };
 
     TEST_F(StreamlineSurficialTracerTest, constant_steps) {
-        tracer->tracing(30);
+        tracer->trace(30);
         save_result();
     }
 
@@ -130,7 +130,7 @@ namespace geolio::test
     };
 
     TEST_F(StreamlineVolumetricTracerTest, constant_steps) {
-        tracer->tracing(30);
+        tracer->trace(30);
         save_result();
     }
 }

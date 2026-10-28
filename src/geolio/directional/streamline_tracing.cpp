@@ -21,7 +21,7 @@ namespace geolio
         initialize_points_locate_element();
     }
 
-    void StreamlineTracer::tracing(
+    void StreamlineTracer::trace(
         const GEO::index_t iterations
         ) {
         assert(iterations > 0);

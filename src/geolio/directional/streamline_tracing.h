@@ -23,7 +23,7 @@ namespace geolio
 
         virtual void set_initial_points(GEO::index_t points_nb, const double* points);
 
-        void tracing(GEO::index_t iterations);
+        void trace(GEO::index_t iterations);
 
         void append_tracing_points_to_mesh(
             GEO::Mesh& mesh,
