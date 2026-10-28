@@ -256,8 +256,11 @@ namespace geolio
             auto& tp = traced_points_[v];
 
             double sq_dist;
-            if (const GEO::index_t nearest_f = mesh_AABB_.nearest_facet(tp.point, tp.point, sq_dist);
-                tp.element != nearest_f) {
+            GEO::vec3 nearest_p;
+            const GEO::index_t nearest_f = mesh_AABB_.nearest_facet(tp.point, nearest_p, sq_dist);
+
+            tp.point = nearest_p; // snap onto the surface
+            if (tp.element != nearest_f) {
                 tp.element = nearest_f;
                 tp.local_idx = GEO::NO_INDEX;
             }
