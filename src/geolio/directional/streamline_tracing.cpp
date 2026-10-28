@@ -6,7 +6,7 @@
 
 namespace geolio
 {
-    void StreamlineTracing::set_initial_points(
+    void StreamlineTracer::set_initial_points(
         const GEO::index_t points_nb,
         const double* points
         ) {
@@ -21,7 +21,7 @@ namespace geolio
         initialize_points_locate_element();
     }
 
-    void StreamlineTracing::tracing(
+    void StreamlineTracer::tracing(
         const GEO::index_t iterations
         ) {
         assert(iterations > 0);
@@ -50,7 +50,7 @@ namespace geolio
         }
     }
 
-    void StreamlineTracing::append_tracing_points_to_mesh(
+    void StreamlineTracer::append_tracing_points_to_mesh(
         GEO::Mesh& mesh,
         GEO::Attribute<GEO::index_t>* mesh_v_tracing_times,
         GEO::Attribute<GEO::index_t>* mesh_e_point_idx
@@ -94,7 +94,7 @@ namespace geolio
         }
     }
 
-    GEO::vec3 StreamlineTracing::get_point_direction(
+    GEO::vec3 StreamlineTracer::get_point_direction(
         const GEO::index_t v
         ) {
         assert(v < points_nb_);
@@ -149,14 +149,14 @@ namespace geolio
 
     /* ============================================================================================================= */
 
-    void StreamlineSurficialTracing::set_per_vertex_directions(
+    void StreamlineSurficialTracer::set_per_vertex_directions(
         const GEO::index_t N,
         const double* directions
         ) {
         // TODO
     }
 
-    void StreamlineSurficialTracing::set_per_facet_directions(
+    void StreamlineSurficialTracer::set_per_facet_directions(
         const GEO::index_t N,
         const double* directions
         ) {
@@ -172,7 +172,7 @@ namespace geolio
         std::ranges::copy_n(directions, 3*N_*mesh_.facets.nb(), mesh_element_direction_.data());
     }
 
-    void StreamlineSurficialTracing::initialize_points_locate_element(
+    void StreamlineSurficialTracer::initialize_points_locate_element(
         ) {
         points_locate_element_.assign(points_nb_, GEO::NO_FACET);
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
@@ -188,7 +188,7 @@ namespace geolio
         }
     }
 
-    void StreamlineSurficialTracing::trace_point(
+    void StreamlineSurficialTracer::trace_point(
         const GEO::index_t v,
         GEO::vec3& next_point,
         GEO::index_t& next_element
@@ -220,8 +220,8 @@ namespace geolio
         /* Find intersecting edge: the first one met ahead of p0. An intersection behind
          * p0 (t <= 0) is not an exit, and neither is the edge p0 already lies on, which
          * is where the previous step left it. */
-        double min_t = std::numeric_limits<double>::max();
-        GEO::index_t min_lv = GEO::NO_INDEX;
+        double max_t = -std::numeric_limits<double>::max();
+        GEO::index_t max_lv = GEO::NO_INDEX;
         for (GEO::index_t lv = 0; lv < 3; ++lv) {
             const auto& ep0 = mesh_.facets.point(f, lv);
             const auto& ep1 = mesh_.facets.point(f, (lv+1)%3);
@@ -232,7 +232,7 @@ namespace geolio
                 continue;
 
             const double t = GEO::dot(GEO::cross(p0-ep0, edge), mesh_f_unit_normal_[f]) / s_d;
-            if (t <= 1e-10) // behind p0, or p0 is on this edge
+            if (t < 0) // behind p0
                 continue;
 
             /* The ray meets the line supporting this edge: reject the hit if it falls
@@ -241,32 +241,32 @@ namespace geolio
                 s < -1e-10 || s > 1.0+1e-10)
                 continue;
 
-            if (t < min_t) {
-                min_t = t;
-                min_lv = lv;
+            if (t > max_t) {
+                max_t = t;
+                max_lv = lv;
             }
         }
-        if (min_lv == GEO::NO_INDEX) // the direction leads out of this facet, no exit ahead
+        if (max_lv == GEO::NO_INDEX) // the direction leads out of this facet, no exit ahead
             return;
 
         /* Output */
-        const GEO::vec3 p1 = p0+min_t*d;
+        const GEO::vec3 p1 = p0+max_t*d;
         next_point[0] = p1[0];
         next_point[1] = p1[1];
         next_point[2] = p1[2];
-        next_element = mesh_.facets.adjacent(f, min_lv);
+        next_element = mesh_.facets.adjacent(f, max_lv);
     }
 
     /* ============================================================================================================= */
 
-    void StreamlineVolumetricTracing::set_per_vertex_directions(
+    void StreamlineVolumetricTracer::set_per_vertex_directions(
         const GEO::index_t N,
         const double* directions
         ) {
         // TODO
     }
 
-    void StreamlineVolumetricTracing::set_per_cell_directions(
+    void StreamlineVolumetricTracer::set_per_cell_directions(
         const GEO::index_t N,
         const double* directions
         ) {
@@ -282,7 +282,7 @@ namespace geolio
         std::ranges::copy_n(directions, 3*N_*mesh_.cells.nb(), mesh_element_direction_.data());
     }
 
-    void StreamlineVolumetricTracing::initialize_points_locate_element(
+    void StreamlineVolumetricTracer::initialize_points_locate_element(
         ) {
         points_locate_element_.assign(points_nb_, GEO::NO_FACET);
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
@@ -292,7 +292,7 @@ namespace geolio
         }
     }
 
-    void StreamlineVolumetricTracing::trace_point(
+    void StreamlineVolumetricTracer::trace_point(
         const GEO::index_t v,
         GEO::vec3& next_point,
         GEO::index_t& next_element
@@ -321,8 +321,8 @@ namespace geolio
         d /= d_norm;
 
         /* Find intersecting edge */
-        double min_t = std::numeric_limits<double>::max();
-        GEO::index_t min_lf = GEO::NO_INDEX;
+        double max_t = -std::numeric_limits<double>::max();
+        GEO::index_t max_lf = GEO::NO_INDEX;
         for (GEO::index_t lf = 0; lf < 4; ++lf) {
             const auto& fp0 = mesh_.vertices.point(mesh_.cells.facet_vertex(c, lf, 0));
             const auto& fp1 = mesh_.vertices.point(mesh_.cells.facet_vertex(c, lf, 1));
@@ -342,22 +342,22 @@ namespace geolio
                 continue;
 
             const auto t = GEO::dot(E2, Q) / det;
-            if (t <= 1e-10) // behind p0, or p0 is on this edge
+            if (t < 0) // behind p0
                 continue;
             
-            if (t < min_t) {
-                min_t = t;
-                min_lf = lf;
+            if (t > max_t) {
+                max_t = t;
+                max_lf = lf;
             }
         }
-        if (min_lf == GEO::NO_INDEX) // the direction leads out of this facet, no exit ahead
+        if (max_lf == GEO::NO_INDEX) // the direction leads out of this facet, no exit ahead
             return;
 
         /* Output */
-        const GEO::vec3 p1 = p0+min_t*d;
+        const GEO::vec3 p1 = p0+max_t*d;
         next_point[0] = p1[0];
         next_point[1] = p1[1];
         next_point[2] = p1[2];
-        next_element = mesh_.cells.adjacent(c, min_lf);
+        next_element = mesh_.cells.adjacent(c, max_lf);
     }
 }

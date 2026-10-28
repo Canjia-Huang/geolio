@@ -12,11 +12,11 @@
 
 namespace geolio
 {
-    class StreamlineTracing {
+    class StreamlineTracer {
     public:
-        explicit StreamlineTracing(GEO::Mesh& mesh) : attribute_id_(generate_random_string(22)), mesh_(mesh) {}
+        explicit StreamlineTracer(GEO::Mesh& mesh) : attribute_id_(generate_random_string(22)), mesh_(mesh) {}
 
-        virtual ~StreamlineTracing() {
+        virtual ~StreamlineTracer() {
             if (mesh_element_direction_.is_bound())
                 mesh_element_direction_.destroy();
         }
@@ -52,9 +52,9 @@ namespace geolio
 
     /* ============================================================================================================= */
 
-    class StreamlineSurficialTracing : public StreamlineTracing {
+    class StreamlineSurficialTracer : public StreamlineTracer {
     public:
-        explicit StreamlineSurficialTracing(GEO::Mesh& mesh) : StreamlineTracing(mesh) {
+        explicit StreamlineSurficialTracer(GEO::Mesh& mesh) : StreamlineTracer(mesh) {
             assert(mesh_.vertices.dimension() > 2);
             assert(mesh_.facets.nb() > 0);
             assert(mesh_.facets.are_simplices());
@@ -68,7 +68,7 @@ namespace geolio
                     mesh_.facets.point(f, 2)));
         }
 
-        ~StreamlineSurficialTracing() override {
+        ~StreamlineSurficialTracer() override {
             if (mesh_f_unit_normal_.is_bound())
                 mesh_f_unit_normal_.destroy();
         }
@@ -88,9 +88,9 @@ namespace geolio
 
     /* ============================================================================================================= */
 
-    class StreamlineVolumetricTracing : public StreamlineTracing {
+    class StreamlineVolumetricTracer : public StreamlineTracer {
     public:
-        explicit StreamlineVolumetricTracing(GEO::Mesh& mesh) : StreamlineTracing(mesh) {
+        explicit StreamlineVolumetricTracer(GEO::Mesh& mesh) : StreamlineTracer(mesh) {
             assert(mesh_.cells.nb() > 0);
             assert(mesh_.cells.are_simplices());
             mesh_AABB_.initialize(mesh_);
