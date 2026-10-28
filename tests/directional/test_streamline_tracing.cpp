@@ -19,7 +19,7 @@ namespace geolio::test
 
         virtual void initialize_tracer() = 0;
 
-        void save_result() {
+        void save_result(const std::shared_ptr<StreamlineTracer>& tracer) {
             GEO::Attribute<GEO::index_t> mesh_v_tracing_times(mesh_.vertices.attributes(), "tracing_times");
             GEO::Attribute<GEO::index_t> mesh_e_point_idx(mesh_.edges.attributes(), "point_idx");
             tracer->append_tracing_points_to_mesh(mesh_, &mesh_v_tracing_times, &mesh_e_point_idx);
@@ -33,8 +33,6 @@ namespace geolio::test
 
         const GEO::index_t N_ = 3;
         std::vector<double> directions_;
-
-        std::unique_ptr<StreamlineTracer> tracer;
     };
 
     class StreamlineSurficialTracerTest : public StreamlineTracerTest {
@@ -64,10 +62,9 @@ namespace geolio::test
         }
 
         void initialize_tracer() override {
-            tracer = std::make_unique<StreamlineSurficialTracer>(mesh_);
-            const auto surf_tracer = dynamic_cast<StreamlineSurficialTracer*>(tracer.get());
-            surf_tracer->set_initial_points(points_nb_, points_.data());
-            surf_tracer->set_per_facet_directions(N_, directions_.data());
+            tracer_ = std::make_shared<StreamlineSurficialTracer>(mesh_);
+            tracer_->set_initial_points(points_nb_, points_.data());
+            tracer_->set_per_facet_directions(N_, directions_.data());
         }
 
         void SetUp() override {
@@ -77,12 +74,14 @@ namespace geolio::test
             initialize_directions();
             initialize_tracer();
         }
+
+        std::shared_ptr<StreamlineSurficialTracer> tracer_;
     };
 
     TEST_F(StreamlineSurficialTracerTest, constant_steps) {
-        tracer->trace(30);
-        tracer->smooth();
-        save_result();
+        tracer_->trace(30);
+        tracer_->smooth();
+        save_result(tracer_);
     }
 
     class StreamlineVolumetricTracerTest : public StreamlineTracerTest {
@@ -115,10 +114,9 @@ namespace geolio::test
         }
 
         void initialize_tracer() override {
-            tracer = std::make_unique<StreamlineVolumetricTracer>(mesh_);
-            const auto surf_tracer = dynamic_cast<StreamlineVolumetricTracer*>(tracer.get());
-            surf_tracer->set_initial_points(points_nb_, points_.data());
-            surf_tracer->set_per_cell_directions(N_, directions_.data());
+            tracer_ = std::make_shared<StreamlineVolumetricTracer>(mesh_);
+            tracer_->set_initial_points(points_nb_, points_.data());
+            tracer_->set_per_cell_directions(N_, directions_.data());
         }
 
         void SetUp() override {
@@ -128,11 +126,13 @@ namespace geolio::test
             initialize_directions();
             initialize_tracer();
         }
+
+        std::shared_ptr<StreamlineVolumetricTracer> tracer_;
     };
 
     TEST_F(StreamlineVolumetricTracerTest, constant_steps) {
-        tracer->trace(30);
-        tracer->smooth();
-        save_result();
+        tracer_->trace(30);
+        tracer_->smooth();
+        save_result(tracer_);
     }
 }

@@ -25,8 +25,6 @@ namespace geolio
 
         void trace(GEO::index_t iterations);
 
-        void smooth(GEO::index_t iterations = 3, double damping = 0.5);
-
         const auto& points() { return points_; }
 
         void append_tracing_points_to_mesh(
@@ -39,7 +37,7 @@ namespace geolio
 
         GEO::vec3 get_point_direction(GEO::index_t v);
 
-        virtual void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element) = 0;
+        virtual void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element, GEO::index_t& next_local_idx) = 0;
 
         const std::string attribute_id_;
 
@@ -48,7 +46,7 @@ namespace geolio
         GEO::index_t points_nb_ = 0;
         GEO::index_t tracing_times_ = 0;
         std::vector<double> points_; // 3*points_nb*(tracing_times+1)
-        std::vector<GEO::index_t> points_locate_element_; // points_nb, may be GEO::NO_INDEX
+        std::vector<std::pair<GEO::index_t, GEO::index_t>> points_locate_element_; // points_nb*(tracing_times+1), (f, lv) or (c, lf)
 
         GEO::index_t N_ = 0;
         GEO::Attribute<double> mesh_element_direction_;
@@ -81,10 +79,12 @@ namespace geolio
 
         void set_per_facet_directions(GEO::index_t N, const double* directions);
 
+        void smooth(GEO::index_t iterations = 3, double damping = 0.5, bool constraint_on_surface = true);
+
     protected:
         void initialize_points_locate_element() override;
 
-        void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element) override;
+        void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element, GEO::index_t& next_local_idx) override;
 
         GEO::MeshFacetsAABB mesh_AABB_;
         GEO::Attribute<GEO::vec3> mesh_f_unit_normal_;
@@ -104,10 +104,12 @@ namespace geolio
 
         void set_per_cell_directions(GEO::index_t N, const double* directions);
 
+        void smooth(GEO::index_t iterations = 3, double damping = 0.5);
+
     protected:
         void initialize_points_locate_element() override;
 
-        void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element) override;
+        void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element, GEO::index_t& next_local_idx) override;
 
         GEO::MeshCellsAABB mesh_AABB_;
     };
