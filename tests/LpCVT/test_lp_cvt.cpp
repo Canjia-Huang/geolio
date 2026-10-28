@@ -1437,7 +1437,7 @@ namespace geolio::test
     TEST_F(LpCVTTestExample, example_anisotropic) {
         /* Compute frame field */
         FrameField frame_field;
-        frame_field.create_curvature_directions(mesh, 45.0);
+        frame_field.create_curvature_directions(mesh, false, 45.0);
         const auto& frames = frame_field.frames();
         ASSERT_EQ(frames.size(), 9*mesh.facets.nb());
 

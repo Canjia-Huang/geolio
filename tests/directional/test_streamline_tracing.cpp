@@ -31,7 +31,7 @@ namespace geolio::test
 
             /* Directional */
             FrameField frame_field;
-            frame_field.create_curvature_directions(mesh_, 45.0);
+            frame_field.create_curvature_directions(mesh_, false, 45.0);
             const auto& frames = frame_field.frames();
             const GEO::index_t frames_size = 3*N_*mesh_.facets.nb();
             ASSERT_EQ(frames.size(), frames_size);

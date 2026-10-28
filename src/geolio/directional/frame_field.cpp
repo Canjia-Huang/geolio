@@ -8,6 +8,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/numerics/matrix_util.h>
+#include <geogram/points/nn_search.h>
 #include <geolio/common/log.h>
 #include <algorithm>
 #include <cmath>
@@ -59,7 +60,7 @@ namespace {
          * @param[in] v the input 3d vector
          * @return the representation of @p v in the local 2d basis.
          */
-        vec2 project(const vec3& v) const {
+        [[nodiscard]] vec2 project(const vec3& v) const {
             return {dot(v, X), dot(v, Y)};
         }
 
@@ -68,7 +69,7 @@ namespace {
          * @param[in] v the input 2d vector in the local basis
          * @return the representation of @p v in the global 3d basis.
          */
-        vec3 unproject(const vec2& v) const {
+        [[nodiscard]] vec3 unproject(const vec2& v) const {
             return v.x * X + v.y * Y;
         }
 
@@ -174,7 +175,7 @@ namespace {
          * @brief Gets the estimated direction of maximum curvature.
          * @return the estimated direction of maximum curvature.
          */
-        const vec3& Kmax() const {
+        [[nodiscard]] const vec3& Kmax() const {
             return eigen_vector(0);
         }
 
@@ -182,7 +183,7 @@ namespace {
          * @brief Gets the estimated direction of minimum curvature.
          * @return the estimated direction of minimum curvature.
          */
-        const vec3& Kmin() const {
+        [[nodiscard]] const vec3& Kmin() const {
             return eigen_vector(1);
         }
 
@@ -190,7 +191,7 @@ namespace {
          * @brief Gets the estimated maximum curvature.
          * @return the estimated maximum curvature.
          */
-        double kmax() const {
+        [[nodiscard]] double kmax() const {
             return eigen_value(0);
         }
 
@@ -198,7 +199,7 @@ namespace {
          * @brief Gets the estimated minimum curvature.
          * @return the estimated minimum curvature.
          */
-        double kmin() const {
+        [[nodiscard]] double kmin() const {
             return eigen_value(1);
         }
 
@@ -231,7 +232,7 @@ namespace {
          *  sorted by increasing eigenvalue magnitude
          * @return the @p i-th eigenvector.
          */
-        const vec3& eigen_vector(const int i) const {
+        [[nodiscard]] const vec3& eigen_vector(const int i) const {
             return axis_[i_[i]];
         }
 
@@ -241,7 +242,7 @@ namespace {
          *  sorted by increasing magnitude
          * @return the @p i-th eigenvalue.
          */
-        double eigen_value(const int i) const {
+        [[nodiscard]] double eigen_value(const int i) const {
             return eigen_value_[i_[i]];
         }
 
@@ -366,12 +367,44 @@ namespace {
             min_magnitude[f] = ::fabs(NC.kmin());
         }
     }
+
+    /**
+     * @brief Finds, for every cell of a tetrahedral mesh, the facet whose center is nearest
+     *        to the center of the cell.
+     * @details This is the extrapolation step of
+     *          ``GEO::FrameField::create_from_surface_mesh()`` in volumetric mode: the field
+     *          is known on the facets, and a cell inherits the frame of the nearest facet.
+     *          Geogram performs the lookup with the same kind of search structure, over the
+     *          facet centers, hence the same notion of "nearest".
+     * @param[in] M a const reference to the mesh
+     * @return one facet index per cell, in cell order.
+     */
+    std::vector<index_t> nearest_facet_per_cell(const Mesh& M) {
+        std::vector<double> centers(3 * M.facets.nb());
+        for (const index_t f : M.facets) {
+            const vec3 c = Geom::mesh_facet_center(M, f);
+            centers[3 * f] = c.x;
+            centers[3 * f + 1] = c.y;
+            centers[3 * f + 2] = c.z;
+        }
+
+        NearestNeighborSearch_var NN = NearestNeighborSearch::create(3, "default");
+        NN->set_points(M.facets.nb(), centers.data());
+
+        std::vector<index_t> nearest(M.cells.nb(), NO_FACET);
+        for (const index_t t : M.cells) {
+            const vec3 c = Geom::mesh_cell_center(M, t);
+            nearest[t] = NN->get_nearest_neighbor(c.data());
+        }
+        return nearest;
+    }
 }
 
 namespace geolio
 {
     void FrameField::create_curvature_directions(
         const GEO::Mesh& mesh,
+        const bool volumetric,
         const double sharp_angle_threshold,
         const double autoscale
         ) {
@@ -384,7 +417,24 @@ namespace geolio
             return;
         }
 
-        geo_assert(mesh.facets.are_simplices());
+        assert(mesh.facets.are_simplices());
+
+        // Volumetric frames are attached to the cells, so a mesh that has none cannot hold
+        // them. Rather than publish an empty field, fall back to the surface field that the
+        // curvature estimate defines directly.
+        bool volumetric_mode = volumetric;
+        if (volumetric_mode && mesh.cells.nb() == 0) {
+            LOG::WARN("volumetric was requested but the mesh has no cell: building the "
+                      "surface frame field instead.");
+            volumetric_mode = false;
+        }
+        if (volumetric_mode) {
+            // The base class' volumetric mode puts the points of its search structure at
+            // mesh_tet_center() of every cell, which is the centroid of the cell only for a
+            // tetrahedron.
+            assert(mesh.cells.are_simplices());
+        }
+        volumetric_ = volumetric_mode;
 
         // Step 1: the two principal curvature directions and their magnitudes, one of
         // each per facet.
@@ -398,42 +448,60 @@ namespace geolio
             certainty_max_, certainty_min_
         );
 
-        // Step 2: the factor that turns the raw magnitudes into the sizes of the frame
+        // Step 2: the facet each cell inherits its frame from, in volumetric mode. The
+        // lookup uses the facet centers, as in the base class' extrapolation.
+        std::vector<GEO::index_t> cell_facet;
+        if (volumetric_mode) {
+            cell_facet = nearest_facet_per_cell(mesh);
+        }
+
+        // Step 3: the factor that turns the raw magnitudes into the sizes of the frame
         // vectors. They are curvature measures rather than curvatures - lengths proportional
         // to the local facet area, see the class documentation - so autoscale fixes the
-        // overall scale of a field that still follows the local sampling density.
-        double scale = 1.0;
-        if (const double max_magnitude = *std::ranges::max_element(certainty_max_);
-            max_magnitude > 0.0
-            ) {
-            if (autoscale > 0.0) {
-                scale = autoscale / max_magnitude;
-                LOG::DEBUG(
-                    "Largest curvature magnitude {}, scaling the frame sizes by {}",
-                    max_magnitude, scale
-                );
+        // overall scale of a field that still follows the local sampling density. The
+        // reference is the largest magnitude that is actually published: over the facets in
+        // surface mode, over the facets the cells inherit from in volumetric mode, so that
+        // autoscale always names the largest size of the field.
+        double reference_magnitude = 0.0;
+        if (volumetric_mode) {
+            for (const GEO::index_t t : mesh.cells) {
+                reference_magnitude = std::max(reference_magnitude, certainty_max_[cell_facet[t]]);
+            }
+        } else {
+            for (const double magnitude : certainty_max_) {
+                reference_magnitude = std::max(reference_magnitude, magnitude);
             }
         }
 
-        // Step 3: the base class allocates the frame storage, the facet centers and the
-        // spatial search, and solves for its own cross field, which Step 4 overwrites.
-        // Its members are private, so running it is the only way to obtain that storage,
-        // and it is the price of keeping the inherited queries consistent with the frames
-        // published below (see the class documentation).
+        double scale = 1.0;
+        if (reference_magnitude > 0.0 && autoscale > 0.0) {
+            scale = autoscale / reference_magnitude;
+            LOG::DEBUG(
+                "Largest curvature magnitude {}, scaling the frame sizes by {}",
+                reference_magnitude, scale
+            );
+        }
+
+        // Step 4: the base class allocates the frame storage, the centers and the spatial
+        // search, and solves for its own cross field, which Step 5 overwrites. Its members
+        // are private, so running it is the only way to obtain that storage, and it is the
+        // price of keeping the inherited queries consistent with the frames published below
+        // (see the class documentation). In volumetric mode it allocates one frame per cell
+        // and sets the search structure up on the cell centers, which is precisely the
+        // storage the extrapolated field needs.
         LOG::DEBUG(
             "Initializing the frame storage and the spatial search with the base class' "
             "own field, which the curvature directions then replace"
         );
-        GEO::FrameField::create_from_surface_mesh(mesh, false, sharp_angle_threshold);
+        GEO::FrameField::create_from_surface_mesh(mesh, volumetric_mode, sharp_angle_threshold);
 
-        // Step 4: the frames themselves. Writing through frames() needs a const_cast: it
+        // Step 5: the frames themselves. Writing through frames() needs a const_cast: it
         // is the only accessor Geogram exposes for its private frames_, and it is well
         // defined here because this member function is non-const, hence the object is not
         // const.
         auto& frames = const_cast<GEO::vector<double>&>(this->frames());
-        geo_assert(frames.size() == 9 * mesh.facets.nb());
 
-        for (const GEO::index_t f : mesh.facets) {
+        const auto write_facet_frame = [&](const GEO::index_t f, double* frame) {
             const MeshFacetBasis basis(mesh, f);
 
             const double max_angle = atan2(
@@ -453,15 +521,37 @@ namespace geolio
             U *= scale * certainty_max_[f];
             V *= scale * certainty_min_[f];
 
-            frames[9 * f + 0] = U.x;
-            frames[9 * f + 1] = U.y;
-            frames[9 * f + 2] = U.z;
-            frames[9 * f + 3] = V.x;
-            frames[9 * f + 4] = V.y;
-            frames[9 * f + 5] = V.z;
-            frames[9 * f + 6] = W.x;
-            frames[9 * f + 7] = W.y;
-            frames[9 * f + 8] = W.z;
+            frame[0] = U.x;
+            frame[1] = U.y;
+            frame[2] = U.z;
+            frame[3] = V.x;
+            frame[4] = V.y;
+            frame[5] = V.z;
+            frame[6] = W.x;
+            frame[7] = W.y;
+            frame[8] = W.z;
+        };
+
+        if (!volumetric_mode) {
+            geo_assert(frames.size() == 9 * mesh.facets.nb());
+            for (const GEO::index_t f : mesh.facets) {
+                write_facet_frame(f, &frames[9 * f]);
+            }
+            return;
+        }
+
+        geo_assert(frames.size() == 9 * mesh.cells.nb());
+
+        // A facet frame is shared by every cell it is the nearest facet of, so each one is
+        // computed once and then copied to the cells that inherit it.
+        std::vector<double> facet_frames(9 * mesh.facets.nb());
+        for (const GEO::index_t f : mesh.facets) {
+            write_facet_frame(f, &facet_frames[9 * f]);
+        }
+        for (const GEO::index_t t : mesh.cells) {
+            std::copy_n(
+                facet_frames.data() + 9 * cell_facet[t], 9, frames.data() + 9 * t
+            );
         }
     }
 
@@ -473,6 +563,11 @@ namespace geolio
         LOG::TRACE("{}({})", __FUNCTION__, max_aspect);
 
         const auto& frames = this->frames();
+
+        if (volumetric_)
+            throw std::logic_error(
+                "The frame field is volumetric: it holds one frame per tetrahedron, while "
+                "this function computes one matrix per facet");
 
         if (frames.size() != 9*mesh.facets.nb())
             throw std::logic_error(

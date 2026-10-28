@@ -16,12 +16,12 @@
 #include <gtest/gtest.h>
 #include "../utils.h"
 
-// geolio::FrameField adds one entry point to the inherited ones, and the three ways of
-// building a field differ in what they put in the frame vectors:
+// geolio::FrameField adds one entry point to the inherited ones, and the ways of building a
+// field differ in what they put in the frame vectors and in where they attach them:
 //
-//   create_curvature_directions(M, true, autoscale)  curvature directions, sized
-//   create_curvature_directions(M, false)            curvature directions, unit (the default)
-//   create_from_surface_mesh(M, false)               the inherited cross field, unit
+//   create_curvature_directions(M)        curvature directions, one frame per facet, sized
+//   create_curvature_directions(M, true)  the same frames, one per cell, extrapolated
+//   create_from_surface_mesh(M, false)    the inherited cross field, unit vectors
 //
 // The curvature magnitudes are private, so every size checked below is read back from the
 // published frames: with autoscale = 0 the length of U is exactly the magnitude the estimator
@@ -378,6 +378,58 @@ namespace geolio::test
         }
 
         /**
+         * @brief Builds a cube split into six tetrahedra, with its boundary triangulated.
+         * @details All six tetrahedra share the diagonal that joins the corner at the origin
+         *          to its opposite, so the boundary of that decomposition is exactly the
+         *          twelve triangles below: the surface and the volume are conforming. This is
+         *          the volumetric counterpart of make_plane(), small enough for the frame of
+         *          every cell to be checked one by one.
+         * @param[out] M the mesh to fill; it is cleared first
+         */
+        void make_tet_cube(GEO::Mesh& M) {
+            M.clear();
+
+            M.vertices.create_vertices(8);
+            M.vertices.point<3>(0) = GEO::vec3(0.0, 0.0, 0.0);
+            M.vertices.point<3>(1) = GEO::vec3(1.0, 0.0, 0.0);
+            M.vertices.point<3>(2) = GEO::vec3(1.0, 1.0, 0.0);
+            M.vertices.point<3>(3) = GEO::vec3(0.0, 1.0, 0.0);
+            M.vertices.point<3>(4) = GEO::vec3(0.0, 0.0, 1.0);
+            M.vertices.point<3>(5) = GEO::vec3(1.0, 0.0, 1.0);
+            M.vertices.point<3>(6) = GEO::vec3(1.0, 1.0, 1.0);
+            M.vertices.point<3>(7) = GEO::vec3(0.0, 1.0, 1.0);
+
+            // The six faces, each split along the diagonal that the tetrahedra below induce.
+            const GEO::index_t triangles[12][3] = {
+                {0, 1, 2}, {0, 2, 3}, // z = 0
+                {4, 5, 6}, {4, 6, 7}, // z = 1
+                {0, 4, 5}, {0, 5, 1}, // y = 0
+                {2, 3, 6}, {3, 7, 6}, // y = 1
+                {0, 3, 7}, {0, 7, 4}, // x = 0
+                {1, 2, 6}, {1, 5, 6}, // x = 1
+            };
+            M.facets.create_triangles(12);
+            for (GEO::index_t f = 0; f < 12; ++f) {
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    M.facets.set_vertex(f, lv, triangles[f][lv]);
+                }
+            }
+            M.facets.connect();
+
+            const GEO::index_t tetrahedra[6][4] = {
+                {0, 1, 2, 6}, {0, 2, 3, 6}, {0, 3, 7, 6},
+                {0, 7, 4, 6}, {0, 4, 5, 6}, {0, 5, 1, 6},
+            };
+            M.cells.create_tets(6);
+            for (GEO::index_t t = 0; t < 6; ++t) {
+                for (GEO::index_t lv = 0; lv < 4; ++lv) {
+                    M.cells.set_vertex(t, lv, tetrahedra[t][lv]);
+                }
+            }
+            M.cells.connect();
+        }
+
+        /**
          * @brief Reads the anisotropy matrix of one facet out of the packed output.
          * @param[in] matrices the 9 * M.facets.nb() coefficients, row-major per facet
          * @param[in] f the facet index
@@ -477,7 +529,7 @@ namespace geolio::test
      */
     TEST_F(FrameFieldTest, directions_are_the_curvature_lines) {
         FrameField field;
-        field.create_curvature_directions(mesh, 45.0, 0.0);
+        field.create_curvature_directions(mesh, false, 45.0, 0.0);
 
         ASSERT_EQ(field.frames().size(), 9 * mesh.facets.nb());
         for (const auto& f : mesh.facets) {
@@ -497,7 +549,7 @@ namespace geolio::test
      */
     TEST_F(FrameFieldTest, sizes_are_the_curvature_magnitudes) {
         FrameField field;
-        field.create_curvature_directions(mesh, 45.0, 0.0);
+        field.create_curvature_directions(mesh, false, 45.0, 0.0);
 
         const std::vector<double> lengths_u = frame_lengths(field, mesh, 0);
         const std::vector<double> lengths_v = frame_lengths(field, mesh, 1);
@@ -523,7 +575,7 @@ namespace geolio::test
      */
     TEST_F(FrameFieldTest, autoscale_normalizes_the_largest_size) {
         FrameField raw;
-        raw.create_curvature_directions(mesh, 45.0, 0.0);
+        raw.create_curvature_directions(mesh, false, 45.0, 0.0);
         const std::vector<double> raw_u = frame_lengths(raw, mesh, 0);
         const std::vector<double> raw_v = frame_lengths(raw, mesh, 1);
         const double max_raw_u = max_of(raw_u);
@@ -531,7 +583,7 @@ namespace geolio::test
 
         constexpr double autoscale = 2.0;
         FrameField scaled;
-        scaled.create_curvature_directions(mesh, 45.0, autoscale);
+        scaled.create_curvature_directions(mesh, false, 45.0, autoscale);
         const std::vector<double> scaled_u = frame_lengths(scaled, mesh, 0);
         const std::vector<double> scaled_v = frame_lengths(scaled, mesh, 1);
 
@@ -557,7 +609,7 @@ namespace geolio::test
         GEO::Mesh coarse;
         make_sphere(coarse, radius, 32, 16);
         FrameField on_coarse;
-        on_coarse.create_curvature_directions(coarse, true, 0.0);
+        on_coarse.create_curvature_directions(coarse, false, 45.0, 0.0);
 
         std::vector<double> measure_ratio_coarse;
         std::vector<double> areas_coarse;
@@ -580,7 +632,7 @@ namespace geolio::test
         GEO::Mesh fine;
         make_sphere(fine, radius, 64, 32);
         FrameField on_fine;
-        on_fine.create_curvature_directions(fine, true, 0.0);
+        on_fine.create_curvature_directions(fine, false, 45.0, 0.0);
 
         std::vector<double> measure_ratio_fine;
         std::vector<double> areas_fine;
@@ -608,7 +660,7 @@ namespace geolio::test
         make_plane(plane, 4);
 
         FrameField field;
-        field.create_curvature_directions(plane, true, 0.0);
+        field.create_curvature_directions(plane, false, 45.0, 0.0);
 
         ASSERT_EQ(field.frames().size(), 9 * plane.facets.nb());
         for (const auto& f : plane.facets) {
@@ -621,6 +673,141 @@ namespace geolio::test
     }
 
     /**
+     * @brief A volumetric field carries one frame per cell, each one copied from the facet
+     *        whose center is nearest to the center of the cell.
+     * @details This is the extrapolation the inherited field performs in volumetric mode: the
+     *          curvature estimate stays a surface quantity and the volume only inherits it.
+     *          Comparing against a surface field built from the same mesh pins down both the
+     *          values and the choice of the source facet.
+     */
+    TEST_F(FrameFieldTest, volumetric_frames_are_the_nearest_facet_frames) {
+        GEO::Mesh cube;
+        make_tet_cube(cube);
+
+        FrameField surface;
+        surface.create_curvature_directions(cube, false, 45.0, 0.0);
+        ASSERT_EQ(surface.frames().size(), 9 * cube.facets.nb());
+
+        FrameField volume;
+        volume.create_curvature_directions(cube, true, 45.0, 0.0);
+        ASSERT_EQ(volume.frames().size(), 9 * cube.cells.nb());
+
+        for (const auto& t : cube.cells) {
+            const GEO::vec3 center = GEO::Geom::mesh_cell_center(cube, t);
+
+            // Distance to the nearest facet center, computed the slow way on purpose: the
+            // field uses a search structure, and ties must not make this test depend on the
+            // order in which that structure visits equidistant facets.
+            double nearest_sq_dist = std::numeric_limits<double>::max();
+            for (const auto& f : cube.facets) {
+                nearest_sq_dist = std::min(
+                    nearest_sq_dist,
+                    GEO::Geom::distance2(center, GEO::Geom::mesh_facet_center(cube, f))
+                    );
+            }
+
+            bool found = false;
+            for (const auto& f : cube.facets) {
+                const double sq_dist = GEO::Geom::distance2(center, GEO::Geom::mesh_facet_center(cube, f));
+                if (::fabs(sq_dist - nearest_sq_dist) > 1e-12 * (1.0 + nearest_sq_dist)) {
+                    continue;
+                }
+                bool same = true;
+                for (GEO::index_t c = 0; c < 9; ++c) {
+                    same = same && volume.frames()[9 * t + c] == surface.frames()[9 * f + c];
+                }
+                found = found || same;
+            }
+            EXPECT_TRUE(found)
+                << "cell " << t << " does not carry the frame of any nearest facet";
+        }
+    }
+
+    /**
+     * @brief A volumetric field publishes the frame of every cell to the inherited nearest
+     *        frame queries, i.e. the search structure was set up on the cell centers.
+     */
+    TEST_F(FrameFieldTest, volumetric_queries_agree_with_the_cell_frames) {
+        GEO::Mesh cube;
+        make_tet_cube(cube);
+
+        FrameField field;
+        field.create_curvature_directions(cube, true, 45.0, 1.0);
+
+        ASSERT_EQ(field.frames().size(), 9 * cube.cells.nb());
+        for (const auto& t : cube.cells) {
+            const GEO::vec3 center = GEO::Geom::mesh_cell_center(cube, t);
+            double queried[9];
+            field.get_nearest_frame(center.data(), queried);
+            for (GEO::index_t c = 0; c < 9; ++c) {
+                EXPECT_NEAR(queried[c], field.frames()[9 * t + c], 1e-9);
+            }
+        }
+    }
+
+    /**
+     * @brief autoscale names the largest size the field publishes, which in volumetric mode
+     *        is the largest one among the facets the cells inherit from.
+     */
+    TEST_F(FrameFieldTest, volumetric_autoscale_normalizes_the_largest_published_size) {
+        GEO::Mesh cube;
+        make_tet_cube(cube);
+
+        constexpr double autoscale = 2.0;
+        FrameField field;
+        field.create_curvature_directions(cube, true, 45.0, autoscale);
+
+        double largest = 0.0;
+        for (const auto& t : cube.cells) {
+            largest = std::max(largest, GEO::length(frame_vector(field, t, 0)));
+        }
+        EXPECT_GT(largest, 0.0) << "a cube is not flat, so its curvature magnitudes are not zero";
+        EXPECT_NEAR(largest, autoscale, 1e-12);
+    }
+
+    /**
+     * @brief A volumetric request on a mesh without any cell falls back to the surface field,
+     *        so the object stays usable.
+     */
+    TEST_F(FrameFieldTest, volumetric_request_without_cells_builds_the_surface_field) {
+        GEO::Mesh plane;
+        make_plane(plane, 2);
+
+        FrameField surface;
+        surface.create_curvature_directions(plane, false, 45.0, 0.0);
+        FrameField fallback;
+        fallback.create_curvature_directions(plane, true, 45.0, 0.0);
+
+        ASSERT_EQ(fallback.frames().size(), 9 * plane.facets.nb());
+        for (GEO::index_t c = 0; c < GEO::index_t(surface.frames().size()); ++c) {
+            EXPECT_NEAR(fallback.frames()[c], surface.frames()[c], 0.0);
+        }
+
+        // The fallback field is a surface one, so the anisotropy matrices are defined for it.
+        std::vector<double> matrices;
+        fallback.compute_anisotropy_matrices(plane, 3.0, matrices);
+        EXPECT_EQ(matrices.size(), 9 * plane.facets.nb());
+    }
+
+    /**
+     * @brief The anisotropy matrices are defined for a surface field only: a volumetric one
+     *        carries one frame per cell, so there is no facet to attach a matrix to.
+     * @details The output is left untouched when the check fails, so a caller can reuse its
+     *          buffer for another attempt.
+     */
+    TEST_F(FrameFieldTest, volumetric_field_has_no_facet_anisotropy_matrices) {
+        GEO::Mesh cube;
+        make_tet_cube(cube);
+
+        FrameField field;
+        field.create_curvature_directions(cube, true, 45.0, 0.0);
+
+        std::vector<double> matrices{1.0, 2.0, 3.0};
+        EXPECT_THROW(field.compute_anisotropy_matrices(cube, 3.0, matrices), std::logic_error);
+        EXPECT_EQ(matrices.size(), 3);
+    }
+
+    /**
      * @brief The anisotropy matrices are symmetric positive-definite metrics of unit
      *        determinant whose normal weight is 1.
      * @details They are built as @f$R\,\mathrm{diag}(s, 1/s, 1)\,R^{\mathsf{T}}@f$ from an
@@ -630,7 +817,7 @@ namespace geolio::test
      */
     TEST_F(FrameFieldTest, anisotropy_matrices_are_unit_determinant_metrics) {
         FrameField field;
-        field.create_curvature_directions(mesh, 45.0, 0.0);
+        field.create_curvature_directions(mesh, false, 45.0, 0.0);
 
         std::vector<double> matrices;
         field.compute_anisotropy_matrices(mesh, 3.0, matrices);
@@ -676,7 +863,7 @@ namespace geolio::test
         make_cylinder(cylinder, 1.0, 3.0, 32, 18);
 
         FrameField field;
-        field.create_curvature_directions(cylinder, 45.0, 0.0);
+        field.create_curvature_directions(cylinder, false, 45.0, 0.0);
 
         std::vector<double> matrices;
         field.compute_anisotropy_matrices(cylinder, max_aspect, matrices);
@@ -734,7 +921,7 @@ namespace geolio::test
         make_torus(torus, big_radius, small_radius, 48, 24, true);
 
         FrameField field;
-        field.create_curvature_directions(torus, 45.0, 0.0);
+        field.create_curvature_directions(torus, false, 45.0, 0.0);
 
         std::vector<double> matrices;
         field.compute_anisotropy_matrices(torus, 2.0, matrices);
@@ -769,7 +956,7 @@ namespace geolio::test
         make_plane(plane, 4);
 
         FrameField field;
-        field.create_curvature_directions(plane, 45.0, 0.0);
+        field.create_curvature_directions(plane, false, 45.0, 0.0);
 
         std::vector<double> matrices;
         field.compute_anisotropy_matrices(plane, 4.0, matrices);
@@ -790,7 +977,7 @@ namespace geolio::test
         make_cylinder(cylinder, 1.0, 3.0, 32, 18);
 
         FrameField field;
-        field.create_curvature_directions(cylinder, 45.0, 0.0);
+        field.create_curvature_directions(cylinder, false, 45.0, 0.0);
 
         const GEO::vec3 axis(0.0, 0.0, 1.0);
         double previous = 0.0;
@@ -833,9 +1020,9 @@ namespace geolio::test
      */
     TEST_F(FrameFieldTest, anisotropy_matrices_do_not_depend_on_the_autoscale) {
         FrameField raw;
-        raw.create_curvature_directions(mesh, 45.0, 0.0);
+        raw.create_curvature_directions(mesh, false, 45.0, 0.0);
         FrameField scaled;
-        scaled.create_curvature_directions(mesh, 45.0, 2.0);
+        scaled.create_curvature_directions(mesh, false, 45.0, 2.0);
 
         std::vector<double> from_raw;
         std::vector<double> from_scaled;
@@ -877,7 +1064,7 @@ namespace geolio::test
         make_plane(plane, 2);
 
         FrameField field;
-        field.create_curvature_directions(plane, 45.0, 0.0);
+        field.create_curvature_directions(plane, false, 45.0, 0.0);
 
         std::vector<double> matrices{1.0, 2.0, 3.0};
         EXPECT_THROW(field.compute_anisotropy_matrices(mesh, 3.0, matrices), std::logic_error);
@@ -895,7 +1082,7 @@ namespace geolio::test
      */
     TEST_F(FrameFieldTest, inherited_queries_agree_with_the_published_frames) {
         FrameField field;
-        field.create_curvature_directions(mesh, 45.0, 1.0);
+        field.create_curvature_directions(mesh, false, 45.0, 1.0);
 
         for (const auto& f : mesh.facets) {
             const GEO::vec3 center = GEO::Geom::mesh_facet_center(mesh, f);
@@ -912,7 +1099,7 @@ namespace geolio::test
         ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes.geogram"));
 
         FrameField frame_field;
-        frame_field.create_curvature_directions(mesh, 45.0);
+        frame_field.create_curvature_directions(mesh, false, 45.0);
         const auto& frames = frame_field.frames();
         ASSERT_EQ(frames.size(), 9*mesh.facets.nb());
 

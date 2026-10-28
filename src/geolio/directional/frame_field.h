@@ -14,17 +14,33 @@ namespace geolio
          * @brief Creates a frame field aligned with the principal curvature directions,
          *        optionally keeping their magnitudes as the vector sizes.
          *
-         * @param[in] mesh the input mesh, triangulated
-         * \param[in] sharp_angle_threshold angles smaller than this threshold
+         * The curvature is estimated on the facets, so the field is defined on the surface.
+         * By default the frames are attached to those facets. With @p volumetric they are
+         * attached to the cells instead, the way
+         * ``GEO::FrameField::create_from_surface_mesh()`` extrapolates a surface field to a
+         * volume: every cell receives the frame of the facet whose center is nearest to the
+         * center of the cell.
+         *
+         * @param[in] mesh the input mesh, triangulated; it must also be tetrahedralized when
+         *                 @p volumetric is true
+         * @param[in] volumetric if true, publish one frame per tetrahedron instead of one per
+         *                 facet; a mesh without any cell is built as a surface field, with a
+         *                 warning
+         * @param[in] sharp_angle_threshold angles smaller than this threshold
          *                 (in degrees) are considered to be sharp features
-         * @param[in] autoscale if positive, normalize the sizes so that the largest one is
-         *                 exactly @p autoscale; if 0, store the raw magnitudes. A negative or
-         *                 non-finite value is rejected, as is a mesh without facets, both with
-         *                 an error or warning message and without touching the object.
-         * @warning With @p preserve_size, flat facets get zero-length vectors; see the class
-         *          documentation.
+         * @param[in] autoscale if positive, normalize the sizes so that the largest
+         *                 published one is exactly @p autoscale; if 0, store the raw
+         *                 magnitudes. A negative or non-finite value is rejected, as is a
+         *                 mesh without facets, both with an error or warning message and
+         *                 without touching the object.
+         * @warning With @p autoscale equal to 0, flat facets get zero-length vectors; see the
+         *          class documentation.
          */
-        void create_curvature_directions(const GEO::Mesh& mesh, double sharp_angle_threshold = 45.0, double autoscale = 0.0);
+        void create_curvature_directions(
+            const GEO::Mesh& mesh,
+            bool volumetric = false,
+            double sharp_angle_threshold = 45.0,
+            double autoscale = 0.0);
 
         /**
          * @brief Computes one anisotropy matrix for each facet from the current frame field.
@@ -53,12 +69,15 @@ namespace geolio
          *                       coefficient at row @p i and column @p j is stored at
          *                       ``matrices[9 * f + 3 * i + j]``
          *
-         * @throws std::logic_error if the current frame field does not contain
-         *         exactly one frame for each facet of @p M
+         * @throws std::logic_error if the current frame field is volumetric, or if it does
+         *         not contain exactly one frame for each facet of @p M
          */
         void compute_anisotropy_matrices(const GEO::Mesh& mesh, double max_aspect, std::vector<double>& matrices) const;
 
     private:
+        /// Whether the current frames describe the cells (true) or the facets (false).
+        bool volumetric_ = false;
+
         /// The estimated @f$|k_{\max}|@f$ per facet, in facet order.
         std::vector<double> certainty_max_;
 
