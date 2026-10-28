@@ -3,7 +3,6 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "streamline_tracing.h"
-
 #include <geogram/basic/geometry_nd.h>
 
 namespace geolio
@@ -211,13 +210,18 @@ namespace geolio
                                 const double v0 = GEO::length(prev_p-ep0 - u0*edge);
                                 const double u1 = GEO::dot(next_p-ep0, edge);
                                 const double v1 = GEO::length(next_p-ep0 - u1*edge);
-                                if (const double t = (u0*v1 + u1*v0) / (v0+v1);
+                                if (const double w = v0+v1;
+                                    std::abs(w) < 1e-10) // degenerate to projection
+                                    p = ep0 + std::clamp(0.5*(u0+u1), 0.0, edge_length) * edge;
+                                else {
+                                    if (const double t = (u0*v1 + u1*v0) / w;
                                     t < 1e-10)
-                                    p = ep0;
-                                else if (t > edge_length-1e-10)
-                                    p = ep1;
-                                else
-                                    p = ep0 + t*edge;
+                                        p = ep0;
+                                    else if (t > edge_length-1e-10)
+                                        p = ep1;
+                                    else
+                                        p = ep0 + t*edge;
+                                }
                             }
                         }
                         else {
