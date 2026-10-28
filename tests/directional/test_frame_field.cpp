@@ -1213,12 +1213,27 @@ namespace geolio::test
     TEST(FrameFieldVolumeExampleTest, example) {
         GEO::Mesh mesh;
         ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes_tets.geogram"));
+        mesh.cells.connect();
         mesh.cells.compute_borders();
+        ASSERT_GT(mesh.facets.nb(), 0);
+        ASSERT_LT(mesh.facets.nb(), 4 * mesh.cells.nb()) << "the border still contains interior tet faces";
 
         FrameField frame_field;
         frame_field.create_curvature_directions(mesh, true, 45.0);
         const auto& frames = frame_field.frames();
         ASSERT_EQ(frames.size(), 9*mesh.cells.nb());
+
+        // A field whose in-plane vectors are all zero is the degenerate case this example
+        // exists to rule out: it would show a single direction per cell.
+        GEO::index_t with_in_plane_direction = 0;
+        for (const auto& c : mesh.cells) {
+            const double length_u = std::sqrt(
+                frames[9*c]*frames[9*c] + frames[9*c+1]*frames[9*c+1] + frames[9*c+2]*frames[9*c+2]);
+            if (length_u > 1e-4) {
+                ++with_in_plane_direction;
+            }
+        }
+        EXPECT_GT(with_in_plane_direction, mesh.cells.nb() / 2);
 
         /* Append frame field */
         GEO::Attribute<GEO::index_t> mesh_e_axis(mesh.edges.attributes(), "axis");

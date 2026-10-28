@@ -398,6 +398,28 @@ namespace {
         }
         return nearest;
     }
+
+    /**
+     * @brief Tests whether the facets of a mesh share edges, i.e. whether the curvature
+     *        estimator can read a dihedral angle anywhere.
+     * @details Geogram's loaders do not connect the facets of every format, and a mesh built
+     *          by hand may not either. Without that adjacency the estimator accumulates
+     *          nothing and the whole field degenerates to zero-length in-plane vectors: the
+     *          frames then only publish their normal, which is never what the caller wants
+     *          but is hard to see, hence the warning in create_curvature_directions().
+     * @param[in] M a const reference to the mesh
+     * @return true if at least one facet corner has an adjacent facet.
+     */
+    bool facets_are_connected(const Mesh& M) {
+        for (const index_t f : M.facets) {
+            for (const index_t c : M.facets.corners(f)) {
+                if (M.facet_corners.adjacent_facet(c) != NO_FACET) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }
 
 namespace geolio
@@ -418,6 +440,12 @@ namespace geolio
         }
 
         assert(mesh.facets.are_simplices());
+
+        if (!facets_are_connected(mesh)) {
+            LOG::WARN("The facets of the mesh are not connected: the dihedral angles are "
+                      "all zero, so the curvature estimate is zero. Call "
+                      "mesh.facets.connect() first.");
+        }
 
         // Volumetric frames are attached to the cells, so a mesh that has none cannot hold
         // them. Rather than publish an empty field, fall back to the surface field that the

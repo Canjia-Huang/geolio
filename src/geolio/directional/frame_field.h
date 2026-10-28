@@ -21,7 +21,9 @@ namespace geolio
          * volume: every cell receives the frame of the facet whose center is nearest to the
          * center of the cell.
          *
-         * @param[in] mesh the input mesh, triangulated; it must also be tetrahedralized when
+         * @param[in] mesh the input mesh, triangulated, with its facet adjacency computed
+         *                 (``mesh.facets.connect()``) so that the curvature estimator can
+         *                 read dihedral angles; it must also be tetrahedralized when
          *                 @p volumetric is true
          * @param[in] volumetric if true, publish one frame per tetrahedron instead of one per
          *                 facet; a mesh without any cell is built as a surface field, with a
