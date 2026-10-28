@@ -437,40 +437,45 @@ namespace geolio
         volumetric_ = volumetric_mode;
 
         // Step 1: the two principal curvature directions and their magnitudes, one of
-        // each per facet.
+        // each per facet. The curvature is a surface quantity: in volumetric mode these
+        // estimates are what the cells inherit in Step 2.
         std::vector<double> max_sincos_alpha(2 * mesh.facets.nb(), 0.0);
         std::vector<double> min_sincos_alpha(2 * mesh.facets.nb(), 0.0);
         const GEO::vector<bool> locked(mesh.facets.nb());
-        certainty_max_.assign(mesh.facets.nb(), 0.0);
-        certainty_min_.assign(mesh.facets.nb(), 0.0);
+        std::vector<double> facet_certainty_max(mesh.facets.nb(), 0.0);
+        std::vector<double> facet_certainty_min(mesh.facets.nb(), 0.0);
         estimate_min_max_curvature_direction(
             mesh, max_sincos_alpha, min_sincos_alpha, locked,
-            certainty_max_, certainty_min_
+            facet_certainty_max, facet_certainty_min
         );
 
-        // Step 2: the facet each cell inherits its frame from, in volumetric mode. The
-        // lookup uses the facet centers, as in the base class' extrapolation.
+        // Step 2: what a cell inherits in volumetric mode, namely the facet whose center is
+        // nearest to the center of the cell, and with it that facet's curvature magnitudes.
+        // The lookup uses the facet centers, as in the base class' extrapolation; the frames
+        // themselves are inherited after they are built, in Step 5.
         std::vector<GEO::index_t> cell_facet;
         if (volumetric_mode) {
             cell_facet = nearest_facet_per_cell(mesh);
+            certainty_max_.resize(mesh.cells.nb());
+            certainty_min_.resize(mesh.cells.nb());
+            for (const GEO::index_t t : mesh.cells) {
+                certainty_max_[t] = facet_certainty_max[cell_facet[t]];
+                certainty_min_[t] = facet_certainty_min[cell_facet[t]];
+            }
+        } else {
+            certainty_max_ = facet_certainty_max;
+            certainty_min_ = facet_certainty_min;
         }
 
         // Step 3: the factor that turns the raw magnitudes into the sizes of the frame
         // vectors. They are curvature measures rather than curvatures - lengths proportional
         // to the local facet area, see the class documentation - so autoscale fixes the
         // overall scale of a field that still follows the local sampling density. The
-        // reference is the largest magnitude that is actually published: over the facets in
-        // surface mode, over the facets the cells inherit from in volumetric mode, so that
-        // autoscale always names the largest size of the field.
+        // reference is the largest magnitude the field publishes, and certainty_max_ is
+        // indexed like the frames, so autoscale always names the largest size of the field.
         double reference_magnitude = 0.0;
-        if (volumetric_mode) {
-            for (const GEO::index_t t : mesh.cells) {
-                reference_magnitude = std::max(reference_magnitude, certainty_max_[cell_facet[t]]);
-            }
-        } else {
-            for (const double magnitude : certainty_max_) {
-                reference_magnitude = std::max(reference_magnitude, magnitude);
-            }
+        for (const double magnitude : certainty_max_) {
+            reference_magnitude = std::max(reference_magnitude, magnitude);
         }
 
         double scale = 1.0;
@@ -518,8 +523,8 @@ namespace geolio
 
             const vec3 W = normalize(Geom::mesh_facet_normal(mesh, f));
 
-            U *= scale * certainty_max_[f];
-            V *= scale * certainty_min_[f];
+            U *= scale * facet_certainty_max[f];
+            V *= scale * facet_certainty_min[f];
 
             frame[0] = U.x;
             frame[1] = U.y;
@@ -564,26 +569,30 @@ namespace geolio
 
         const auto& frames = this->frames();
 
-        if (volumetric_)
-            throw std::logic_error(
-                "The frame field is volumetric: it holds one frame per tetrahedron, while "
-                "this function computes one matrix per facet");
+        // A surface field holds one frame per facet, a volumetric one (built by
+        // create_curvature_directions()) one frame per cell.
+        const GEO::index_t nb_elements = volumetric_ ? mesh.cells.nb() : mesh.facets.nb();
 
-        if (frames.size() != 9*mesh.facets.nb())
+        if (frames.size() != 9*nb_elements)
             throw std::logic_error(
-                "The frame field does not match the mesh ("+std::to_string(frames.size())+" values for "+std::to_string(mesh.facets.nb())+" facets, "+std::to_string(9*mesh.facets.nb())+" expected), "
+                "The frame field does not match the mesh ("+
+                std::to_string(frames.size())+" values for "+
+                std::to_string(nb_elements)+" "+(volumetric_ ? "cells" : "facets")+
+                ", "+std::to_string(9*nb_elements)+" expected), "
                "re-compute it with create_curvature_directions()");
 
         // The curvature magnitudes give the anisotropy. When the field does not
-        // carry them (a field built by create_from_surface_mesh() or create_curvature_directions(), for instance), fall
+        // carry them (a field built by create_from_surface_mesh(), for instance), fall
         // back to the lengths of the two frame vectors: the anisotropic variant of
         // compute_principal_curvature_field() sets them to the certainty values
         // times a single common scale, so their ratio is the same anisotropy. A
         // field with unit vectors therefore yields the identity, i.e. an isotropic
-        // metric, which is what it says.
+        // metric, which is what it says. A volumetric field built by
+        // create_curvature_directions() carries the certainty of the facet each cell
+        // inherits its frame from, so the two variants agree cell by cell.
         const bool with_certainty = (
-            certainty_max_.size() == mesh.facets.nb() &&
-            certainty_min_.size() == mesh.facets.nb());
+            certainty_max_.size() == nb_elements &&
+            certainty_min_.size() == nb_elements);
         if (!with_certainty)
             LOG::WARN("The frame field carries no curvature certainty, deriving the "
                        "anisotropy from the frame vector lengths");
@@ -591,26 +600,38 @@ namespace geolio
         const double aspect_span = std::max(1.0, max_aspect) - 1.0;
 
         matrices.clear();
-        matrices.reserve(9*mesh.facets.nb());
-        for (const auto& f : mesh.facets) {
+        matrices.reserve(9*nb_elements);
+        for (GEO::index_t e = 0; e < nb_elements; ++e) {
             // Orthonormal frame (U, V, N): U is the max curvature direction, N the
-            // facet normal. The stored vectors are re-orthonormalized rather than
-            // trusted: the field stores them per facet and floating point error, or
-            // a degenerate eigen decomposition, can leave them slightly off.
-            GEO::vec3 N = GEO::Geom::mesh_facet_normal(mesh, f);
+            // third axis. The stored vectors are re-orthonormalized rather than
+            // trusted: the field stores them per element and floating point error, or
+            // a degenerate eigen decomposition, can leave them slightly off. On a
+            // facet N is the facet normal; on a cell, which has no normal of its own,
+            // it is the normal of the facet the cell inherits its frame from.
+            GEO::vec3 N;
+            if (volumetric_)
+                N = GEO::vec3(frames[9*e+6], frames[9*e+7], frames[9*e+8]);
+            else
+                N = GEO::Geom::mesh_facet_normal(mesh, e);
             if (GEO::length(N) < 1e-30)
-                N = GEO::vec3(0, 0, 1);  // degenerate facet, keep going
+                N = GEO::vec3(0, 0, 1);  // degenerate element, keep going
             N = GEO::normalize(N);
 
-            const GEO::vec3 stored_U(frames[9*f], frames[9*f+1], frames[9*f+2]);
-            const GEO::vec3 stored_V(frames[9*f+3], frames[9*f+4], frames[9*f+5]);
+            const GEO::vec3 stored_U(frames[9*e], frames[9*e+1], frames[9*e+2]);
+            const GEO::vec3 stored_V(frames[9*e+3], frames[9*e+4], frames[9*e+5]);
 
             GEO::vec3 U = stored_U;
-            U -= GEO::dot(U, N)*N;  // project into the facet plane
+            U -= GEO::dot(U, N)*N;  // project into the plane orthogonal to N
             if (GEO::length(U) < 1e-12) {
-                // No direction at all: fall back to the first edge of the facet.
-                const GEO::vec3 e = mesh.facets.point(f, 1) - mesh.facets.point(f, 0);
-                U = e - GEO::dot(e, N)*N;
+                if (volumetric_) {
+                    // No direction at all: any direction orthogonal to N will do, the
+                    // metric is isotropic wherever the curvature says nothing.
+                    U = GEO::cross(N, ::fabs(N.x) < 0.9 ? GEO::vec3(1, 0, 0) : GEO::vec3(0, 1, 0));
+                } else {
+                    // No direction at all: fall back to the first edge of the facet.
+                    const GEO::vec3 edge = mesh.facets.point(e, 1) - mesh.facets.point(e, 0);
+                    U = edge - GEO::dot(edge, N)*N;
+                }
             }
             if (GEO::length(U) < 1e-30)
                 U = GEO::cross(N, GEO::vec3(1, 0, 0));
@@ -621,13 +642,13 @@ namespace geolio
             // 0 where the two curvatures are equal (planar regions and umbilic
             // points carry no direction) and 1 where the smallest one vanishes
             // (developable regions have a well defined direction).
-            const double k0 = std::fabs(with_certainty ? certainty_max_[f] : GEO::length(stored_U));
-            const double k1 = std::fabs(with_certainty ? certainty_min_[f] : GEO::length(stored_V));
+            const double k0 = std::fabs(with_certainty ? certainty_max_[e] : GEO::length(stored_U));
+            const double k1 = std::fabs(with_certainty ? certainty_min_[e] : GEO::length(stored_V));
             const double sum = k0 + k1;
             const double relative_anisotropy = (sum > 0) ? (k0 - k1)/sum : 0.0;
 
             // Weights of the two curvature directions, normalized to unit
-            // determinant: no facet is made globally smaller than another, so the
+            // determinant: no element is made globally smaller than another, so the
             // anisotropy cannot turn into a (huge) density bias. The larger weight
             // goes along the max curvature direction, i.e. cells are short across
             // a ridge and long along it.

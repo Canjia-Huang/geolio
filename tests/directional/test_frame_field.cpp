@@ -790,21 +790,98 @@ namespace geolio::test
     }
 
     /**
-     * @brief The anisotropy matrices are defined for a surface field only: a volumetric one
-     *        carries one frame per cell, so there is no facet to attach a matrix to.
-     * @details The output is left untouched when the check fails, so a caller can reuse its
-     *          buffer for another attempt.
+     * @brief A volumetric field gets one anisotropy matrix per cell, and it is exactly the
+     *        matrix of the facet the cell inherits its frame from.
+     * @details The metric is built from the two curvature directions and their magnitudes,
+     *          all of which a cell inherits unchanged, so building it per cell and building
+     *          it per facet have to agree: the extension adds no new convention. The frame
+     *          of every cell is checked against a surface field in
+     *          volumetric_frames_are_the_nearest_facet_frames(); this test does the same for
+     *          the matrices.
      */
-    TEST_F(FrameFieldTest, volumetric_field_has_no_facet_anisotropy_matrices) {
+    TEST_F(FrameFieldTest, volumetric_anisotropy_matrices_are_the_inherited_facet_matrices) {
+        GEO::Mesh cube;
+        make_tet_cube(cube);
+
+        FrameField surface;
+        surface.create_curvature_directions(cube, false, 45.0, 1.0);
+        std::vector<double> facet_matrices;
+        surface.compute_anisotropy_matrices(cube, 3.0, facet_matrices);
+        ASSERT_EQ(facet_matrices.size(), 9 * cube.facets.nb());
+
+        FrameField volume;
+        volume.create_curvature_directions(cube, true, 45.0, 1.0);
+        std::vector<double> cell_matrices;
+        volume.compute_anisotropy_matrices(cube, 3.0, cell_matrices);
+        ASSERT_EQ(cell_matrices.size(), 9 * cube.cells.nb());
+
+        for (const auto& t : cube.cells) {
+            // As in the frames test: accept any facet at the smallest center distance, so
+            // that ties do not depend on the order of the search structure.
+            const GEO::vec3 center = GEO::Geom::mesh_cell_center(cube, t);
+            double nearest_sq_dist = std::numeric_limits<double>::max();
+            for (const auto& f : cube.facets) {
+                nearest_sq_dist = std::min(
+                    nearest_sq_dist,
+                    GEO::Geom::distance2(center, GEO::Geom::mesh_facet_center(cube, f))
+                    );
+            }
+
+            bool found = false;
+            for (const auto& f : cube.facets) {
+                const double sq_dist = GEO::Geom::distance2(center, GEO::Geom::mesh_facet_center(cube, f));
+                if (::fabs(sq_dist - nearest_sq_dist) > 1e-12 * (1.0 + nearest_sq_dist)) {
+                    continue;
+                }
+                bool same = true;
+                for (GEO::index_t c = 0; c < 9; ++c) {
+                    same = same && ::fabs(cell_matrices[9 * t + c] - facet_matrices[9 * f + c]) < 1e-12;
+                }
+                found = found || same;
+            }
+            EXPECT_TRUE(found)
+                << "cell " << t << " does not carry the matrix of any nearest facet";
+        }
+    }
+
+    /**
+     * @brief A volumetric field's matrices are metrics of the cell frames: unit determinant,
+     *        weight 1 along the inherited normal, and positive weights along the two
+     *        curvature directions.
+     * @details This is the per-cell counterpart of
+     *          anisotropy_matrices_are_unit_determinant_metrics(), checking the properties
+     *          that do not depend on knowing which facet a cell inherited from.
+     */
+    TEST_F(FrameFieldTest, volumetric_anisotropy_matrices_are_unit_determinant_metrics) {
         GEO::Mesh cube;
         make_tet_cube(cube);
 
         FrameField field;
-        field.create_curvature_directions(cube, true, 45.0, 0.0);
+        field.create_curvature_directions(cube, true, 45.0, 1.0);
 
-        std::vector<double> matrices{1.0, 2.0, 3.0};
-        EXPECT_THROW(field.compute_anisotropy_matrices(cube, 3.0, matrices), std::logic_error);
-        EXPECT_EQ(matrices.size(), 3);
+        std::vector<double> matrices;
+        field.compute_anisotropy_matrices(cube, 3.0, matrices);
+        ASSERT_EQ(matrices.size(), 9 * cube.cells.nb());
+
+        for (const auto& t : cube.cells) {
+            const GEO::mat3 M = anisotropy_matrix(matrices, t);
+            for (GEO::index_t i = 0; i < 3; ++i) {
+                for (GEO::index_t j = 0; j < 3; ++j) {
+                    EXPECT_NEAR(M(i, j), M(j, i), 1e-12) << "cell " << t;
+                }
+            }
+            EXPECT_NEAR(GEO::det(M), 1.0, 1e-12) << "cell " << t;
+
+            const GEO::vec3 N = GEO::normalize(frame_vector(field, t, 2));
+            EXPECT_NEAR(metric_square(M, N), 1.0, 1e-12) << "cell " << t;
+
+            const GEO::vec3 U = GEO::normalize(frame_vector(field, t, 0));
+            const double weight_u = metric_square(M, U);
+            EXPECT_GT(weight_u, 0.0) << "cell " << t;
+            EXPECT_NEAR(
+                weight_u * metric_square(M, GEO::normalize(GEO::cross(N, U))), 1.0, 1e-12
+                ) << "cell " << t;
+        }
     }
 
     /**

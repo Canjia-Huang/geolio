@@ -43,34 +43,40 @@ namespace geolio
             double autoscale = 0.0);
 
         /**
-         * @brief Computes one anisotropy matrix for each facet from the current frame field.
+         * @brief Computes one anisotropy matrix for each element from the current frame field.
          *
-         * The matrices are symmetric positive-definite 3x3 metrics. Their principal
-         * directions follow the frame field, while their anisotropy is controlled by
-         * the relative magnitudes of the two curvature directions. The matrices are
-         * written in facet order and stored consecutively in row-major order.
+         * An element is a facet of a surface field, or a cell of a volumetric one. The
+         * matrices are symmetric positive-definite 3x3 metrics. Their principal directions
+         * follow the frame field, while their anisotropy is controlled by the relative
+         * magnitudes of the two curvature directions. The matrices are written in element
+         * order and stored consecutively in row-major order.
          *
          * The metrics measure lengths, so a large weight means short cells: the larger
          * weight is the one along the maximum curvature direction, i.e. cells are made
-         * short across a ridge and long along it. The weight along the facet normal is 1,
-         * and the two in-plane weights multiply to 1, so that a facet is never made
-         * globally smaller or larger than another: the anisotropy cannot turn into a
+         * short across a ridge and long along it. The weight along the third axis is 1 -
+         * the facet normal, or, for a cell, the normal of the facet it inherits its frame
+         * from - and the two in-plane weights multiply to 1, so that an element is never
+         * made globally smaller or larger than another: the anisotropy cannot turn into a
          * density bias. Their ratio is at most @p max_aspect, which it reaches where the
-         * smallest curvature vanishes, i.e. on a developable region. An isotropic facet
+         * smallest curvature vanishes, i.e. on a developable region. An isotropic element
          * (flat, or umbilic) therefore gets the identity.
          *
-         * @param[in] mesh the mesh whose facets correspond to the current frame field
+         * @param[in] mesh the mesh whose elements correspond to the current frame field
          * @param[in] max_aspect the maximum ratio of the two in-plane weights, i.e. the
          *                       square of the largest aspect ratio the cells can reach;
          *                       values below 1 are treated as 1
          * @param[out] matrices output vector, replaced with exactly
-         *                       ``9 * M.facets.nb()`` coefficients. The matrix for
-         *                       facet @p f starts at ``matrices[9 * f]`` and its
-         *                       coefficient at row @p i and column @p j is stored at
-         *                       ``matrices[9 * f + 3 * i + j]``
+         *                       ``9 * nb_elements`` coefficients, where ``nb_elements`` is
+         *                       ``M.facets.nb()`` for a surface field and ``M.cells.nb()``
+         *                       for a volumetric one. The matrix for element @p e starts at
+         *                       ``matrices[9 * e]`` and its coefficient at row @p i and
+         *                       column @p j is stored at ``matrices[9 * e + 3 * i + j]``
          *
-         * @throws std::logic_error if the current frame field is volumetric, or if it does
-         *         not contain exactly one frame for each facet of @p M
+         * @throws std::logic_error if the current frame field does not contain
+         *         exactly one frame for each element of @p M
+         *
+         * @note A volumetric field inherits the frame of the nearest facet, so each cell
+         *       gets the anisotropy of that facet.
          */
         void compute_anisotropy_matrices(const GEO::Mesh& mesh, double max_aspect, std::vector<double>& matrices) const;
 
@@ -78,10 +84,12 @@ namespace geolio
         /// Whether the current frames describe the cells (true) or the facets (false).
         bool volumetric_ = false;
 
-        /// The estimated @f$|k_{\max}|@f$ per facet, in facet order.
+        /// The estimated @f$|k_{\max}|@f$ per element: per facet, or per cell in volumetric
+        /// mode, where a cell carries the value of the facet it inherits its frame from.
         std::vector<double> certainty_max_;
 
-        /// The estimated @f$|k_{\min}|@f$ per facet, in facet order.
+        /// The estimated @f$|k_{\min}|@f$ per element, with the same layout as
+        /// @ref certainty_max_.
         std::vector<double> certainty_min_;
     };
 }
