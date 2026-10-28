@@ -25,12 +25,12 @@ namespace geolio
 
         void trace(GEO::index_t iterations);
 
-        const auto& traced_points() { return traced_points_; }
-
         void append_tracing_points_to_mesh(
             GEO::Mesh& mesh,
             GEO::Attribute<GEO::index_t>* mesh_v_tracing_times = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_e_point_idx = nullptr) const;
+
+        const auto& traced_points() { return traced_points_; }
 
     protected:
         virtual void initialize_points_locate_element() = 0;
