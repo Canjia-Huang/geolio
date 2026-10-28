@@ -153,7 +153,7 @@ namespace geolio
         const GEO::index_t N,
         const double* directions
         ) {
-        // TODO
+        throw std::logic_error("TODO"); // TODO
     }
 
     void StreamlineSurficialTracer::set_per_facet_directions(
@@ -263,7 +263,7 @@ namespace geolio
         const GEO::index_t N,
         const double* directions
         ) {
-        // TODO
+        throw std::logic_error("TODO"); // TODO
     }
 
     void StreamlineVolumetricTracer::set_per_cell_directions(
