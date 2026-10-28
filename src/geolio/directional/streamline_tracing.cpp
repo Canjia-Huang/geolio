@@ -15,10 +15,15 @@ namespace geolio
         assert(points_nb > 0);
 
         points_nb_ = points_nb;
-        tracing_times_ = 0;
+        traced_times_ = 0;
 
-        points_.resize(3*points_nb_);
-        std::ranges::copy_n(points, 3*points_nb_, points_.data());
+        traced_points_.resize(points_nb_);
+        for (GEO::index_t v = 0; v < points_nb_; ++v) {
+            auto& tp = traced_points_[v];
+            tp.point[0] = points[3*v];
+            tp.point[1] = points[3*v+1];
+            tp.point[2] = points[3*v+2];
+        }
 
         initialize_points_locate_element();
     }
@@ -28,26 +33,18 @@ namespace geolio
         ) {
         assert(iterations > 0);
 
-        points_.resize(points_.size() + 3*points_nb_ * iterations);
-        points_locate_element_.resize(points_locate_element_.size() + points_nb_ * iterations);
+        GEO::index_t begin_idx = traced_points_.size();
+        traced_points_.resize(traced_points_.size() + points_nb_*iterations);
         for (GEO::index_t iter = 0; iter < iterations; ++iter) {
-            const GEO::index_t next_p_start_idx = 3*points_nb_*(tracing_times_+1);
-            const GEO::index_t next_ele_start_idx = points_nb_*(tracing_times_+1);
-
             for (GEO::index_t v = 0; v < points_nb_; ++v) {
+                auto& tp = traced_points_[begin_idx+v];
+
                 /* Trace */
-                GEO::vec3 next_point;
-                GEO::index_t next_element;
-                GEO::index_t next_local_idx;
-                trace_point(v, next_point, next_element, next_local_idx);
-                points_[next_p_start_idx + 3*v]   = next_point[0];
-                points_[next_p_start_idx + 3*v+1] = next_point[1];
-                points_[next_p_start_idx + 3*v+2] = next_point[2];
-                points_locate_element_[next_ele_start_idx + v].first = next_element;
-                points_locate_element_[next_ele_start_idx + v].second = next_local_idx;
+                trace_point(v, tp.point, tp.element, tp.local_idx);
             }
 
-            ++tracing_times_;
+            begin_idx += points_nb_;
+            ++traced_times_;
         }
     }
 
@@ -59,8 +56,8 @@ namespace geolio
         if (mesh.vertices.dimension() < 3)
             mesh.vertices.set_dimension(3);
 
-        GEO::index_t new_v = mesh.vertices.create_vertices(points_nb_*(tracing_times_+1));
-        GEO::index_t new_e = mesh.edges.create_edges(points_nb_*tracing_times_);
+        GEO::index_t new_v = mesh.vertices.create_vertices(points_nb_*(traced_times_+1));
+        GEO::index_t new_e = mesh.edges.create_edges(points_nb_*traced_times_);
 
         if (mesh_v_tracing_times != nullptr) {
             assert(mesh_v_tracing_times->is_bound());
@@ -72,16 +69,14 @@ namespace geolio
         }
 
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
-            for (GEO::index_t n = 0; n < tracing_times_+1; ++n) {
-                double* p = mesh.vertices.point_ptr(new_v+n);
-                p[0] = points_[3*points_nb_*n + 3*v];
-                p[1] = points_[3*points_nb_*n + 3*v+1];
-                p[2] = points_[3*points_nb_*n + 3*v+2];
+            for (GEO::index_t n = 0; n < traced_times_+1; ++n) {
+                const auto& tp = traced_points_[points_nb_*n + v];
+                mesh.vertices.point(new_v+n) = tp.point;
 
                 if (mesh_v_tracing_times != nullptr)
                     (*mesh_v_tracing_times)[new_v+n] = n;
 
-                if (n < tracing_times_) {
+                if (n < traced_times_) {
                     mesh.edges.set_vertex(new_e, 0, new_v+n);
                     mesh.edges.set_vertex(new_e, 1, new_v+n+1);
 
@@ -91,7 +86,7 @@ namespace geolio
                     ++new_e;
                 }
             }
-            new_v += tracing_times_+1;
+            new_v += traced_times_+1;
         }
     }
 
@@ -103,13 +98,15 @@ namespace geolio
         assert(mesh_element_direction_.is_bound());
         assert(mesh_element_direction_.dimension() == 3*N_);
 
-        const auto& ele = points_locate_element_[points_nb_*tracing_times_ + v].first;
+        const auto& tp1 = traced_points_[points_nb_*traced_times_ + v];
+
+        const auto& ele = tp1.element;
         if (ele == GEO::NO_INDEX)
             return {0, 0, 0};
 
         const GEO::index_t fd_idx = 3*N_*ele;
 
-        if (tracing_times_ == 0 || N_ == 1) { // Initially, a direction is randomly selected (take the first valid one)
+        if (traced_times_ == 0 || N_ == 1) { // Initially, a direction is randomly selected (take the first valid one)
             for (GEO::index_t n = 0; n < N_; ++n) {
                 if (const GEO::vec3 dir(mesh_element_direction_[fd_idx+3*n], mesh_element_direction_[fd_idx+3*n+1], mesh_element_direction_[fd_idx+3*n+2]);
                     GEO::length(dir) > 1e-12)
@@ -119,10 +116,9 @@ namespace geolio
         }
 
         /* Find the closet direction */
-        const GEO::index_t p0_idx = 3*points_nb_*(tracing_times_-1);
-        const GEO::index_t p1_idx = 3*points_nb_*tracing_times_;
-        const GEO::vec3 p0(points_[p0_idx+3*v], points_[p0_idx+3*v+1], points_[p0_idx+3*v+2]);
-        const GEO::vec3 p1(points_[p1_idx+3*v], points_[p1_idx+3*v+1], points_[p1_idx+3*v+2]);
+        const auto& tp0 = traced_points_[points_nb_*(traced_times_-1) + v];
+        const auto& p0 = tp0.point;
+        const auto& p1 = tp1.point;
         const GEO::vec3 moving_dir = p1-p0;
         GEO::vec3 closet_dir;
         double closet_angle = M_PI;
@@ -179,75 +175,72 @@ namespace geolio
         const bool constraint_on_surface
         ) {
         assert(iterations > 0);
-        if (tracing_times_ < 2)
+        if (traced_times_ < 2)
             return;
         if (std::abs(damping-1) < 1e-10)
             return;
 
-        std::vector<double> new_points = points_; // pre-allocated
+        auto new_traced_points = traced_points_; // pre-allocated
         for (GEO::index_t iter = 0; iter < iterations; ++iter) {
             for (GEO::index_t v = 0; v < points_nb_; ++v) {
-                for (GEO::index_t n = 1; n < tracing_times_; ++n) {
-                    const GEO::vec3 prev_p(
-                        points_[3*points_nb_*(n-1) + 3*v],
-                        points_[3*points_nb_*(n-1) + 3*v+1],
-                        points_[3*points_nb_*(n-1) + 3*v+2]);
-                    const GEO::vec3 cur_p(
-                        points_[3*points_nb_*n + 3*v],
-                        points_[3*points_nb_*n + 3*v+1],
-                        points_[3*points_nb_*n + 3*v+2]);
-                    const GEO::vec3 next_p(
-                        points_[3*points_nb_*(n+1) + 3*v],
-                        points_[3*points_nb_*(n+1) + 3*v+1],
-                        points_[3*points_nb_*(n+1) + 3*v+2]);
+                for (GEO::index_t n = 1; n < traced_times_; ++n) {
+                    const auto& prev_p = traced_points_[points_nb_*(n-1) + v].point;
+                    const auto& cur_p  = traced_points_[points_nb_*n     + v].point;
+                    const auto& next_p = traced_points_[points_nb_*(n+1) + v].point;
 
-                    GEO::vec3 p = (1-damping) * 0.5*(prev_p + next_p) + damping * cur_p;
+                    auto& new_tp = new_traced_points[points_nb_*n + v];
+                    auto& p = new_tp.point;
+                    const auto& loc_f = new_tp.element;
+                    const auto& loc_lv = new_tp.local_idx;
 
-                    if (constraint_on_surface) {
-                        if (const auto& [loc_f, loc_lv] = points_locate_element_[points_nb_*n + v];
-                            loc_f != GEO::NO_FACET
-                            ) {
-                            assert(loc_f < mesh_.facets.nb());
+                    if (constraint_on_surface && loc_f != GEO::NO_FACET) {
+                        assert(loc_f < mesh_.facets.nb());
 
-                            if (loc_lv != GEO::NO_INDEX) {
-                                assert(loc_lv < 3);
-                                const auto& ep0 = mesh_.facets.point(loc_f, loc_lv);
-                                const auto& ep1 = mesh_.facets.point(loc_f, (loc_lv+1)%3);
-                                GEO::vec3 edge = ep1-ep0;
-                                if (const double edge_length = GEO::length(edge);
-                                    edge_length < 1e-10) // degenerate
-                                    p = ep0;
-                                else {
-                                    edge /= edge_length;
-                                    if (const double t = GEO::dot(p-ep0, edge);
-                                        t < 0)
-                                        p = ep0;
-                                    else if (t > edge_length)
-                                        p = ep1;
-                                    else
-                                        p = ep0 + t*edge;
-                                }
-                            }
+                        if (loc_lv != GEO::NO_INDEX) {
+                            assert(loc_lv < 3);
+                            const auto& ep0 = mesh_.facets.point(loc_f, loc_lv);
+                            const auto& ep1 = mesh_.facets.point(loc_f, (loc_lv+1)%3);
+                            GEO::vec3 edge = ep1-ep0;
+                            if (const double edge_length = GEO::length(edge);
+                                edge_length < 1e-10) // degenerate
+                                p = ep0;
                             else {
-                                GEO::vec3 closest_p;
-                                double lambda0, lambda1, lambda2;
-                                GEO::Geom::point_triangle_squared_distance(
-                                    p,
-                                    mesh_.facets.point(loc_f, 0), mesh_.facets.point(loc_f, 1), mesh_.facets.point(loc_f, 2),
-                                    closest_p,
-                                    lambda0, lambda1, lambda2);
-                                p = closest_p;
+                                edge /= edge_length;
+
+                                const double u0 = GEO::dot(prev_p-ep0, edge);
+                                const double v0 = GEO::length(prev_p-ep0 - u0*edge);
+                                const double u1 = GEO::dot(next_p-ep0, edge);
+                                const double v1 = GEO::length(next_p-ep0 - u1*edge);
+                                if (const double t = (u0*v1 + u1*v0) / (v0+v1);
+                                    t < 1e-10)
+                                    p = ep0;
+                                else if (t > edge_length-1e-10)
+                                    p = ep1;
+                                else
+                                    p = ep0 + t*edge;
                             }
                         }
-                    }
+                        else {
+                            p = 0.5*(prev_p + next_p) ;
 
-                    new_points[3*points_nb_*n + 3*v] = p[0];
-                    new_points[3*points_nb_*n + 3*v+1] = p[1];
-                    new_points[3*points_nb_*n + 3*v+2] = p[2];
+                            GEO::vec3 closest_p;
+                            double lambda0, lambda1, lambda2;
+                            GEO::Geom::point_triangle_squared_distance(
+                                p,
+                                mesh_.facets.point(loc_f, 0), mesh_.facets.point(loc_f, 1), mesh_.facets.point(loc_f, 2),
+                                closest_p,
+                                lambda0, lambda1, lambda2);
+                            p = closest_p;
+                        }
+                    }
+                    else
+                        p = 0.5*(prev_p + next_p);
+
+                    p = (1-damping)*p + damping*cur_p;
                 }
             }
 
-            points_.swap(new_points);
+            traced_points_.swap(new_traced_points);
         }
 
         initialize_points_locate_element();
@@ -255,17 +248,15 @@ namespace geolio
 
     void StreamlineSurficialTracer::initialize_points_locate_element(
         ) {
-        points_locate_element_.assign(points_nb_, std::pair(GEO::NO_FACET, GEO::NO_INDEX));
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
-            const GEO::vec3 p(points_[3*v], points_[3*v+1], points_[3*v+2]);
+            auto& tp = traced_points_[v];
 
-            GEO::vec3 nearest_p;
             double sq_dist;
-            points_locate_element_[v].first = mesh_AABB_.nearest_facet(p, nearest_p, sq_dist);
-
-            points_[3*v] = nearest_p[0];
-            points_[3*v+1] = nearest_p[1];
-            points_[3*v+2] = nearest_p[2];
+            if (const GEO::index_t nearest_f = mesh_AABB_.nearest_facet(tp.point, tp.point, sq_dist);
+                tp.element != nearest_f) {
+                tp.element = nearest_f;
+                tp.local_idx = GEO::NO_INDEX;
+            }
         }
     }
 
@@ -277,8 +268,8 @@ namespace geolio
         ) {
         assert(v < points_nb_);
 
-        const GEO::index_t p_start_idx = 3*points_nb_*tracing_times_+3*v;
-        const GEO::vec3 p0(points_[p_start_idx], points_[p_start_idx+1], points_[p_start_idx+2]);
+        const auto& tp = traced_points_[points_nb_*traced_times_ + v];
+        const auto& p0 = tp.point;
 
         /* Init */
         next_point[0] = p0[0];
@@ -287,7 +278,8 @@ namespace geolio
         next_element = GEO::NO_FACET;
         next_local_idx = GEO::NO_INDEX;
 
-        const auto [loc_f, loc_lv] = points_locate_element_[points_nb_*tracing_times_ + v];
+        const auto& loc_f = tp.element;
+        const auto& loc_lv = tp.local_idx;
         if (loc_f == GEO::NO_FACET)
             return;
         assert(loc_f < mesh_.facets.nb());
@@ -375,37 +367,24 @@ namespace geolio
         const double damping
         ) {
         assert(iterations > 0);
-        if (tracing_times_ < 2)
+        if (traced_times_ < 2)
             return;
         if (std::abs(damping-1) < 1e-10)
             return;
 
-        std::vector<double> new_points = points_; // pre-allocated
+        auto new_traced_points = traced_points_; // pre-allocated
         for (GEO::index_t iter = 0; iter < iterations; ++iter) {
             for (GEO::index_t v = 0; v < points_nb_; ++v) {
-                for (GEO::index_t n = 1; n < tracing_times_; ++n) {
-                    const GEO::vec3 prev_p(
-                        points_[3*points_nb_*(n-1) + 3*v],
-                        points_[3*points_nb_*(n-1) + 3*v+1],
-                        points_[3*points_nb_*(n-1) + 3*v+2]);
-                    const GEO::vec3 cur_p(
-                        points_[3*points_nb_*n + 3*v],
-                        points_[3*points_nb_*n + 3*v+1],
-                        points_[3*points_nb_*n + 3*v+2]);
-                    const GEO::vec3 next_p(
-                        points_[3*points_nb_*(n+1) + 3*v],
-                        points_[3*points_nb_*(n+1) + 3*v+1],
-                        points_[3*points_nb_*(n+1) + 3*v+2]);
+                for (GEO::index_t n = 1; n < traced_times_; ++n) {
+                    const auto& prev_p = traced_points_[points_nb_*(n-1) + v].point;
+                    const auto& cur_p = traced_points_[points_nb_*n + v].point;
+                    const auto& next_p = traced_points_[points_nb_*(n+1) + v].point;
 
-                    const GEO::vec3 p = (1-damping) * 0.5*(prev_p + next_p) + damping * cur_p;
-
-                    new_points[3*points_nb_*n + 3*v] = p[0];
-                    new_points[3*points_nb_*n + 3*v+1] = p[1];
-                    new_points[3*points_nb_*n + 3*v+2] = p[2];
+                    new_traced_points[points_nb_*n + v].point = (1-damping) * 0.5*(prev_p + next_p) + damping * cur_p;
                 }
             }
 
-            points_.swap(new_points);
+            traced_points_.swap(new_traced_points);
         }
 
         initialize_points_locate_element();
@@ -413,11 +392,14 @@ namespace geolio
 
     void StreamlineVolumetricTracer::initialize_points_locate_element(
         ) {
-        points_locate_element_.assign(points_nb_, std::pair(GEO::NO_CELL, GEO::NO_INDEX));
         for (GEO::index_t v = 0; v < points_nb_; ++v) {
-            const GEO::vec3 p(points_[3*v], points_[3*v+1], points_[3*v+2]);
+            auto& tp = traced_points_[v];
 
-            points_locate_element_[v].first = mesh_AABB_.containing_tet(p);
+            if (const GEO::index_t containing_c = mesh_AABB_.containing_tet(tp.point);
+                tp.element != containing_c) {
+                tp.element = containing_c;
+                tp.local_idx = GEO::NO_INDEX;
+            }
         }
     }
 
@@ -429,8 +411,8 @@ namespace geolio
         ) {
         assert(v < points_nb_);
 
-        const GEO::index_t p_start_idx = 3*points_nb_*tracing_times_+3*v;
-        const GEO::vec3 p0(points_[p_start_idx], points_[p_start_idx+1], points_[p_start_idx+2]);
+        const auto& tp = traced_points_[points_nb_*traced_times_ + v];
+        const auto& p0 = tp.point;
 
         /* Init */
         next_point[0] = p0[0];
@@ -439,7 +421,8 @@ namespace geolio
         next_element = GEO::NO_CELL;
         next_local_idx = GEO::NO_INDEX;
 
-        const auto [loc_c, loc_lf] = points_locate_element_[v];
+        const auto& loc_c = tp.element;
+        const auto& loc_lf = tp.local_idx;
         if (loc_c == GEO::NO_CELL)
             return;
         assert(loc_c < mesh_.cells.nb());

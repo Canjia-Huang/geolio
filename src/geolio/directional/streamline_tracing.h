@@ -25,7 +25,7 @@ namespace geolio
 
         void trace(GEO::index_t iterations);
 
-        const auto& points() { return points_; }
+        const auto& traced_points() { return traced_points_; }
 
         void append_tracing_points_to_mesh(
             GEO::Mesh& mesh,
@@ -44,9 +44,14 @@ namespace geolio
         GEO::Mesh& mesh_;
 
         GEO::index_t points_nb_ = 0;
-        GEO::index_t tracing_times_ = 0;
-        std::vector<double> points_; // 3*points_nb*(tracing_times+1)
-        std::vector<std::pair<GEO::index_t, GEO::index_t>> points_locate_element_; // points_nb*(tracing_times+1), (f, lv) or (c, lf)
+        GEO::index_t traced_times_ = 0;
+
+        struct TracingPoint {
+            GEO::vec3 point;
+            GEO::index_t element = GEO::NO_INDEX; // f / c
+            GEO::index_t local_idx = GEO::NO_INDEX; // lv / lf
+        };
+        std::vector<TracingPoint> traced_points_; // points_nb * tracing_times
 
         GEO::index_t N_ = 0;
         GEO::Attribute<double> mesh_element_direction_;
