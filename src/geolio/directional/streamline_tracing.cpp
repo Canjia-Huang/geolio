@@ -50,6 +50,47 @@ namespace geolio
         }
     }
 
+    void StreamlineTracer::smooth(
+        const GEO::index_t iterations,
+        const double damping
+        ) {
+        assert(iterations > 0);
+        if (tracing_times_ < 2)
+            return;
+        if (std::abs(damping-1) < 1e-10)
+            return;
+
+        std::vector<double> new_points = points_; // pre-allocated
+        for (GEO::index_t iter = 0; iter < iterations; ++iter) {
+            for (GEO::index_t v = 0; v < points_nb_; ++v) {
+                for (GEO::index_t n = 1; n < tracing_times_; ++n) {
+                    const GEO::vec3 prev_p(
+                        points_[3*points_nb_*(n-1) + 3*v],
+                        points_[3*points_nb_*(n-1) + 3*v+1],
+                        points_[3*points_nb_*(n-1) + 3*v+2]);
+                    const GEO::vec3 cur_p(
+                        points_[3*points_nb_*n + 3*v],
+                        points_[3*points_nb_*n + 3*v+1],
+                        points_[3*points_nb_*n + 3*v+2]);
+                    const GEO::vec3 next_p(
+                        points_[3*points_nb_*(n+1) + 3*v],
+                        points_[3*points_nb_*(n+1) + 3*v+1],
+                        points_[3*points_nb_*(n+1) + 3*v+2]);
+
+                    const GEO::vec3 p = (1-damping) * 0.5*(prev_p + next_p) + damping * cur_p;
+
+                    new_points[3*points_nb_*n + 3*v] = p[0];
+                    new_points[3*points_nb_*n + 3*v+1] = p[1];
+                    new_points[3*points_nb_*n + 3*v+2] = p[2];
+                }
+            }
+
+            points_.swap(new_points);
+        }
+
+        initialize_points_locate_element();
+    }
+
     void StreamlineTracer::append_tracing_points_to_mesh(
         GEO::Mesh& mesh,
         GEO::Attribute<GEO::index_t>* mesh_v_tracing_times,

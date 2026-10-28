@@ -25,6 +25,10 @@ namespace geolio
 
         void trace(GEO::index_t iterations);
 
+        void smooth(GEO::index_t iterations = 3, double damping = 0.5);
+
+        const auto& points() { return points_; }
+
         void append_tracing_points_to_mesh(
             GEO::Mesh& mesh,
             GEO::Attribute<GEO::index_t>* mesh_v_tracing_times = nullptr,
@@ -43,7 +47,7 @@ namespace geolio
 
         GEO::index_t points_nb_ = 0;
         GEO::index_t tracing_times_ = 0;
-        std::vector<double> points_; // 3*points_nb
+        std::vector<double> points_; // 3*points_nb*(tracing_times+1)
         std::vector<GEO::index_t> points_locate_element_; // points_nb, may be GEO::NO_INDEX
 
         GEO::index_t N_ = 0;
