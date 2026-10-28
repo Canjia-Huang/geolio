@@ -238,8 +238,7 @@ namespace geolio
             /* The ray meets the line supporting this edge: reject the hit if it falls
              * outside the edge itself. */
             if (const double s = GEO::dot(GEO::cross(p0-ep0, d), mesh_f_unit_normal_[f]) / s_d;
-                s < -1e-10 || s > 1.0+1e-10
-                )
+                s < -1e-10 || s > 1.0+1e-10)
                 continue;
 
             if (t < min_t) {
@@ -298,6 +297,67 @@ namespace geolio
         GEO::vec3& next_point,
         GEO::index_t& next_element
         ) {
-        // TODO
+        assert(v < points_nb_);
+
+        const GEO::index_t p_start_idx = 3*points_nb_*tracing_times_+3*v;
+        const GEO::vec3 p0(points_[p_start_idx], points_[p_start_idx+1], points_[p_start_idx+2]);
+
+        /* Init */
+        next_point[0] = p0[0];
+        next_point[1] = p0[1];
+        next_point[2] = p0[2];
+        next_element = GEO::NO_CELL;
+
+        const GEO::index_t c = points_locate_element_[v];
+        if (c == GEO::NO_CELL)
+            return;
+        assert(c < mesh_.cells.nb());
+
+        /* Compute direction */
+        GEO::vec3 d = get_point_direction(v);
+        const double d_norm = GEO::length(d);
+        if (d_norm < 1e-10) // cannot find a valid direction!
+            return;
+        d /= d_norm;
+
+        /* Find intersecting edge */
+        double min_t = std::numeric_limits<double>::max();
+        GEO::index_t min_lf = GEO::NO_INDEX;
+        for (GEO::index_t lf = 0; lf < 4; ++lf) {
+            const auto& fp0 = mesh_.vertices.point(mesh_.cells.facet_vertex(c, lf, 0));
+            const auto& fp1 = mesh_.vertices.point(mesh_.cells.facet_vertex(c, lf, 1));
+            const auto& fp2 = mesh_.vertices.point(mesh_.cells.facet_vertex(c, lf, 2));
+            const auto E1 = fp1-fp0;
+            const auto E2 = fp2-fp0;
+            const auto T = p0-fp0;
+            const auto P = GEO::cross(d, E2);
+            const auto det = GEO::dot(E1, P);
+            if (std::abs(det) < 1e-10) // d is parallel to this facet, skip
+                continue;
+            const auto Q = GEO::cross(T, E1);
+
+            const auto u0 = GEO::dot(T, P) / det;
+            const auto u1 = GEO::dot(d, Q) / det;
+            if (u0 < 0 || u1 < 0 || u0+u1 > 1) // intersecting point is not located on this facet
+                continue;
+
+            const auto t = GEO::dot(E2, Q) / det;
+            if (t <= 1e-10) // behind p0, or p0 is on this edge
+                continue;
+            
+            if (t < min_t) {
+                min_t = t;
+                min_lf = lf;
+            }
+        }
+        if (min_lf == GEO::NO_INDEX) // the direction leads out of this facet, no exit ahead
+            return;
+
+        /* Output */
+        const GEO::vec3 p1 = p0+min_t*d;
+        next_point[0] = p1[0];
+        next_point[1] = p1[1];
+        next_point[2] = p1[2];
+        next_element = mesh_.cells.adjacent(c, min_lf);
     }
 }
