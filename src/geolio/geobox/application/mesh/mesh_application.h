@@ -26,6 +26,14 @@ namespace geolio::geobox
         virtual void draw_window_contents_details() = 0;
 
         void draw_window_contents() override {
+            // Width shared by all the numeric sliders/drags of the derived
+            // windows: 75% of the default item width. It is computed here, at
+            // draw time, and not in the constructor: ImGui::CalcItemWidth()
+            // needs an active context and window (it dereferences the current
+            // window), which do not exist yet while the applications are
+            // being constructed, and calling it there crashes at startup.
+            slider_width_ = ImGui::CalcItemWidth() * 0.75f;
+
             // Collect the objects whose type is a mesh ("Mesh", see MeshObject).
             std::vector<std::shared_ptr<MeshObject>> mesh_objects;
             for (const auto& object : objects_) {
@@ -46,7 +54,7 @@ namespace geolio::geobox
             // Selection combo box: pick one mesh object.
             if (const bool has_mesh_object = !mesh_objects.empty();
                 !has_mesh_object)
-                ImGui::TextUnformatted("No triangular mesh object available.");
+                ImGui::TextUnformatted("No mesh object available.");
             else {
                 // Index of the currently selected mesh object, -1 when none.
                 int current_index = -1;
@@ -83,15 +91,20 @@ namespace geolio::geobox
                 }
             }
 
+            ImGui::Separator();
+
             // When no mesh object is selected yet, everything below the combo
             // box (parameters and the perform button) is non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
             {
-                ImGui::Separator();
-
                 draw_window_contents_details();
 
-                ImGui::Separator();
+                if (selected_mesh_object_.expired()) {
+                    const auto selected_object = selected_mesh_object_.lock();
+                    const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
+                    if (!is_mesh_valid(mesh_object->mesh()))
+                        selected_mesh_object_.reset();
+                }
             }
             ImGui::EndDisabled();
         }
@@ -101,9 +114,11 @@ namespace geolio::geobox
         /** The mesh object currently selected in the combo box. */
         std::weak_ptr<BaseObject> selected_mesh_object_;
 
-        const float slider_width_ = ImGui::CalcItemWidth() * 0.75f; /*
-            All numeric sliders/drags in this window are drawn at 75% of the
-            default (full available width) item width. */
+        /** Width used by every slider/drag of the derived windows: 75% of the
+         *  default item width. Refreshed at the beginning of each
+         *  draw_window_contents(), so it follows window resizes; it must not
+         *  be computed in the constructor (no ImGui frame is active then). */
+        float slider_width_ = 0.0f;
     };
 }
 

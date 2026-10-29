@@ -15,10 +15,14 @@ namespace geolio::geobox
         explicit MeshRepairTriangulateApplication(const std::vector<std::shared_ptr<BaseObject>>& objects)
             : MeshApplication("triangulate", objects)
         {
-            menu_tooltip_ = "GEO::mesh_repair()";
+            menu_tooltip_ = "GEO::mesh_repair(GEO::MESH_REPAIR_TRIANGULATE)";
         }
 
     protected:
+        bool is_mesh_valid(const GEO::Mesh& mesh) override {
+            return mesh.facets.nb() > 0 && !mesh.facets.are_simplices();
+        }
+
         void draw_window_contents_details() override {
             if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
                 // std::dynamic_pointer_cast needs a shared_ptr, so lock the
