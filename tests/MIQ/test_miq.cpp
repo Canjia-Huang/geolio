@@ -12,8 +12,8 @@ namespace geolio::test
 {
     class MIQTest : public ::testing::Test {
     protected:
-        void save_results() {
-            mesh.save(get_current_test_name()+".geogram");
+        void save_results(const std::string& suffix = "") {
+            mesh.save(get_current_test_name()+suffix+".geogram");
 
             {
                 GEO::Mesh mesh_out(2);
@@ -28,7 +28,7 @@ namespace geolio::test
                     mesh_out.facets.set_vertex(f, 1, 3*f+1);
                     mesh_out.facets.set_vertex(f, 2, 3*f+2);
                 }
-                mesh_out.save(get_current_test_name()+"_uv.geogram");
+                mesh_out.save(get_current_test_name()+suffix+"_uv.geogram");
             }
         }
 
@@ -61,27 +61,14 @@ namespace geolio::test
         save_results();
     }
 
-    class MIQOpenExampleTest : public MIQTest {
+    class MIQOpenBoundaryExampleTest : public MIQTest {
     protected:
         void SetUp() override {
             ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"cut_cylinder.geogram"));
             mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
         }
-    };
 
-    /**
-     * @brief Open boundaries must end up on integer grid lines.
-     *
-     * MIQ cuts the mesh along seams derived from the singularities, but a mesh with an
-     * open boundary is already cut by that boundary. Since no seam constraint exists
-     * along a boundary, the boundary is only driven by the Poisson energy and lands at
-     * arbitrary real coordinates unless it is explicitly snapped. `snap_boundary`
-     * (default true) turns every boundary edge into a hard feature, i.e. forces it onto
-     * an integer grid line. This test verifies exactly that property, and that turning
-     * the option off restores the old, unsnapped behaviour.
-     */
-    TEST_F(MIQOpenExampleTest, boundary_on_integer_grid) {
-        auto check_boundary = [&](const bool expect_snapped) {
+        void check_boundary(const bool expect_snapped) {
             GEO::index_t nb_boundary_edges = 0;
             GEO::index_t nb_grid_aligned = 0;
             for (const auto& f : mesh.facets) {
@@ -108,16 +95,19 @@ namespace geolio::test
                 EXPECT_LT(nb_grid_aligned, nb_boundary_edges)
                     << "without snap_boundary the boundary is expected to miss the grid";
             }
-        };
+        }
+    };
 
+    TEST_F(MIQOpenBoundaryExampleTest, boundary_on_integer_grid) {
         params.snap_boundary = true;
         miq<3>(mesh, mesh_fc_uv, params);
         check_boundary(true);
-        save_results();
+        save_results("_snap");
 
         params.snap_boundary = false;
         miq<3>(mesh, mesh_fc_uv, params);
         check_boundary(false);
+        save_results("_wo_snap");
     }
 }
 #endif
