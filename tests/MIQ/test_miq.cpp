@@ -69,10 +69,55 @@ namespace geolio::test
         }
     };
 
-    TEST_F(MIQOpenExampleTest, nrosy) {
+    /**
+     * @brief Open boundaries must end up on integer grid lines.
+     *
+     * MIQ cuts the mesh along seams derived from the singularities, but a mesh with an
+     * open boundary is already cut by that boundary. Since no seam constraint exists
+     * along a boundary, the boundary is only driven by the Poisson energy and lands at
+     * arbitrary real coordinates unless it is explicitly snapped. `snap_boundary`
+     * (default true) turns every boundary edge into a hard feature, i.e. forces it onto
+     * an integer grid line. This test verifies exactly that property, and that turning
+     * the option off restores the old, unsnapped behaviour.
+     */
+    TEST_F(MIQOpenExampleTest, boundary_on_integer_grid) {
+        auto check_boundary = [&](const bool expect_snapped) {
+            GEO::index_t nb_boundary_edges = 0;
+            GEO::index_t nb_grid_aligned = 0;
+            for (const auto& f : mesh.facets) {
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    if (mesh.facets.adjacent(f, lv) != GEO::NO_FACET) continue;
+                    ++nb_boundary_edges;
+                    const GEO::index_t c0 = mesh.facets.corner(f, lv);
+                    const GEO::index_t c1 = mesh.facets.corner(f, (lv + 1) % 3);
+                    const double du = mesh_fc_uv[2*c1] - mesh_fc_uv[2*c0];
+                    const double dv = mesh_fc_uv[2*c1+1] - mesh_fc_uv[2*c0+1];
+                    const bool u_is_const = std::fabs(du) <= 1e-6;
+                    const bool v_is_const = std::fabs(dv) <= 1e-6;
+                    if (!u_is_const && !v_is_const) continue;
+                    const double line = u_is_const ? mesh_fc_uv[2*c0] : mesh_fc_uv[2*c0+1];
+                    if (std::fabs(line - std::round(line)) > 1e-6) continue;
+                    ++nb_grid_aligned;
+                }
+            }
+            EXPECT_GT(nb_boundary_edges, 0);
+            if (expect_snapped) {
+                EXPECT_EQ(nb_grid_aligned, nb_boundary_edges)
+                    << "every boundary edge should lie on an integer grid line";
+            } else {
+                EXPECT_LT(nb_grid_aligned, nb_boundary_edges)
+                    << "without snap_boundary the boundary is expected to miss the grid";
+            }
+        };
+
+        params.snap_boundary = true;
         miq<3>(mesh, mesh_fc_uv, params);
+        check_boundary(true);
         save_results();
+
+        params.snap_boundary = false;
+        miq<3>(mesh, mesh_fc_uv, params);
+        check_boundary(false);
     }
 }
-
 #endif
