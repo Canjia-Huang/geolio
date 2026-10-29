@@ -39,6 +39,8 @@
 #include <fstream>
 #endif
 #include <iostream>
+#include <set>
+#include <utility>
 #include <igl/matlab_format.h>
 
 #define DEBUGPRINT 0
@@ -143,7 +145,8 @@ namespace comiso {
                                  bool _integer_rounding=true,
                                  bool _singularity_rounding=true,
                                  std::vector<int> roundVertices = std::vector<int>(),
-                                 std::vector<std::vector<int> > hardFeatures = std::vector<std::vector<int> >());
+                                 std::vector<std::vector<int> > hardFeatures = std::vector<std::vector<int> >(),
+                                 bool _snap_boundary=true);
 
     IGL_INLINE PoissonSolver(const Eigen::PlainObjectBase<DerivedV> &_V,
                              const Eigen::PlainObjectBase<DerivedF> &_F,
@@ -328,7 +331,8 @@ namespace comiso {
                          bool DoRound = true,
                          bool SingularityRound=true,
                          std::vector<int> roundVertices = std::vector<int>(),
-                         std::vector<std::vector<int> > hardFeatures = std::vector<std::vector<int> >());
+                         std::vector<std::vector<int> > hardFeatures = std::vector<std::vector<int> >(),
+                         bool SnapBoundary = true);
 
 
     IGL_INLINE void extractUV(Eigen::PlainObjectBase<DerivedU> &UV_out,
@@ -600,7 +604,8 @@ IGL_INLINE void igl::copyleft::comiso::PoissonSolver<DerivedV, DerivedF>::SolveP
                                                                      bool _integer_rounding,
                                                                      bool _singularity_rounding,
                                                                      std::vector<int> roundVertices,
-                                                                     std::vector<std::vector<int> > hardFeatures)
+                                                                     std::vector<std::vector<int> > hardFeatures,
+                                                                     bool _snap_boundary)
 {
   Handle_Stiffness = Stiffness;
 
@@ -610,10 +615,55 @@ IGL_INLINE void igl::copyleft::comiso::PoissonSolver<DerivedV, DerivedF>::SolveP
   ids_to_round.clear();
 
   clearUserConstraint();
-  // copy the user constraints number
+
+  // Sharp features are edges that must lie on an integer grid line: they
+  // carry one hard constraint (the coordinate perpendicular to the edge is
+  // constant along it) and that coordinate is rounded to an integer.
+  //
+  // Open boundaries need exactly the same treatment. A boundary edge that is
+  // left free is only driven by the Poisson energy, so it ends up at arbitrary
+  // real coordinates and the integer grid does not respect the boundary,
+  // which makes it impossible to extract boundary quads from the
+  // parametrization. Adding every boundary edge (i.e. every edge with no
+  // opposite face, TT == -1) as a sharp feature keeps the boundary on the
+  // grid: the boundary becomes a staircase of grid lines and each boundary
+  // vertex gets at least one integer coordinate. Meshes without boundary are
+  // not affected, as they have no such edges.
+  std::vector<std::vector<int> > sharpFeatures;
+  sharpFeatures.reserve(hardFeatures.size());
+  std::set<std::pair<int,int> > sharpFeatureSet;
   for (size_t i = 0; i < hardFeatures.size(); ++i)
   {
-    addSharpEdgeConstraint(hardFeatures[i][0],hardFeatures[i][1]);
+    if (hardFeatures[i].size() < 2)
+    {
+      std::cerr << "WARNING: Ignored hard feature with less than 2 indices." << std::endl;
+      continue;
+    }
+    sharpFeatures.push_back(hardFeatures[i]);
+    sharpFeatureSet.insert(std::make_pair(hardFeatures[i][0], hardFeatures[i][1]));
+  }
+  if (_snap_boundary)
+  {
+    for (int f = 0; f < TT.rows(); ++f)
+    {
+      for (int k = 0; k < 3; ++k)
+      {
+        // boundary edge: no adjacent face. Do not add it twice if the caller
+        // already listed it in hardFeatures.
+        if (TT(f,k) == -1 && sharpFeatureSet.insert(std::make_pair(f,k)).second)
+        {
+          std::vector<int> feature(2);
+          feature[0] = f;
+          feature[1] = k;
+          sharpFeatures.push_back(feature);
+        }
+      }
+    }
+  }
+
+  for (size_t i = 0; i < sharpFeatures.size(); ++i)
+  {
+    addSharpEdgeConstraint(sharpFeatures[i][0],sharpFeatures[i][1]);
   }
 
   ///Initializing Matrix
@@ -1186,7 +1236,8 @@ IGL_INLINE igl::copyleft::comiso::MIQ_class<DerivedV, DerivedF, DerivedU>::MIQ_c
                                                                    bool DoRound,
                                                                    bool SingularityRound,
                                                                    std::vector<int> roundVertices,
-                                                                   std::vector<std::vector<int> > hardFeatures):
+                                                                   std::vector<std::vector<int> > hardFeatures,
+                                                                   bool SnapBoundary):
 V(V_),
 F(F_)
 {
@@ -1218,7 +1269,7 @@ F(F_)
   {
     for (int i=0;i<iter;i++)
     {
-      PSolver.SolvePoisson(Handle_Stiffness, GradientSize,1.f,DirectRound,localIter,DoRound,SingularityRound,roundVertices,hardFeatures);
+      PSolver.SolvePoisson(Handle_Stiffness, GradientSize,1.f,DirectRound,localIter,DoRound,SingularityRound,roundVertices,hardFeatures,SnapBoundary);
       int nflips=NumFlips(PSolver.WUV);
       bool folded = updateStiffeningJacobianDistorsion(GradientSize,PSolver.WUV);
       printf("ITERATION %d FLIPS %d \n",i,nflips);
@@ -1227,7 +1278,7 @@ F(F_)
   }
   else
   {
-    PSolver.SolvePoisson(Handle_Stiffness,GradientSize,1.f,DirectRound,localIter,DoRound,SingularityRound,roundVertices,hardFeatures);
+    PSolver.SolvePoisson(Handle_Stiffness,GradientSize,1.f,DirectRound,localIter,DoRound,SingularityRound,roundVertices,hardFeatures,SnapBoundary);
   }
 
   int nflips=NumFlips(PSolver.WUV);
@@ -1441,7 +1492,8 @@ void igl::copyleft::comiso::miq(
   bool DoRound,
   bool SingularityRound,
   std::vector<int> roundVertices,
-  std::vector<std::vector<int> > hardFeatures)
+  std::vector<std::vector<int> > hardFeatures,
+  bool SnapBoundary)
 {
   GradientSize = GradientSize/(V.colwise().maxCoeff()-V.colwise().minCoeff()).norm();
 
@@ -1462,7 +1514,8 @@ void igl::copyleft::comiso::miq(
     DoRound,
     SingularityRound,
     roundVertices,
-    hardFeatures);
+    hardFeatures,
+    SnapBoundary);
 
   miq.extractUV(UV,FUV);
 }
@@ -1483,7 +1536,8 @@ void igl::copyleft::comiso::miq(
     bool DoRound,
     bool SingularityRound,
     std::vector<int> roundVertices,
-    std::vector<std::vector<int> > hardFeatures)
+    std::vector<std::vector<int> > hardFeatures,
+    bool SnapBoundary)
 {
 
   DerivedV BIS1, BIS2;
@@ -1521,13 +1575,14 @@ void igl::copyleft::comiso::miq(
            DoRound,
            SingularityRound,
            roundVertices,
-           hardFeatures);
+           hardFeatures,
+           SnapBoundary);
 
 }
 
 // #ifdef IGL_STATIC_LIBRARY
 // Explicit template specialization
-template void igl::copyleft::comiso::miq<Eigen::MatrixX3d, Eigen::MatrixX3i, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixX3i > const&, Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixX3i >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >);
-template void igl::copyleft::comiso::miq<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXi > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::MatrixX3i const&, Eigen::VectorXi const&, Eigen::MatrixX3i const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixXi >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >);
-template void igl::copyleft::comiso::miq<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXi > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixXi >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >);
+template void igl::copyleft::comiso::miq<Eigen::MatrixX3d, Eigen::MatrixX3i, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixX3i > const&, Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixX3d > const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixX3i >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >, bool);
+template void igl::copyleft::comiso::miq<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXi > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::MatrixX3i const&, Eigen::VectorXi const&, Eigen::MatrixX3i const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixXi >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >, bool);
+template void igl::copyleft::comiso::miq<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd >(Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXi > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd > const&, Eigen::PlainObjectBase<Eigen::MatrixXd >&, Eigen::PlainObjectBase<Eigen::MatrixXi >&, double, double, bool, int, int, bool, bool, std::vector<int, std::allocator<int> >, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >, bool);
 // #endif

@@ -12,13 +12,8 @@ namespace geolio::test
 {
     class MIQTest : public ::testing::Test {
     protected:
-        void SetUp() override {
-            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes.geogram"));
-            mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
-        }
-
-        void save_results() {
-            mesh.save(get_current_test_name()+".geogram");
+        void save_results(const std::string& suffix = "") {
+            mesh.save(get_current_test_name()+suffix+".geogram");
 
             {
                 GEO::Mesh mesh_out(2);
@@ -33,7 +28,7 @@ namespace geolio::test
                     mesh_out.facets.set_vertex(f, 1, 3*f+1);
                     mesh_out.facets.set_vertex(f, 2, 3*f+2);
                 }
-                mesh_out.save(get_current_test_name()+"_uv.geogram");
+                mesh_out.save(get_current_test_name()+suffix+"_uv.geogram");
             }
         }
 
@@ -42,12 +37,20 @@ namespace geolio::test
         MIQParameters params;
     };
 
-    TEST_F(MIQTest, nrosy) {
+    class MIQExampleTest : public MIQTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes.geogram"));
+            mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
+        }
+    };
+
+    TEST_F(MIQExampleTest, nrosy) {
         miq<3>(mesh, mesh_fc_uv, params);
         save_results();
     }
 
-    TEST_F(MIQTest, pre_compute_cross) {
+    TEST_F(MIQExampleTest, pre_compute_cross) {
         GEO::FrameField cross_field;
         cross_field.create_from_surface_mesh(mesh, false);
 
@@ -57,6 +60,54 @@ namespace geolio::test
         miq<3>(mesh, mesh_fc_uv, params);
         save_results();
     }
-}
 
+    class MIQOpenBoundaryExampleTest : public MIQTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"cut_cylinder.geogram"));
+            mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
+        }
+
+        void check_boundary(const bool expect_snapped) {
+            GEO::index_t nb_boundary_edges = 0;
+            GEO::index_t nb_grid_aligned = 0;
+            for (const auto& f : mesh.facets) {
+                for (GEO::index_t lv = 0; lv < 3; ++lv) {
+                    if (mesh.facets.adjacent(f, lv) != GEO::NO_FACET) continue;
+                    ++nb_boundary_edges;
+                    const GEO::index_t c0 = mesh.facets.corner(f, lv);
+                    const GEO::index_t c1 = mesh.facets.corner(f, (lv + 1) % 3);
+                    const double du = mesh_fc_uv[2*c1] - mesh_fc_uv[2*c0];
+                    const double dv = mesh_fc_uv[2*c1+1] - mesh_fc_uv[2*c0+1];
+                    const bool u_is_const = std::fabs(du) <= 1e-6;
+                    const bool v_is_const = std::fabs(dv) <= 1e-6;
+                    if (!u_is_const && !v_is_const) continue;
+                    const double line = u_is_const ? mesh_fc_uv[2*c0] : mesh_fc_uv[2*c0+1];
+                    if (std::fabs(line - std::round(line)) > 1e-6) continue;
+                    ++nb_grid_aligned;
+                }
+            }
+            EXPECT_GT(nb_boundary_edges, 0);
+            if (expect_snapped) {
+                EXPECT_EQ(nb_grid_aligned, nb_boundary_edges)
+                    << "every boundary edge should lie on an integer grid line";
+            } else {
+                EXPECT_LT(nb_grid_aligned, nb_boundary_edges)
+                    << "without snap_boundary the boundary is expected to miss the grid";
+            }
+        }
+    };
+
+    TEST_F(MIQOpenBoundaryExampleTest, boundary_on_integer_grid) {
+        params.snap_boundary = true;
+        miq<3>(mesh, mesh_fc_uv, params);
+        check_boundary(true);
+        save_results("_snap");
+
+        params.snap_boundary = false;
+        miq<3>(mesh, mesh_fc_uv, params);
+        check_boundary(false);
+        save_results("_wo_snap");
+    }
+}
 #endif

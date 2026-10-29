@@ -45,8 +45,16 @@ namespace geolio
         bool SingularityRound = true;
         /// Additional vertex indices to snap to integer coordinates.
         std::vector<int> round_vertices = std::vector<int>();
-        /// Vertex pairs defining hard features to snap to integer coordinates.
+        /// (facet, local edge) pairs defining hard features to snap to integer grid lines.
         std::vector<std::vector<int>> hard_features = std::vector<std::vector<int>>();
+        /// Whether open boundary edges are snapped to integer grid lines (default true).
+        ///
+        /// For a mesh with open boundaries the boundary is a natural cut, so MIQ needs no
+        /// seam constraint along it; without this flag the boundary is however only driven
+        /// by the Poisson energy and ends up at arbitrary real coordinates, i.e. the integer
+        /// grid crosses the boundary wherever it wants. With the flag the boundary becomes a
+        /// staircase of integer grid lines, so quads can be extracted right up to the border.
+        bool snap_boundary = true;
     };
 
     /**
@@ -65,6 +73,11 @@ namespace geolio
      * @pre `mesh` contains only triangular facets.
      * @pre `mesh_fc_uv` is bound, has dimension 2, and has one entry per facet corner.
      * @pre `params.vectors_nb_per_facet` is at least 2.
+     *
+     * @note For a mesh with open boundaries, `params.snap_boundary` (default true) makes
+     *       every boundary edge lie on an integer grid line, which is normally required to
+     *       extract quads whose boundary follows the mesh boundary. Pass
+     *       `params.snap_boundary = false` to leave the boundary free, as older code did.
      */
     template <GEO::index_t DIM>
     void miq(
@@ -160,7 +173,8 @@ namespace geolio
             params.DoRound,
             params.SingularityRound,
             params.round_vertices,
-            params.hard_features);
+            params.hard_features,
+            params.snap_boundary);
 
         /* Output */
         for (const auto& f : mesh.facets) {
