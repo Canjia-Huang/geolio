@@ -4,9 +4,9 @@
 //
 #ifndef GEOLIO_APPLICATIONS_H
 #define GEOLIO_APPLICATIONS_H
-
 #include "application_registry.h"
-#include "local_operation_optimization_application.h"
+#include "mesh/local_operation_optimization_application.h"
+#include "mesh/mesh_repair_triangulate_application.h"
 
 namespace geolio::geobox
 {
@@ -39,6 +39,9 @@ namespace geolio::geobox
         geolio_register_BaseApplication_creator(
             LocalOperationOptimizationApplication,
             "Mesh", "Optimization");
+        geolio_register_BaseApplication_creator(
+            MeshRepairTriangulateApplication,
+            "Mesh", "Repair");
     }
 }
 
