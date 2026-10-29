@@ -8,6 +8,7 @@
 #include <geogram_gfx/gui/simple_mesh_application.h>
 #include "colormap.h"
 #include "application/base_application.h"
+#include "application/application_menu.h"
 #include "geolio/geobox/object/base_object.h"
 
 namespace geolio::geobox
@@ -229,6 +230,13 @@ namespace geolio::geobox
         ImVec2 object_properties_size_{0.0f, 0.0f};
 
         std::vector<std::unique_ptr<BaseApplication>> applications_;
+
+        /** "Applications" menu tree, built once from each application's own
+         *  application_name() / menu_path(), i.e. from the registration data
+         *  in application/register_applications.h. Keeping it as a tree is
+         *  what lets draw_application_menus() stay generic: adding a
+         *  sub-application or a sub-menu never touches that function. */
+        ApplicationMenu application_menu_;
     };
 }
 

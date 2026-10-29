@@ -4,12 +4,11 @@
 //
 #ifndef GEOLIO_BASE_APPLICATION_H
 #define GEOLIO_BASE_APPLICATION_H
-
 #include <string>
 #include <utility>
-
+#include <vector>
 #include <geogram_gfx/third_party/imgui/imgui.h>
-#include <geogram_gfx/imgui_ext/icon_font.h>
+#include <geolio/common/utils.h>
 
 namespace geolio::geobox
 {
@@ -20,12 +19,62 @@ namespace geolio::geobox
      *          (draw_menu()) and one floating window (draw_window()), whose
      *          title is application_name_ and whose visibility is shared
      *          between the menu checkbox and the window's close button.
+     *          The concrete class decides its own display name (passed to the
+     *          BaseApplication constructor) and gets a generated instance id,
+     *          so neither has to be supplied at the registration site.
+     *          The entry is placed in a (possibly empty) chain of sub-menus
+     *          below the "Applications" menu: menu_path() holds the labels of
+     *          those parent menus, from the root one to the closest one.
      */
     class BaseApplication {
     public:
-        explicit BaseApplication(std::string application_name) : application_name_(std::move(application_name)) {}
+        explicit BaseApplication(std::string application_name)
+            : id_(generate_random_string(22)),
+              application_name_(std::move(application_name))
+        {}
 
         virtual ~BaseApplication() = default;
+
+        /**
+         * @brief Unique identifier of this application instance.
+         * @details Generated when the instance is constructed, so neither the
+         *          concrete class nor the registration site has to provide
+         *          one.
+         */
+        [[nodiscard]] const std::string& id() const {
+            return id_;
+        }
+
+        /**
+         * @brief User-facing name of this application.
+         * @details Used as the menu item label and as the window title.
+         *          Decided by the concrete class in its constructor.
+         */
+        [[nodiscard]] const std::string& application_name() const {
+            return application_name_;
+        }
+
+        /**
+         * @brief Labels of the sub-menus this application lives in.
+         * @details Empty means the entry is a direct child of the
+         *          "Applications" menu. A path like {"Mesh", "Optimization"}
+         *          yields Applications > Mesh > Optimization > entry.
+         *          Filled in by the application factory from the registration
+         *          data (see application_registry.h).
+         */
+        [[nodiscard]] const std::vector<std::string>& menu_path() const {
+            return menu_path_;
+        }
+
+        /**
+         * @brief Sets the sub-menu chain this application lives in.
+         * @details Called once by the registry-based factory right after
+         *          construction, so concrete applications do not need to
+         *          know about menu placement.
+         */
+        void set_menu_path(std::vector<std::string> menu_path) {
+            menu_path_ = std::move(menu_path);
+        }
 
         /**
          * @brief Draws this application's entries in the main menu bar.
@@ -80,8 +129,11 @@ namespace geolio::geobox
          */
         virtual void draw_window_contents() = 0;
 
-        std::string application_name_;
+        const std::string id_;
+        const std::string application_name_;
         std::string menu_tooltip_;
+        /** Parent sub-menu labels, outermost first (see menu_path()). */
+        std::vector<std::string> menu_path_;
         bool window_visible_ = false;
     };
 }

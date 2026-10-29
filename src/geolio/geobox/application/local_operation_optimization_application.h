@@ -17,9 +17,7 @@ namespace geolio::geobox
 {
     class LocalOperationOptimizationApplication : public BaseApplication {
     public:
-        LocalOperationOptimizationApplication(
-            std::string application_name,
-            const std::vector<std::shared_ptr<BaseObject>>& objects);
+        LocalOperationOptimizationApplication(const std::vector<std::shared_ptr<BaseObject>>& objects);
 
     protected:
         void draw_window_contents() override;

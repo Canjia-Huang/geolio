@@ -87,13 +87,19 @@ namespace geolio::geobox
         /* Register and instantiate every sub-application: instead of
          * hardcoding each concrete application here, the registry is
          * populated by register_additional_Applications() (see
-         * application/applications.h, mirroring how additional MeshIO
-         * handlers are registered in geolio/io/io.h), and each registered
-         * creator is invoked with this application's objects container. */
+         * application/register_applications.h, mirroring how additional
+         * MeshIO handlers are registered in geolio/io/io.h), and each
+         * registered creator is invoked with this application's objects
+         * container. Registration data also carries the sub-menu the
+         * application belongs to, so the menu tree is built here from the
+         * instances themselves: no concrete type is known at this point. */
         register_additional_Applications();
         for (const auto& entry : BaseApplicationRegistry::instance().entries()) {
-            if (auto app = entry.creator(entry.display_name, objects_))
-                applications_.push_back(std::move(app));
+            auto application = entry.creator(entry.menu_path, objects_);
+            if (!application)
+                continue;
+            insert_application_menu_entry(application_menu_, *application);
+            applications_.push_back(std::move(application));
         }
     }
 
@@ -861,13 +867,15 @@ namespace geolio::geobox
 
     void GeoBoxApplication::draw_application_menus(
         ) {
-        if (!applications_.empty()) {
-            if (ImGui::BeginMenu("Application")) {
-                for (const auto& app_ptr : applications_)
-                    app_ptr->draw_menu();
-
-                ImGui::EndMenu();
-            }
+        // Purely generic: the hierarchy and the entries both come from the
+        // menu tree, which is built from the registration data (see
+        // application/register_applications.h). Adding a sub-application or a
+        // new sub-menu level does not require changing this function.
+        if (application_menu_.empty())
+            return;
+        if (ImGui::BeginMenu("Applications")) {
+            draw_application_menu(application_menu_);
+            ImGui::EndMenu();
         }
     }
 
