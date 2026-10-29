@@ -57,9 +57,11 @@ namespace geolio::geobox
 
     /**
      * @brief Inserts @p app in the menu tree, at application.menu_path().
-     * @details Empty path components are ignored (so a path of {""} means
-     *          "direct child of Applications"). The insertion order is the
-     *          order the applications are registered in.
+     * @details Empty path components are ignored. BaseApplication already
+     *          guarantees a non-empty path (applications that never set one
+     *          are grouped under UNGROUPED_APPLICATIONS_MENU_NAME), so every
+     *          leaf ends up inside at least one sub-menu. The insertion order
+     *          is the order the applications are registered in.
      */
     inline void insert_application_menu_entry(
         ApplicationMenu& menu, BaseApplication& application

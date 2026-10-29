@@ -13,6 +13,12 @@
 namespace geolio::geobox
 {
     /**
+     * @brief Label of the sub-menu that collects the applications which do
+     *        not specify any menu path (i.e. do not say where they belong).
+     */
+    inline constexpr const char* UNGROUPED_APPLICATIONS_MENU_NAME = "ungrouped";
+
+    /**
      * @brief Base class for plugin-style sub-applications (e.g. mesh apps)
      *        embedded in the main GeoBox application.
      * @details Each sub-application contributes one menu entry
@@ -25,6 +31,8 @@ namespace geolio::geobox
      *          The entry is placed in a (possibly empty) chain of sub-menus
      *          below the "Applications" menu: menu_path() holds the labels of
      *          those parent menus, from the root one to the closest one.
+     *          An application with no menu path set lands in the "ungrouped"
+     *          sub-menu (see UNGROUPED_APPLICATIONS_MENU_NAME).
      */
     class BaseApplication {
     public:
@@ -56,9 +64,12 @@ namespace geolio::geobox
 
         /**
          * @brief Labels of the sub-menus this application lives in.
-         * @details Empty means the entry is a direct child of the
-         *          "Applications" menu. A path like {"Mesh", "Optimization"}
-         *          yields Applications > Mesh > Optimization > entry.
+         * @details A path like {"Mesh", "Optimization"} yields
+         *          Applications > Mesh > Optimization > entry. It is never
+         *          empty: when no path is set, it is
+         *          {UNGROUPED_APPLICATIONS_MENU_NAME}, so such applications are
+         *          grouped under Applications > ungrouped instead of being
+         *          mixed with the top level entries.
          *          Filled in by the application factory from the registration
          *          data (see application_registry.h).
          */
@@ -70,10 +81,20 @@ namespace geolio::geobox
          * @brief Sets the sub-menu chain this application lives in.
          * @details Called once by the registry-based factory right after
          *          construction, so concrete applications do not need to
-         *          know about menu placement.
+         *          know about menu placement. Empty labels are dropped; if no
+         *          label is left, the path defaults to
+         *          {UNGROUPED_APPLICATIONS_MENU_NAME}.
          */
         void set_menu_path(std::vector<std::string> menu_path) {
-            menu_path_ = std::move(menu_path);
+            std::vector<std::string> labels;
+            labels.reserve(menu_path.size());
+            for (auto& label : menu_path) {
+                if (!label.empty())
+                    labels.push_back(std::move(label));
+            }
+            if (labels.empty())
+                labels.emplace_back(UNGROUPED_APPLICATIONS_MENU_NAME);
+            menu_path_ = std::move(labels);
         }
 
         /**
@@ -132,8 +153,10 @@ namespace geolio::geobox
         const std::string id_;
         const std::string application_name_;
         std::string menu_tooltip_;
-        /** Parent sub-menu labels, outermost first (see menu_path()). */
-        std::vector<std::string> menu_path_;
+        /** Parent sub-menu labels, outermost first (see menu_path()). Never
+         *  empty: defaults to {UNGROUPED_APPLICATIONS_MENU_NAME}. */
+        std::vector<std::string> menu_path_{UNGROUPED_APPLICATIONS_MENU_NAME};
+
         bool window_visible_ = false;
     };
 }

@@ -27,8 +27,8 @@ namespace geolio::geobox
      *              the parent sub-menus, outermost first, so
      *              ("Mesh", "Optimization") means
      *              Applications > Mesh > Optimization > entry;
-     *            - leaving them out puts the entry directly in the
-     *              Applications menu;
+     *            - leaving them out puts the entry in the "ungrouped"
+     *              sub-menu;
      *            - applications sharing a path automatically share the
      *              sub-menu (created once, in registration order), and a
      *              sub-menu with no application in it never appears.

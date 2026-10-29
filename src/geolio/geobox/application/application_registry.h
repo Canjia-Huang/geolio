@@ -50,8 +50,9 @@ namespace geolio::geobox
          *          duplicated here.
          */
         struct Entry {
-            /** Parent sub-menu labels, outermost first; empty means a direct
-             *  child of the "Applications" menu. */
+            /** Parent sub-menu labels, outermost first; when empty, the
+             *  created application defaults to the "ungrouped" sub-menu (see
+             *  BaseApplication::set_menu_path()). */
             std::vector<std::string> menu_path;
             /** Creates the application and attaches @c menu_path to it. */
             Creator creator;
@@ -67,8 +68,8 @@ namespace geolio::geobox
             /**
              * @brief Registers @p ConcreteType.
              * @param[in] menu_path labels of the parent sub-menus under the
-             *            "Applications" menu, outermost first; empty means a
-             *            direct child of "Applications".
+             *            "Applications" menu, outermost first; when empty, the
+             *            application lands in the "ungrouped" sub-menu.
              */
             explicit RegisterCreator(std::vector<std::string> menu_path = {}) {
                 BaseApplicationRegistry::instance().register_creator(
@@ -136,8 +137,8 @@ namespace geolio::geobox
  *          class itself, so they are not passed here. Mirrors
  *          geo_register_MeshIOHandler_creator() from geolio/io/io.h.
  *          The optional trailing arguments are the labels of the parent
- *          sub-menus, outermost first: none means the entry is a direct child
- *          of the "Applications" menu, while
+ *          sub-menus, outermost first: none means the entry is grouped under
+ *          "ungrouped", while
  *          geolio_register_BaseApplication_creator(Type, "Mesh", "Remeshing")
  *          puts it in Applications > Mesh > Remeshing.
  * @param[in] type the ConcreteType subclass of BaseApplication.
