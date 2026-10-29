@@ -12,11 +12,6 @@ namespace geolio::test
 {
     class MIQTest : public ::testing::Test {
     protected:
-        void SetUp() override {
-            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes.geogram"));
-            mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
-        }
-
         void save_results() {
             mesh.save(get_current_test_name()+".geogram");
 
@@ -42,18 +37,39 @@ namespace geolio::test
         MIQParameters params;
     };
 
-    TEST_F(MIQTest, nrosy) {
+    class MIQExampleTest : public MIQTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"three_holes.geogram"));
+            mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
+        }
+    };
+
+    TEST_F(MIQExampleTest, nrosy) {
         miq<3>(mesh, mesh_fc_uv, params);
         save_results();
     }
 
-    TEST_F(MIQTest, pre_compute_cross) {
+    TEST_F(MIQExampleTest, pre_compute_cross) {
         GEO::FrameField cross_field;
         cross_field.create_from_surface_mesh(mesh, false);
 
         params.cross = cross_field.frames().data();
         params.vectors_nb_per_facet = 3;
 
+        miq<3>(mesh, mesh_fc_uv, params);
+        save_results();
+    }
+
+    class MIQOpenExampleTest : public MIQTest {
+    protected:
+        void SetUp() override {
+            ASSERT_TRUE(mesh.load(std::string(TEST_DATA_PATH)+"cut_cylinder.geogram"));
+            mesh_fc_uv.create_vector_attribute(mesh.facet_corners.attributes(), "tex_coord", 2);
+        }
+    };
+
+    TEST_F(MIQOpenExampleTest, nrosy) {
         miq<3>(mesh, mesh_fc_uv, params);
         save_results();
     }
