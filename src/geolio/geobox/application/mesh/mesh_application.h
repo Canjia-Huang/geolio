@@ -93,18 +93,24 @@ namespace geolio::geobox
 
             ImGui::Separator();
 
+            // Drop the selection when the selected mesh is no longer valid for
+            // this application (e.g. Perform changed its connectivity): the
+            // combo box then falls back to "Select a mesh object" and the
+            // widgets below stay disabled until a valid mesh is picked.
+            // The selection has to be locked first: `lock()` on an expired
+            // weak_ptr returns nullptr, so dereferencing it straight away
+            // crashes as soon as no mesh is selected.
+            if (const auto selected_object = selected_mesh_object_.lock()) {
+                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
+                if (mesh_object == nullptr || !is_mesh_valid(mesh_object->mesh()))
+                    selected_mesh_object_.reset();
+            }
+
             // When no mesh object is selected yet, everything below the combo
             // box (parameters and the perform button) is non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
             {
                 draw_window_contents_details();
-
-                if (selected_mesh_object_.expired()) {
-                    const auto selected_object = selected_mesh_object_.lock();
-                    const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                    if (!is_mesh_valid(mesh_object->mesh()))
-                        selected_mesh_object_.reset();
-                }
             }
             ImGui::EndDisabled();
         }
