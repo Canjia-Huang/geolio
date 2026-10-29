@@ -15,7 +15,7 @@
 #include <geolio/common/config.h>
 #include <geolio/common/log.h>
 #include <geolio/common/parse_filepath.h>
-#include <geolio/frame_field/frame_field.h>
+#include <geolio/directional/frame_field.h>
 #include <geolio/io/io.h>
 #include <geolio/LpCVT/lp_cvt.h>
 #include <geolio/LpCVT/lp_measure.h>
