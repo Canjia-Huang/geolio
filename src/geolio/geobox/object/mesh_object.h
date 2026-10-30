@@ -46,12 +46,12 @@ namespace geolio::geobox
     public:
         /**
          * @brief Constructs a mesh object from a display name and a mesh instance.
-         * @param[in] name Name used to identify the object in the UI.
+         * @param[in] filepath Path to the source asset.
          * @param[in] colormaps Available colormap textures for scalar attribute rendering.
          * @param[in] mesh Source mesh data to render.
          */
         explicit MeshObject(
-            const std::string& name,
+            const std::string& filepath,
             const std::vector<ColormapInfo>& colormaps,
             const GEO::Mesh& mesh);
 

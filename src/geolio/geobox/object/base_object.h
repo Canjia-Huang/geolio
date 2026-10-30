@@ -9,6 +9,8 @@
 #include <geolio/common/parse_filepath.h>
 #include <geogram/basic/geometry.h>
 
+#include <utility>
+
 namespace geolio::geobox
 {
     /**
@@ -18,12 +20,14 @@ namespace geolio::geobox
     public:
         /**
          * @brief Constructs an object from its source file path.
-         * @param[in] filepath Path to the source asset or mesh file.
+         * @param[in] name object name.
+         * @param[in] filepath Path to the source asset.
          */
-        explicit BaseObject(
-            const std::string& filepath
-            ) : filepath_(filepath),
-                name_(get_filename(filepath)),
+        BaseObject(
+            std::string name,
+            std::string filepath
+            ) : name_(std::move(name)),
+                filepath_(std::move(filepath)),
                 unique_id_(generate_random_string(22))
         {}
 
@@ -69,8 +73,8 @@ namespace geolio::geobox
         virtual void get_bbox(double* xyzmin, double* xyzmax) const = 0;
 
     protected:
-        const std::string filepath_;
         const std::string name_;
+        const std::string filepath_;
 
         const std::string unique_id_;
 
