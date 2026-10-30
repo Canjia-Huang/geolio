@@ -94,6 +94,21 @@ namespace geolio::geobox
 
     protected:
         /**
+         * @brief Facet and cell counts broken down by kind, for the Info
+         *        panel.
+         * @details Facets are classified by arity (triangle, quad, polygon)
+         *          and cells by their GeoGram type (tet, hex, prism, pyramid,
+         *          connector).
+         */
+        struct ElementCounts {
+            GEO::index_t triangles = 0;
+            GEO::index_t quads = 0;
+            GEO::index_t polygons = 0;
+            /** Indexed by GEO::MeshCellType. */
+            GEO::index_t cells[GEO::MESH_NB_CELL_TYPES] = {0, 0, 0, 0, 0};
+        };
+
+        /**
          * @brief Draws the mesh vertices as markers with an absolute
          *        (model-space) size.
          * @details Each vertex is drawn as a camera-facing disc of diameter
@@ -120,6 +135,15 @@ namespace geolio::geobox
          * @return true if at least one facet edge is on the border.
          */
         bool compute_surface_has_borders() const;
+
+        /**
+         * @brief Counts the facets and the cells of each kind.
+         * @details The result is cached in element_counts_ when the mesh is
+         *          set (constructor) or reloaded; it feeds the breakdown rows
+         *          of the Info panel (see draw_object_properties()).
+         * @return The counts, indexed by facet arity and by cell type.
+         */
+        ElementCounts count_elements() const;
 
         /**
          * @brief Draws the explicit 1-D edges of the mesh (mesh.edges).
@@ -624,6 +648,16 @@ namespace geolio::geobox
 
         /** Cached bounding-box diagonal; < 0 means "not computed yet". */
         mutable float bbox_diag_ = -1.0f;
+
+        /**
+         * @brief The element breakdown above, counted when the mesh is set
+         *        (constructor) or reloaded (see count_elements()).
+         * @details Counted once rather than on each GUI frame: the Info panel
+         *          would otherwise walk every facet and every cell of the
+         *          mesh each time it is drawn, which is wasteful on large
+         *          meshes.
+         */
+        ElementCounts element_counts_;
 
         bool show_vertices_ = false;
         /**

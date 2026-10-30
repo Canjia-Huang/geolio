@@ -242,6 +242,7 @@ namespace geolio::geobox
         mesh_.copy(mesh);
         mesh_gfx_.set_mesh(&mesh_);
         surface_has_borders_ = compute_surface_has_borders();
+        element_counts_ = count_elements();
 
         if (mesh_.edges.nb() == 0 && mesh_.facets.nb() == 0 && mesh_.cells.nb() == 0)
             show_vertices_ = true;
@@ -281,54 +282,168 @@ namespace geolio::geobox
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Info")) {
             /* == Element count ==================================================================================== */
+            // One row per element kind (vertices, edges, facets, cells), with
+            // the kinds the mesh does not contain left out, and indented rows
+            // breaking a kind down: the dimension of the vertices, the arity
+            // of the facets, the type of the cells. A breakdown row whose
+            // count is zero is left out too, so the table only ever shows
+            // what the mesh actually has.
+            const auto format_count = [](const GEO::index_t count) {
+                // Thousands separators: a multi-million element mesh stays
+                // readable, and the counts remain comparable column-wise.
+                const std::string digits =
+                    std::to_string(static_cast<unsigned long long>(count));
+                std::string formatted;
+                formatted.reserve(digits.size() + digits.size() / 3);
+                for (std::size_t i = 0; i < digits.size(); ++i) {
+                    if (i != 0 && (digits.size() - i) % 3 == 0)
+                        formatted.push_back(',');
+                    formatted.push_back(digits[i]);
+                }
+                return formatted;
+            };
+
             if (ImGui::BeginTable(
                 "##InfoTable", 2,
-                ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)
+                ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerV |
+                ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)
                 ) {
-                ImGui::TableSetupColumn("Element");
-                ImGui::TableSetupColumn("Count");
-                ImGui::TableHeadersRow();
+                ImGui::TableSetupColumn(
+                    "Element", ImGuiTableColumnFlags_WidthStretch, 0.66f);
+                ImGui::TableSetupColumn(
+                    "Count", ImGuiTableColumnFlags_WidthStretch, 0.34f);
 
-                // Clicking a count copies its value to the clipboard.
-                const auto count_cell = [](const char* element, const GEO::index_t count) {
-                    const std::string text =
-                        std::to_string(static_cast<unsigned int>(count));
+                // Moves the cursor so that the text drawn next ends flush with
+                // the right edge of the cell: the counts are numbers, and they
+                // read better lined up on their last digit.
+                const auto right_aligned = [](const char* text) {
+                    ImGui::SetCursorPosX(
+                        ImGui::GetCursorPosX() +
+                        std::max(
+                            0.0f,
+                            ImGui::GetContentRegionAvail().x -
+                            ImGui::CalcTextSize(text).x));
+                };
+
+                // Header row. Drawn by hand rather than with TableHeadersRow()
+                // so that the title of the count column is right-aligned over
+                // the values, like they are.
+                ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted("Element");
+                ImGui::TableSetColumnIndex(1);
+                right_aligned("Count");
+                ImGui::TextUnformatted("Count");
+
+                // The count of the current row, right-aligned in the second
+                // column. Clicking it copies the bare value to the clipboard.
+                const auto count_cell = [&format_count, &right_aligned](
+                    const char* id, const GEO::index_t count) {
+                    const std::string text = format_count(count);
                     // The element name disambiguates the ImGui ID in case two
                     // counts happen to be equal.
-                    const std::string label = text + "##" + element;
-                    if (ImGui::Selectable(label.c_str(), false))
+                    const std::string label = text + "##" + id;
+                    const float label_width =
+                        ImGui::CalcTextSize(text.c_str()).x;
+                    ImGui::TableSetColumnIndex(1);
+                    right_aligned(text.c_str());
+                    if (ImGui::Selectable(
+                        label.c_str(), false, 0, ImVec2(label_width, 0.0f)))
                         ImGui::SetClipboardText(text.c_str());
-                    // if (ImGui::IsItemHovered())
-                    //     ImGui::SetTooltip("Click to copy");
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Click to copy");
+                };
+
+                // Horizontal offset at which a tree node draws its label: the
+                // arrow, plus the padding on both sides of it (see
+                // ImGui::TreeNodeBehavior()). The kind rows without a
+                // breakdown indent their name by the same amount, so that all
+                // the kinds line up whether they have an arrow or not.
+                const float label_offset =
+                    ImGui::GetFontSize() +
+                    2.0f * ImGui::GetStyle().FramePadding.x;
+
+                // A row naming an element kind that has nothing to break down
+                // (edges), drawn on the table's header colour so that the
+                // kinds stand out from their breakdown.
+                const auto element_row = [&count_cell, label_offset](
+                    const char* name, const GEO::index_t count) {
+                    ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::SetCursorPosX(
+                        ImGui::GetCursorPosX() + label_offset);
+                    ImGui::TextUnformatted(name);
+                    count_cell(name, count);
+                };
+
+                // A row naming an element kind that has a breakdown. The
+                // arrow opens and closes the breakdown rows below it; like
+                // any tree node it starts collapsed, and remembers its state.
+                // @return true when the breakdown is open and must be drawn.
+                const auto kind_row = [&count_cell](
+                    const char* name, const GEO::index_t count) {
+                    ImGui::TableNextRow();
+                    // Same background as the plain kind rows, so that all the
+                    // kinds read as a group whether they expand or not.
+                    ImGui::TableSetBgColor(
+                        ImGuiTableBgTarget_RowBg0,
+                        ImGui::GetColorU32(ImGuiCol_TableHeaderBg));
+                    ImGui::TableSetColumnIndex(0);
+                    const bool open = ImGui::TreeNodeEx(
+                        name, ImGuiTreeNodeFlags_None, "%s", name);
+                    count_cell(name, count);
+                    return open;
+                };
+
+                // A breakdown row of the element kind above it. Left out when
+                // the mesh has none of it. The row inherits the indentation of
+                // the tree node its kind row pushed, so no explicit indentation
+                // is needed here.
+                const auto detail_row = [&count_cell](
+                    const char* name, const GEO::index_t count) {
+                    if (count == 0)
+                        return;
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(name);
+                    count_cell(name, count);
                 };
 
                 if (mesh_.vertices.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("vertices");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("vertices", mesh_.vertices.nb());
+                    if (kind_row("Vertices", mesh_.vertices.nb())) {
+                        detail_row("dimension", mesh_.vertices.dimension());
+                        ImGui::TreePop();
+                    }
                 }
-                if (mesh_.edges.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("edges");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("edges", mesh_.edges.nb());
-                }
+                if (mesh_.edges.nb() > 0)
+                    element_row("Edges", mesh_.edges.nb());
                 if (mesh_.facets.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("facets");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("facets", mesh_.facets.nb());
+                    if (kind_row("Facets", mesh_.facets.nb())) {
+                        detail_row("triangles", element_counts_.triangles);
+                        detail_row("quads", element_counts_.quads);
+                        detail_row("polygons", element_counts_.polygons);
+                        ImGui::TreePop();
+                    }
                 }
                 if (mesh_.cells.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("cells");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("cells", mesh_.cells.nb());
+                    if (kind_row("Cells", mesh_.cells.nb())) {
+                        // GeoGram's cell types, in the enum's order: these are
+                        // also the names the enum values are usually called by.
+                        static const char* CELL_TYPE_NAMES[] = {
+                            "tets", "hexes", "prisms", "pyramids", "connectors"
+                        };
+                        static_assert(
+                            sizeof(CELL_TYPE_NAMES) /
+                            sizeof(CELL_TYPE_NAMES[0]) ==
+                            GEO::MESH_NB_CELL_TYPES,
+                            "one name per GeoGram cell type");
+                        for (int type = 0;
+                             type < GEO::MESH_NB_CELL_TYPES; ++type)
+                            detail_row(
+                                CELL_TYPE_NAMES[type],
+                                element_counts_.cells[type]);
+                        ImGui::TreePop();
+                    }
                 }
 
                 ImGui::EndTable();
@@ -855,6 +970,8 @@ namespace geolio::geobox
             // The new mesh has its own connectivity: whether it has borders to
             // draw may have changed too (see draw_object_properties()).
             surface_has_borders_ = compute_surface_has_borders();
+            // Same for the facet/cell breakdown shown by the Info panel.
+            element_counts_ = count_elements();
             // The new mesh has its own attributes: the display copy of the
             // displayed one has to be rebuilt on next draw (see
             // update_display_attribute()). The displayed attribute itself may be
@@ -1098,6 +1215,42 @@ namespace geolio::geobox
             }
         }
         return false;
+    }
+
+    MeshObject::ElementCounts MeshObject::count_elements(
+        ) const {
+        ElementCounts counts;
+
+        // Facets are classified by arity: GeoGram stores triangles/quads
+        // compactly but does not record the type, the number of vertices of
+        // the facet is what tells them apart. Facets with more than 4
+        // vertices (and the degenerate ones with fewer than 3, which a valid
+        // mesh should not have) are reported as polygons.
+        for (const GEO::index_t f : mesh_.facets) {
+            switch (mesh_.facets.nb_vertices(f)) {
+            case 3:
+                ++counts.triangles;
+                break;
+            case 4:
+                ++counts.quads;
+                break;
+            default:
+                ++counts.polygons;
+                break;
+            }
+        }
+
+        // Cells are classified by their GeoGram type (tets, hexes, prisms,
+        // pyramids, connectors). MeshCells::type() resolves the simplicial
+        // storage case to MESH_TET, so it yields the right type for every
+        // cell whatever the storage.
+        for (const GEO::index_t c : mesh_.cells) {
+            const GEO::MeshCellType type = mesh_.cells.type(c);
+            if (type < GEO::MESH_NB_CELL_TYPES)
+                ++counts.cells[type];
+        }
+
+        return counts;
     }
 
     void MeshObject::draw_surface(
