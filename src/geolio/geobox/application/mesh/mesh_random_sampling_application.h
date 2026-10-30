@@ -53,7 +53,25 @@ namespace geolio::geobox
             // (the parameters and the button that runs the operation) is
             // non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
-            {
+            if (const auto mesh_object = selected_mesh();
+                mesh_object != nullptr
+                ) {
+                const auto& mesh = mesh_object->mesh();
+
+                const bool has_facets = mesh.facets.nb() > 0;
+                if (!has_facets)
+                    volumetric_ = true;
+                const bool has_cells = mesh.cells.nb() > 0;
+                if (!has_cells)
+                    volumetric_ = false;
+                ImGui::BeginDisabled(!has_cells || !has_facets);
+                {
+                    ImGui::Checkbox("Volumetric", &volumetric_);
+                }
+                ImGui::EndDisabled();
+
+                ImGui::Separator();
+
                 {
                     ImGui::SetNextItemWidth(slider_width_);
 
@@ -72,26 +90,18 @@ namespace geolio::geobox
                     // an Attribute<double> on the vertices). Only the per-vertex
                     // attributes holding one double per vertex can be bound to
                     // mesh_v_weight_, which is what is_weight_attribute() keeps.
-                    const auto mesh_object = selected_mesh();
-                    if (mesh_object != nullptr) {
-                        ImGui::Checkbox(
-                            "Weighted by vertex attribute", &vertex_weighted_);
-                        if (vertex_weighted_)
-                            draw_attribute_selector(
-                                *mesh_object,
-                                &MeshRandomSamplingApplication::is_weight_attribute,
-                                "Attr.");
-                    }
+                    ImGui::Checkbox("Weighted by vertex attribute", &vertex_weighted_);
+                    if (vertex_weighted_)
+                        draw_attribute_selector(
+                            *mesh_object,
+                            &MeshRandomSamplingApplication::is_weight_attribute,
+                            "Attr.");
                 }
 
                 ImGui::Separator();
 
-                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
-                    if (const auto mesh_object = selected_mesh();
-                        mesh_object != nullptr) {
-                        perform(mesh_object->mesh());
-                        }
-                }
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)))
+                        perform(mesh);
             }
             ImGui::EndDisabled();
         }
@@ -111,8 +121,7 @@ namespace geolio::geobox
             if (mesh_v_weight_.is_bound())
                 mesh_v_weight_.unbind();
             if (vertex_weighted_ && !selected_attribute_.name.empty())
-                mesh_v_weight_.bind_if_is_compatible(
-                    mesh.vertices.attributes(), selected_attribute_.name);
+                mesh_v_weight_.bind_if_is_compatible(mesh.vertices.attributes(), selected_attribute_.name);
 
             /* Sampling */
             std::vector<double> sample_points;
@@ -123,12 +132,23 @@ namespace geolio::geobox
                     sample_points.data(),
                     samples_nb,
                     mesh_v_weight_);
-            else
-                GEO::mesh_generate_random_samples_on_surface<3>(
-                    mesh,
-                    sample_points.data(),
-                    samples_nb,
-                    mesh_v_weight_);
+            else {
+                if (volumetric_) {
+                    GEO::mesh_generate_random_samples_in_volume<3>(
+                        mesh,
+                        sample_points.data(),
+                        samples_nb,
+                        mesh_v_weight_);
+                }
+                else {
+                    GEO::mesh_generate_random_samples_on_surface<3>(
+                        mesh,
+                        sample_points.data(),
+                        samples_nb,
+                        mesh_v_weight_);
+                }
+            }
+
 
             /* Build samples object */
             GEO::Mesh samples_mesh(DIM);
@@ -137,6 +157,8 @@ namespace geolio::geobox
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
+
+        bool volumetric_ = false;
 
         int samples_nb = 1e3;
 
