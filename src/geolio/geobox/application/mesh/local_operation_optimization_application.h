@@ -33,7 +33,11 @@ namespace geolio::geobox
             // (the parameters and the button that runs the operation) is
             // non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
-            {
+            if (const auto mesh_object = selected_mesh();
+                mesh_object != nullptr
+                ) {
+                auto& mesh = mesh_object->mesh();
+
                 // Rounds: drag input with a lower limit of 1 and no upper limit
                 // (v_max <= v_min means unbounded; the value is clamped to >= 1
                 // when the user releases the drag).
@@ -99,14 +103,11 @@ namespace geolio::geobox
                 // Full-width button that triggers the optimization.
                 ImGui::Separator();
                 if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
-                    if (const auto mesh_object = selected_mesh();
-                        mesh_object != nullptr) {
-                        if (auto& mesh = mesh_object->mesh();
-                            mesh.vertices.dimension() == 2)
-                            perform<2>(mesh);
-                        else
-                            perform<3>(mesh);
-                    }
+                    if (mesh.vertices.dimension() == 2)
+                        perform<2>(mesh);
+                    else
+                        perform<3>(mesh);
+                    mesh_object->mesh_changed();
                 }
             }
             ImGui::EndDisabled();

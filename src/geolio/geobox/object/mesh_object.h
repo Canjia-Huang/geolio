@@ -91,7 +91,32 @@ namespace geolio::geobox
          */
         float bbox_diagonal() const;
 
+        /**
+         * @brief The mesh of this object.
+         * @warning An operation that modifies the mesh in place (its
+         *          connectivity, its coordinates or its attributes) must tell
+         *          the object, with mesh_changed(): everything the object
+         *          derived from the mesh -- the flags of the facets that have
+         *          border edges, the element counts of the Info panel, the
+         *          cached bounding box, the display copies of the attributes
+         *          and the buffers of the renderer -- would otherwise keep
+         *          describing the mesh as it was before the operation.
+         * @ref BaseApplication::perform_on_mesh() for the usual call site.
+         */
         auto& mesh() { return mesh_; }
+
+        /**
+         * @brief Tells this object that its mesh was modified in place.
+         * @details To be called after an operation changed the mesh behind the
+         *          object's back (see mesh()). What the object derived from the
+         *          mesh is refreshed on the next draw, not here: recomputing it
+         *          scans the facets and the cells, so it is only done once,
+         *          whatever the number of draws before it (see
+         *          update_mesh_caches()). The renderer is told right away,
+         *          since it only re-uploads the geometry and the attributes it
+         *          draws once it knows the mesh changed.
+         */
+        void mesh_changed();
 
         /**
          * @brief One attribute of the mesh, as listed by attribute_infos().
@@ -193,6 +218,17 @@ namespace geolio::geobox
          * @return true if at least one facet edge is on the border.
          */
         bool compute_surface_has_borders() const;
+
+        /**
+         * @brief Recomputes what this object caches about the mesh.
+         * @details The border flag and the element counts both walk the whole
+         *          mesh, so they are recomputed on demand, once per run of
+         *          operations, rather than on each frame: this is a no-op
+         *          unless mesh_changed() (or a reload) asked for it. Called by
+         *          the drawing and by the properties panel before they read
+         *          those caches.
+         */
+        void update_mesh_caches();
 
         /**
          * @brief Counts the facets and the cells of each kind.
@@ -716,6 +752,10 @@ namespace geolio::geobox
          *          meshes.
          */
         ElementCounts element_counts_;
+
+        /** Whether the mesh was modified since the caches above were
+         *  computed (see mesh_changed() and update_mesh_caches()). */
+        bool mesh_caches_dirty_ = false;
 
         bool show_vertices_ = false;
         /**

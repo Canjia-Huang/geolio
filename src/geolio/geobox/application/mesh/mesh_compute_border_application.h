@@ -36,13 +36,15 @@ namespace geolio::geobox
                 ) {
                 auto& mesh = mesh_object->mesh();
 
-                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)))
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
                     perform(mesh);
+                    mesh_object->mesh_changed();
+                }
             }
             ImGui::EndDisabled();
         }
 
-        void perform(GEO::Mesh& mesh) {
+        void perform(GEO::Mesh& mesh) const {
             LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
             mesh.cells.compute_borders();

@@ -32,13 +32,14 @@ namespace geolio::geobox
             // (the parameters and the button that runs the operation) is
             // non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
-            {
+            if (const auto mesh_object = selected_mesh();
+                mesh_object != nullptr
+                ) {
+                auto& mesh = mesh_object->mesh();
+
                 if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
-                    if (const auto mesh_object = selected_mesh();
-                        mesh_object != nullptr) {
-                        auto& mesh = mesh_object->mesh();
-                        perform(mesh);
-                        }
+                    perform(mesh);
+                    mesh_object->mesh_changed();
                 }
             }
             ImGui::EndDisabled();

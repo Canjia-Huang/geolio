@@ -32,31 +32,24 @@ namespace geolio::geobox
             // (the parameters and the button that runs the operation) is
             // non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
-            {
-                bool has_facets = false;
-                bool has_cells = false;
+            if (const auto mesh_object = selected_mesh();
+                mesh_object != nullptr
+                ) {
+                auto& mesh = mesh_object->mesh();
 
-                const auto mesh_object = selected_mesh();
-                if (mesh_object != nullptr) {
-                    const auto& mesh = mesh_object->mesh();
-                    if (mesh.facets.nb() > 0)
-                        has_facets = true;
-                    if (mesh.cells.nb() > 0)
-                        has_cells = true;
-                }
+                const bool has_facets = mesh.facets.nb() > 0;
+                const bool has_cells = mesh.cells.nb() > 0;
 
                 ImGui::BeginDisabled(!has_facets);
                 {
                     if (ImGui::Button("Connect facets", ImVec2(-1.0f, 0.0f))) {
-                        assert(mesh_object != nullptr);
-                        auto& mesh = mesh_object->mesh();
                         perform_connect_facets(mesh);
+                        mesh_object->mesh_changed();
                     }
 
                     if (ImGui::Button("Disconnect facets", ImVec2(-1.0f, 0.0f))) {
-                        assert(mesh_object != nullptr);
-                        auto& mesh = mesh_object->mesh();
                         perform_disconnect_facets(mesh);
+                        mesh_object->mesh_changed();
                     }
                 }
                 ImGui::EndDisabled();
@@ -66,15 +59,13 @@ namespace geolio::geobox
                 ImGui::BeginDisabled(!has_cells);
                 {
                     if (ImGui::Button("Connect cells", ImVec2(-1.0f, 0.0f))) {
-                        assert(mesh_object != nullptr);
-                        auto& mesh = mesh_object->mesh();
                         perform_connect_cells(mesh);
+                        mesh_object->mesh_changed();
                     }
 
                     if (ImGui::Button("Disconnect cells", ImVec2(-1.0f, 0.0f))) {
-                        assert(mesh_object != nullptr);
-                        auto& mesh = mesh_object->mesh();
                         perform_disconnect_cells(mesh);
+                        mesh_object->mesh_changed();
                     }
                 }
                 ImGui::EndDisabled();

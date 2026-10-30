@@ -274,6 +274,11 @@ namespace geolio::geobox
         ) {
         ImGui::PushID(this);
 
+        // An operation may have changed the mesh since the last frame (see
+        // mesh_changed()): the Info panel and the border controls below would
+        // otherwise show what the mesh was before it.
+        update_mesh_caches();
+
         if (ImGui::Button("Reload", ImVec2(-1, 0)))
             reload();
         if (ImGui::IsItemHovered())
@@ -884,6 +889,10 @@ namespace geolio::geobox
         if (mesh_gfx_.mesh() == nullptr)
             return;
 
+        // An operation may have changed the mesh since the last frame (see
+        // mesh_changed()).
+        update_mesh_caches();
+
         mesh_gfx_.set_lighting(lighting);
 
         // Choose how the elements are colored, as Graphite's painting mode
@@ -965,26 +974,17 @@ namespace geolio::geobox
         if (GEO::Mesh mesh;
             mesh.load(filepath_)) {
             mesh_.copy(mesh);
-            bbox_diag_ = -1.0f; // invalidate the cached bounding-box diagonal
-            // The new mesh has its own connectivity: whether it has borders to
-            // draw may have changed too (see draw_object_properties()).
-            surface_has_borders_ = compute_surface_has_borders();
-            // Same for the facet/cell breakdown shown by the Info panel.
-            element_counts_ = count_elements();
-            // The new mesh has its own attributes: the display copy of the
-            // displayed one has to be rebuilt on next draw (see
-            // update_display_attribute()). The displayed attribute itself may be
-            // gone from the file, which the drawing tests for before sampling it
-            // (see displayed_attribute_is_defined()).
-            display_attribute_ = DisplayAttribute();
-            // Same for the scaled texture coordinates: the reloaded mesh has
-            // its own store and attributes (see update_display_tex_coords()).
-            display_tex_coords_ = DisplayTexCoords();
-            // MeshGfx caches the geometry and the attributes it draws in buffer
-            // objects, which it only re-uploads once it is told the mesh changed:
-            // without this, the object would keep displaying the mesh the file
-            // held before the reload.
-            mesh_gfx_.set_mesh(&mesh_);
+
+            // The new mesh has its own connectivity, attributes and element
+            // counts, so everything the object derived from the previous one is
+            // stale: mesh_changed() invalidates it (the displayed attribute may
+            // also be gone from the file, which the drawing tests for before
+            // sampling it, see displayed_attribute_is_defined()). The reload is
+            // an explicit, rare operation, so the caches are refreshed right
+            // away instead of on the next draw, leaving the object consistent
+            // as soon as reload() returns.
+            mesh_changed();
+            update_mesh_caches();
         }
     }
 
@@ -1214,6 +1214,38 @@ namespace geolio::geobox
             }
         }
         return false;
+    }
+
+    void MeshObject::mesh_changed(
+        ) {
+        // What the object caches about the mesh is stale from now on; the parts
+        // that scan it are recomputed lazily (see update_mesh_caches()).
+        mesh_caches_dirty_ = true;
+        bbox_diag_ = -1.0f;
+
+        // The display copies are built on the attribute stores of the mesh,
+        // which the operation may have replaced (see update_display_attribute()
+        // and update_display_tex_coords()).
+        display_attribute_ = DisplayAttribute();
+        display_tex_coords_ = DisplayTexCoords();
+
+        // MeshGfx caches the geometry and the attributes it draws in buffer
+        // objects, which it only re-uploads once it is told the mesh changed:
+        // without this, the object would keep drawing the mesh as it was
+        // before the operation.
+        mesh_gfx_.set_mesh(&mesh_);
+    }
+
+    void MeshObject::update_mesh_caches(
+        ) {
+        if (!mesh_caches_dirty_)
+            return;
+        mesh_caches_dirty_ = false;
+
+        // Both walk the whole mesh, which is why they are not done in
+        // mesh_changed() but here, when the caches are actually read.
+        surface_has_borders_ = compute_surface_has_borders();
+        element_counts_ = count_elements();
     }
 
     MeshObject::ElementCounts MeshObject::count_elements(
