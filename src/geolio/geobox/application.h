@@ -212,6 +212,10 @@ namespace geolio::geobox
         bool controller_properties_visible_ = true;
         bool arc_ball_visible_ = true;
 
+        /** Whether the built-in ImGui demo window (ImGui::ShowDemoWindow)
+         *  is shown. Togglable from the Windows menu. */
+        bool imgui_demo_visible_ = false;
+
         std::vector<std::shared_ptr<BaseObject>> objects_;
         std::weak_ptr<BaseObject> selected_object_;
 

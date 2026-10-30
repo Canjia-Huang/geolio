@@ -304,6 +304,11 @@ namespace geolio::geobox
         draw_controller_properties_window();
         // draw_viewer_properties_window();
         draw_object_properties_window();
+
+        // Built-in ImGui demo window (toggled from the Windows menu). It
+        // passes its own visibility flag so its close button hides it again.
+        if (imgui_demo_visible_)
+            ImGui::ShowDemoWindow(&imgui_demo_visible_);
         // draw_console();
         // draw_command_window();
         // draw_command_line_editor();
@@ -707,6 +712,11 @@ namespace geolio::geobox
             GEO::icon_UTF8("group-arrows-rotate") + " Arc ball",
             0,
             &arc_ball_visible_
+        );
+        ImGui::MenuItem(
+            GEO::icon_UTF8("flask") + " ImGui demo",
+            0,
+            &imgui_demo_visible_
         );
         {
             bool needs_to_close = false;
