@@ -12,7 +12,7 @@ namespace geolio::geobox
 {
     class MeshConnectApplication : public MeshApplication {
     public:
-        explicit MeshConnectApplication(const std::vector<std::shared_ptr<BaseObject>>& objects)
+        explicit MeshConnectApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
             : MeshApplication("connect", objects)
         {
             menu_tooltip_ = "GEO::mesh.facets/cells.connect()";

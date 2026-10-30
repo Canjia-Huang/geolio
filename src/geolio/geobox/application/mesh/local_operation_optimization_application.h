@@ -13,7 +13,7 @@ namespace geolio::geobox
 {
     class LocalOperationOptimizationApplication : public MeshApplication {
     public:
-        explicit LocalOperationOptimizationApplication(const std::vector<std::shared_ptr<BaseObject>>& objects)
+        explicit LocalOperationOptimizationApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
             : MeshApplication("mesh optimization based on local operations", objects)
         {
             menu_tooltip_ = "Triangular mesh optimization based on local operations.";

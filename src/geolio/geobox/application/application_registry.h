@@ -32,14 +32,16 @@ namespace geolio::geobox
         /**
          * @brief Creator function type for a registered sub-application.
          * @details All registered concrete types must provide a constructor
-         *          (const ApplicationObjects&), which is the current
-         *          convention (see LocalOperationOptimizationApplication).
+         *          (ApplicationObjects&), which is the current convention
+         *          (see LocalOperationOptimizationApplication). The container
+         *          is passed by non-const reference so an application can add
+         *          objects to it (e.g. the result of a sampling operation).
          *          The menu path is passed in, so the menu placement stays out
          *          of the concrete classes.
          */
         using Creator = std::unique_ptr<BaseApplication>(*)(
             const std::vector<std::string>& menu_path,
-            const ApplicationObjects& objects
+            ApplicationObjects& objects
         );
 
         /**
@@ -97,8 +99,8 @@ namespace geolio::geobox
         template <class ConcreteType>
         static std::unique_ptr<BaseApplication> create(
             const std::vector<std::string>& menu_path,
-            const ApplicationObjects& objects
-        ) {
+            ApplicationObjects& objects
+            ) {
             auto application = std::make_unique<ConcreteType>(objects);
             application->set_menu_path(menu_path);
             return application;

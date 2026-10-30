@@ -145,7 +145,7 @@ namespace geolio::geobox
     }
 
     void GeoBoxApplication::create_scene_framebuffer(
-        GLsizei w, GLsizei h
+        const GLsizei w, const GLsizei h
         ) {
         delete_scene_framebuffer();
         scene_fb_w_ = w;

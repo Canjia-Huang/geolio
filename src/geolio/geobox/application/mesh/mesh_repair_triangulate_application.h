@@ -12,7 +12,7 @@ namespace geolio::geobox
 {
     class MeshRepairTriangulateApplication : public MeshApplication {
     public:
-        explicit MeshRepairTriangulateApplication(const std::vector<std::shared_ptr<BaseObject>>& objects)
+        explicit MeshRepairTriangulateApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
             : MeshApplication("triangulate", objects)
         {
             menu_tooltip_ = "GEO::mesh_repair(..., GEO::MESH_REPAIR_TRIANGULATE)";

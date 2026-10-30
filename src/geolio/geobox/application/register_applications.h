@@ -38,10 +38,10 @@ namespace geolio::geobox
      *          only walks the resulting tree, so it never needs to change.
      */
     inline void register_additional_Applications() {
-        geolio_register_BaseApplication_creator(MeshConnectApplication, "Mesh");
-        geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "Mesh", "Optimization");
-        geolio_register_BaseApplication_creator(MeshRepairColocateApplication, "Mesh", "Repair");
-        geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication, "Mesh", "Repair");
+        geolio_register_BaseApplication_creator(MeshConnectApplication, "mesh");
+        geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "mesh", "optimization");
+        geolio_register_BaseApplication_creator(MeshRepairColocateApplication, "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication, "mesh", "repair");
     }
 }
 

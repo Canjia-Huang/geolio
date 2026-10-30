@@ -13,7 +13,7 @@ namespace geolio::geobox
     public:
         MeshApplication(
             std::string application_name,
-            const std::vector<std::shared_ptr<BaseObject>>& objects
+            std::vector<std::shared_ptr<BaseObject>>& objects
             ) : BaseApplication(std::move(application_name)),
                 objects_(objects)
         {}
@@ -115,7 +115,7 @@ namespace geolio::geobox
             ImGui::EndDisabled();
         }
 
-        const std::vector<std::shared_ptr<BaseObject>>& objects_;
+        std::vector<std::shared_ptr<BaseObject>>& objects_;
 
         /** The mesh object currently selected in the combo box. */
         std::weak_ptr<BaseObject> selected_mesh_object_;

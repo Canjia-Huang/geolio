@@ -12,7 +12,7 @@ namespace geolio::geobox
 {
     class MeshRepairColocateApplication : public MeshApplication {
     public:
-        explicit MeshRepairColocateApplication(const std::vector<std::shared_ptr<BaseObject>>& objects)
+        explicit MeshRepairColocateApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
             : MeshApplication("colocate", objects)
         {
             menu_tooltip_ = "GEO::mesh_colocate_vertices_no_check(...)";
