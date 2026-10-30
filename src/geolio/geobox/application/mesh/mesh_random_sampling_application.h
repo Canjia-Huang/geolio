@@ -80,7 +80,7 @@ namespace geolio::geobox
                             draw_attribute_selector(
                                 *mesh_object,
                                 &MeshRandomSamplingApplication::is_weight_attribute,
-                                true, "Attr.", "No vertex attribute available.");
+                                "Attr.");
                     }
                 }
 

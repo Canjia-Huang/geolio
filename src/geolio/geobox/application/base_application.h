@@ -263,7 +263,7 @@ namespace geolio::geobox
             }
 
             if (mesh_objects.empty()) {
-                ImGui::TextUnformatted("No mesh object available.");
+                ImGui::TextDisabled("No mesh object available.");
                 return changed;
             }
 
@@ -331,21 +331,15 @@ namespace geolio::geobox
          * @param[in] mesh_object Mesh whose attributes are offered.
          * @param[in] filter Which attributes can be picked; all of them when
          *            empty.
-         * @param[in] allow_none Whether picking no attribute at all is allowed
-         *            ("none" entry, stored as an empty name).
          * @param[in] label Text shown on the left of the combo box; it also
          *            names the ImGui item, so two selectors drawn in the same
          *            window need different labels.
-         * @param[in] no_match_text Message shown when no attribute matches
-         *            @p filter.
          * @return true when the selection changed.
          */
         bool draw_attribute_selector(
             const MeshObject& mesh_object,
             const AttributeFilter& filter = {},
-            const bool allow_none = true,
-            const char* label = "Attr.",
-            const char* no_match_text = "No matching attribute."
+            const char* label = "Attr."
             ) {
             bool changed = false;
 
@@ -357,7 +351,7 @@ namespace geolio::geobox
             }
 
             if (attributes.empty()) {
-                ImGui::TextDisabled("%s", no_match_text);
+                ImGui::TextDisabled("%s", "No matching attribute.");
                 if (selected_attribute_.subelements != GEO::MESH_NONE) {
                     selected_attribute_ = MeshObject::AttributeInfo();
                     changed = true;
@@ -369,8 +363,6 @@ namespace geolio::geobox
             // (an empty selection) first when picking no attribute is allowed,
             // then the attributes that matched the filter.
             std::vector<MeshObject::AttributeInfo> entries;
-            if (allow_none)
-                entries.emplace_back();
             entries.insert(entries.end(), attributes.begin(), attributes.end());
 
             // The attribute the selection names may not be offered any more:
@@ -389,8 +381,8 @@ namespace geolio::geobox
             selected_attribute_ = entries[selected];
 
             std::string items;
-            for (std::size_t i = 0; i < entries.size(); ++i) {
-                const std::string name = entries[i].full_name();
+            for (const auto & entry : entries) {
+                const std::string name = entry.full_name();
                 // The empty name is the "picking no attribute" entry.
                 items += name.empty() ? "none" : name;
                 items.push_back('\0');
