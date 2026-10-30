@@ -1990,35 +1990,57 @@ namespace geolio::geobox
         return result;
     }
 
-    std::string MeshObject::vertex_scalar_attribute_names(
+    std::vector<MeshObject::AttributeInfo> MeshObject::attribute_infos(
         ) const {
-        // The attributes stored on the vertices, whatever their type: the
-        // elements of the other sub-elements (edges, facets, cells, ...) are
-        // not vertex weights.
-        GEO::vector<std::string> names;
-        mesh_.vertices.attributes().list_attribute_names(names);
+        // Every store of the mesh that can carry attributes, in the order the
+        // applications see them in their selectors.
+        static const GEO::MeshElementsFlags SUBELEMENTS[] = {
+            GEO::MESH_VERTICES,
+            GEO::MESH_EDGES,
+            GEO::MESH_FACETS,
+            GEO::MESH_FACET_CORNERS,
+            GEO::MESH_CELLS,
+            GEO::MESH_CELL_CORNERS,
+            GEO::MESH_CELL_FACETS
+        };
 
-        std::string result;
-        for (const std::string& name : names) {
-            const GEO::AttributeStore* store =
-                mesh_.vertices.attributes().find_attribute_store(name);
-            // A per-vertex weight is one double per vertex: attributes of
-            // another element type (int, bool, ...) cannot be bound to a
-            // GEO::Attribute<double>, and the vector ones hold more than one
-            // component per vertex (the sampler reads one value per vertex).
-            if (store == nullptr ||
-                store->element_typeid_name() != typeid(double).name() ||
-                store->dimension() != 1)
-                continue;
-            // The display copies are built by this object for the renderer,
-            // not written by the user's data (see DISPLAY_ATTRIBUTE_NAME and
-            // DISPLAY_TEX_COORD_NAME).
-            if (name == DISPLAY_ATTRIBUTE_NAME ||
-                name == DISPLAY_TEX_COORD_NAME)
-                continue;
-            if (!result.empty())
-                result += ';';
-            result += name;
+        // The coordinates of the vertices are stored as an attribute of the
+        // vertices store ("point", or "point_fp32" with single precision
+        // vertices, see MeshVertices::single_precision()): they are the
+        // geometry of the mesh, not data attached to it, so they are not
+        // offered as an attribute an application can pick.
+        const std::string coordinates_name =
+            mesh_.vertices.single_precision() ? "point_fp32" : "point";
+
+        std::vector<AttributeInfo> result;
+        for (const GEO::MeshElementsFlags subelements : SUBELEMENTS) {
+            const GEO::MeshSubElementsStore& store =
+                mesh_.get_subelements_by_type(subelements);
+            GEO::vector<std::string> names;
+            store.attributes().list_attribute_names(names);
+            for (const std::string& name : names) {
+                if (subelements == GEO::MESH_VERTICES &&
+                    name == coordinates_name)
+                    continue;
+                // The display copies are built by this object for the
+                // renderer, not written by the user's data (see
+                // DISPLAY_ATTRIBUTE_NAME and DISPLAY_TEX_COORD_NAME).
+                if (name == DISPLAY_ATTRIBUTE_NAME ||
+                    name == DISPLAY_TEX_COORD_NAME)
+                    continue;
+                const GEO::AttributeStore* attribute =
+                    store.attributes().find_attribute_store(name);
+                if (attribute == nullptr)
+                    continue;
+
+                AttributeInfo info;
+                info.subelements = subelements;
+                info.name = name;
+                info.element_type = attribute->element_typeid_name();
+                info.dimension = attribute->dimension();
+                info.nb_elements = store.nb();
+                result.push_back(std::move(info));
+            }
         }
         return result;
     }

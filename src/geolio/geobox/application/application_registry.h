@@ -15,9 +15,6 @@
 
 namespace geolio::geobox
 {
-    /** Objects container shared by all sub-applications. */
-    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
-
     /**
      * Registry of plugin-style sub-applications (BaseApplication subclasses).
      * Mirrors the MeshIOHandler factory pattern from geolio/io/io.h: concrete

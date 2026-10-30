@@ -4,36 +4,44 @@
 //
 #ifndef GEOLIO_MESH_REPAIR_TRIANGULATE_APPLICATION_H
 #define GEOLIO_MESH_REPAIR_TRIANGULATE_APPLICATION_H
-#include "mesh_application.h"
+#include <geolio/geobox/application/base_application.h>
 #include <geolio/geobox/object/mesh_object.h>
 #include <geogram/mesh/mesh_repair.h>
 
 namespace geolio::geobox
 {
-    class MeshRepairTriangulateApplication : public MeshApplication {
+    class MeshRepairTriangulateApplication : public BaseApplication {
     public:
         explicit MeshRepairTriangulateApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
-            : MeshApplication("triangulate", objects)
+            : BaseApplication("triangulate", objects)
         {
             menu_tooltip_ = "GEO::mesh_repair(..., GEO::MESH_REPAIR_TRIANGULATE)";
         }
 
     protected:
-        bool is_mesh_valid(const GEO::Mesh& mesh) override {
-            return mesh.facets.nb() > 0 && !mesh.facets.are_simplices();
-        }
+        void draw_window_contents() override {
+            // The mesh picker, offering the meshes this application accepts.
+            const bool selection_changed = draw_mesh_selector(
+                [](const GEO::Mesh& mesh) {
+                    return mesh.facets.nb() > 0 && !mesh.facets.are_simplices();
+                });
 
-        void draw_window_contents_details() override {
-            if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
-                // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-                // weak_ptr selection first.
-                const auto selected_object = selected_mesh_object_.lock();
-                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                if (mesh_object != nullptr) {
-                    auto& mesh = mesh_object->mesh();
-                    perform(mesh);
+            ImGui::Separator();
+
+            // When no mesh object is selected, everything below the picker
+            // (the parameters and the button that runs the operation) is
+            // non-interactive.
+            ImGui::BeginDisabled(selected_mesh_object_.expired());
+            {
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
+                    if (const auto mesh_object = selected_mesh();
+                        mesh_object != nullptr) {
+                        auto& mesh = mesh_object->mesh();
+                        perform(mesh);
+                        }
                 }
             }
+            ImGui::EndDisabled();
         }
 
         void perform(GEO::Mesh& mesh) const {

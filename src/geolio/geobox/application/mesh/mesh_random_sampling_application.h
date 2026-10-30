@@ -4,100 +4,96 @@
 //
 #ifndef GEOLIO_MESH_RANDOM_SAMPLING_APPLICATION_H
 #define GEOLIO_MESH_RANDOM_SAMPLING_APPLICATION_H
-#include "mesh_application.h"
+#include <geolio/geobox/application/base_application.h>
 #include <geolio/geobox/object/mesh_object.h>
 #include <geolio/common/log.h>
 #include <geogram/mesh/mesh_sampling.h>
 
 namespace geolio::geobox
 {
-    class MeshRandomSamplingApplication : public MeshApplication {
+    class MeshRandomSamplingApplication : public BaseApplication {
     public:
-        explicit MeshRandomSamplingApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
-            : MeshApplication("random sampling", objects)
+        explicit MeshRandomSamplingApplication(ApplicationObjects& objects)
+            : BaseApplication("random sampling", objects)
         {
             menu_tooltip_ = "Random sampling on mesh.";
         }
 
-    protected:
-        bool is_mesh_valid(const GEO::Mesh& mesh) override {
-            return mesh.facets.nb() > 0 || mesh.cells.nb() > 0;
+        /**
+         * @brief Tests whether an attribute can weight the sampling.
+         * @details The sampler reads the weight of the vertices of a triangle
+         *          from a GEO::Attribute<double> (see perform()), so only the
+         *          per-vertex attributes holding exactly one double per vertex
+         *          can be bound to it: an integer attribute cannot, a vector
+         *          one holds several components per vertex, and an attribute on
+         *          another sub-element has one value per facet or per cell
+         *          instead of one per vertex.
+         * @param[in] attribute Attribute of the selected mesh.
+         * @return true if @p attribute can weight the sampling.
+         */
+        static bool is_weight_attribute(
+            const MeshObject::AttributeInfo& attribute
+            ) {
+            return attribute.subelements == GEO::MESH_VERTICES &&
+                   attribute.holds<double>() &&
+                   attribute.dimension == 1;
         }
 
-        void draw_window_contents_details() override {
-            {
-                ImGui::SetNextItemWidth(slider_width_);
-
-                ImGui::DragInt(
-                    "Samples nb",
-                    &samples_nb, 1, 0, 1e8);
-            }
+    protected:
+        void draw_window_contents() override {
+            // The mesh picker, offering the meshes this application accepts.
+            const bool selection_changed = draw_mesh_selector(
+                [](const GEO::Mesh& mesh) {
+                    return mesh.facets.nb() > 0 || mesh.cells.nb() > 0;
+                });
 
             ImGui::Separator();
 
+            // When no mesh object is selected, everything below the picker
+            // (the parameters and the button that runs the operation) is
+            // non-interactive.
+            ImGui::BeginDisabled(selected_mesh_object_.expired());
             {
-                // Sampling weight: the sampler reads the selected attribute to
-                // make the number of samples of a triangle proportional to its
-                // weighted area (see
-                // GEO::mesh_generate_random_samples_on_surface(), which takes
-                // an Attribute<double> on the vertices). Only the per-vertex
-                // attributes holding one double per vertex can be bound to
-                // mesh_v_weight_, so those are the only ones offered here.
-                std::vector<std::string> attribute_names;
-                if (const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_mesh_object_.lock());
-                    mesh_object != nullptr)
-                    GEO::String::split_string(
-                        mesh_object->vertex_scalar_attribute_names(), ';', attribute_names);
+                {
+                    ImGui::SetNextItemWidth(slider_width_);
 
-                if (attribute_names.empty()) {
-                    ImGui::TextUnformatted("No vertex attribute available.");
+                    ImGui::DragInt(
+                        "Samples nb",
+                        &samples_nb, 1, 0, 1e8);
                 }
-                else {
-                    int selected = 0;
-                    for (std::size_t i = 1; i < attribute_names.size(); ++i) {
-                        if (attribute_names[i] == vertex_weight_attribute_name_)
-                            selected = static_cast<int>(i);
+
+                ImGui::Separator();
+
+                {
+                    // Sampling weight: the sampler reads the selected attribute to
+                    // make the number of samples of a triangle proportional to its
+                    // weighted area (see
+                    // GEO::mesh_generate_random_samples_on_surface(), which takes
+                    // an Attribute<double> on the vertices). Only the per-vertex
+                    // attributes holding one double per vertex can be bound to
+                    // mesh_v_weight_, which is what is_weight_attribute() keeps.
+                    const auto mesh_object = selected_mesh();
+                    if (mesh_object != nullptr) {
+                        ImGui::Checkbox(
+                            "Weighted by vertex attribute", &vertex_weighted_);
+                        if (vertex_weighted_)
+                            draw_attribute_selector(
+                                *mesh_object,
+                                &MeshRandomSamplingApplication::is_weight_attribute,
+                                true, "Attr.", "No vertex attribute available.");
                     }
-                    // The selected attribute is gone (another mesh was selected, or
-                    // the mesh was reloaded without it): fall back to "none".
-                    if (selected == 0)
-                        vertex_weight_attribute_name_.clear();
+                }
 
-                    std::string items;
-                    for (const std::string& name : attribute_names) {
-                        items += name;
-                        items.push_back('\0');
-                    }
+                ImGui::Separator();
 
-                    ImGui::Separator();
-
-                    ImGui::Checkbox("Weighted by vertex attribute", &vertex_weighted_);
-
-                    if (vertex_weighted_) {
-                        ImGui::AlignTextToFramePadding();
-                        ImGui::Text("Attr.");
-                        ImGui::SameLine();
-                        if (ImGui::Combo("##weight_attr", &selected, items.c_str())) {
-                            vertex_weight_attribute_name_ = selected == 0
-                                ? std::string()
-                                : attribute_names[static_cast<std::size_t>(selected)];
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
+                    if (const auto mesh_object = selected_mesh();
+                        mesh_object != nullptr) {
+                        perform(mesh_object->mesh());
                         }
-                    }
                 }
             }
-
-            ImGui::Separator();
-
-            if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
-                // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-                // weak_ptr selection first.
-                const auto selected_object = selected_mesh_object_.lock();
-                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                if (mesh_object != nullptr) {
-                    auto& mesh = mesh_object->mesh();
-                    perform(mesh);
-                }
-            }
+            ImGui::EndDisabled();
         }
 
         void perform(const GEO::Mesh& mesh) {
@@ -114,9 +110,9 @@ namespace geolio::geobox
             // case the sampling is area-proportional, as GeoGram does.
             if (mesh_v_weight_.is_bound())
                 mesh_v_weight_.unbind();
-            if (!vertex_weight_attribute_name_.empty())
+            if (vertex_weighted_ && !selected_attribute_.name.empty())
                 mesh_v_weight_.bind_if_is_compatible(
-                    mesh.vertices.attributes(), vertex_weight_attribute_name_);
+                    mesh.vertices.attributes(), selected_attribute_.name);
 
             /* Sampling */
             std::vector<double> sample_points;
@@ -144,9 +140,11 @@ namespace geolio::geobox
 
         int samples_nb = 1e3;
 
+        /** Whether the sampling is weighted by a vertex attribute (see
+         *  selected_attribute_ for which one). */
         bool vertex_weighted_ = false;
+
         GEO::Attribute<double> mesh_v_weight_;
-        std::string vertex_weight_attribute_name_;
     };
 }
 

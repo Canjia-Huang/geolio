@@ -6,6 +6,7 @@
 #define GEOLIO_MESH_OBJECT_H
 #include <algorithm>
 #include <string>
+#include <typeinfo>
 #include <vector>
 #include "base_object.h"
 #include <geogram/mesh/mesh.h>
@@ -93,23 +94,61 @@ namespace geolio::geobox
         auto& mesh() { return mesh_; }
 
         /**
-         * @brief Returns the names of the vertex attributes that hold one
-         *        double per vertex.
-         * @details Those are the attributes a per-vertex weight can be read
-         *          from, e.g. the weight of
-         *          GEO::mesh_generate_random_samples_on_surface() (bound to a
-         *          GEO::Attribute<double> on mesh.vertices.attributes()).
-         *          Integer and vector attributes are left out -- the former
-         *          cannot be bound to a double attribute, the latter hold
-         *          several components per vertex -- as are the display-only
-         *          copies this object builds for the renderer (see
-         *          DISPLAY_ATTRIBUTE_NAME and DISPLAY_TEX_COORD_NAME), which
-         *          are not attributes of the mesh.
-         * @return Semicolon-separated attribute names, as stored on the
-         *         vertices (e.g. "weight"), in the order the vertex store
-         *         lists them. Empty when the vertices carry no such attribute.
+         * @brief One attribute of the mesh, as listed by attribute_infos().
+         * @details Describes where the attribute lives and what it holds, so
+         *          that an application can decide whether it can work with it
+         *          (see BaseApplication::AttributeFilter) and bind it with the
+         *          GeoGram attribute API of the store it belongs to.
          */
-        std::string vertex_scalar_attribute_names() const;
+        struct AttributeInfo {
+            /** Store of the mesh the attribute lives on, one of GEO::MESH_VERTICES, GEO::MESH_EDGES, ... */
+            GEO::MeshElementsFlags subelements = GEO::MESH_NONE;
+            /** Name of the attribute, without its sub-elements prefix (e.g. "weight"). */
+            std::string name;
+            /** Element type, as given by GEO::AttributeStore::element_typeid_name(). */
+            std::string element_type;
+            /** Number of components per element: 1 for a scalar attribute. */
+            GEO::index_t dimension = 0;
+            /** Number of elements the attribute holds a value for. */
+            GEO::index_t nb_elements = 0;
+
+            /**
+             * @brief Tests whether one element is of type \p T.
+             * @details Compares the GeoGram element type name, so it matches
+             *          what the attribute stores were created with:
+             *          holds<double>() is true for a GEO::Attribute<double>,
+             *          holds<GEO::vec3>() for a GEO::Attribute<GEO::vec3>.
+             */
+            template <class T>
+            [[nodiscard]] bool holds() const {
+                return element_type == typeid(T).name();
+            }
+
+            /**
+             * @brief Name of the attribute as the mesh API spells it, i.e.
+             *        with its sub-elements prefix (e.g. "vertices.weight").
+             * @return The full name, or an empty string for the default value
+             *         of the structure, which stands for "no attribute".
+             */
+            [[nodiscard]] std::string full_name() const {
+                if (subelements == GEO::MESH_NONE)
+                    return {};
+                return GEO::Mesh::subelements_type_to_name(subelements) + "." + name;
+            }
+        };
+
+        /**
+         * @brief Lists the attributes of the mesh, on every sub-element.
+         * @details The applications pick the ones they can work on with that
+         *          list (see BaseApplication::draw_attribute_selector()). The
+         *          display-only copies this object builds for the renderer are
+         *          left out: they are not attributes of the mesh (see
+         *          DISPLAY_ATTRIBUTE_NAME and DISPLAY_TEX_COORD_NAME).
+         * @return The attributes, grouped by sub-element in the order of
+         *         GEO::MESH_VERTICES, GEO::MESH_EDGES, ..., and sorted by name
+         *         inside a group.
+         */
+        std::vector<AttributeInfo> attribute_infos() const;
 
     protected:
         /**

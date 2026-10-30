@@ -4,72 +4,80 @@
 //
 #ifndef GEOLIO_MESH_CONNECT_APPLICATION_H
 #define GEOLIO_MESH_CONNECT_APPLICATION_H
-#include "mesh_application.h"
+#include <geolio/geobox/application/base_application.h>
 #include <geolio/geobox/object/mesh_object.h>
 #include <geolio/common/log.h>
 
 namespace geolio::geobox
 {
-    class MeshConnectApplication : public MeshApplication {
+    class MeshConnectApplication : public BaseApplication {
     public:
         explicit MeshConnectApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
-            : MeshApplication("connect", objects)
+            : BaseApplication("connect", objects)
         {
             menu_tooltip_ = "GEO::mesh.facets/cells.connect()";
         }
 
     protected:
-        bool is_mesh_valid(const GEO::Mesh& mesh) override {
-            return mesh.facets.nb() > 0 || mesh.cells.nb() > 0;
-        }
-
-        void draw_window_contents_details() override {
-            bool has_facets = false;
-            bool has_cells = false;
-
-            // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-            // weak_ptr selection first.
-            const auto selected_object = selected_mesh_object_.lock();
-            const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-            if (mesh_object != nullptr) {
-                const auto& mesh = mesh_object->mesh();
-                if (mesh.facets.nb() > 0)
-                    has_facets = true;
-                if (mesh.cells.nb() > 0)
-                    has_cells = true;
-            }
-
-            ImGui::BeginDisabled(!has_facets);
-            {
-                if (ImGui::Button("Connect facets", ImVec2(-1.0f, 0.0f))) {
-                    assert(mesh_object != nullptr);
-                    auto& mesh = mesh_object->mesh();
-                    perform_connect_facets(mesh);
-                }
-
-                if (ImGui::Button("Disconnect facets", ImVec2(-1.0f, 0.0f))) {
-                    assert(mesh_object != nullptr);
-                    auto& mesh = mesh_object->mesh();
-                    perform_disconnect_facets(mesh);
-                }
-            }
-            ImGui::EndDisabled();
+        void draw_window_contents() override {
+            // The mesh picker, offering the meshes this application accepts.
+            const bool selection_changed = draw_mesh_selector(
+                [](const GEO::Mesh& mesh) {
+                    return mesh.facets.nb() > 0 || mesh.cells.nb() > 0;
+                });
 
             ImGui::Separator();
 
-            ImGui::BeginDisabled(!has_cells);
+            // When no mesh object is selected, everything below the picker
+            // (the parameters and the button that runs the operation) is
+            // non-interactive.
+            ImGui::BeginDisabled(selected_mesh_object_.expired());
             {
-                if (ImGui::Button("Connect cells", ImVec2(-1.0f, 0.0f))) {
-                    assert(mesh_object != nullptr);
-                    auto& mesh = mesh_object->mesh();
-                    perform_connect_cells(mesh);
+                bool has_facets = false;
+                bool has_cells = false;
+
+                const auto mesh_object = selected_mesh();
+                if (mesh_object != nullptr) {
+                    const auto& mesh = mesh_object->mesh();
+                    if (mesh.facets.nb() > 0)
+                        has_facets = true;
+                    if (mesh.cells.nb() > 0)
+                        has_cells = true;
                 }
 
-                if (ImGui::Button("Disconnect cells", ImVec2(-1.0f, 0.0f))) {
-                    assert(mesh_object != nullptr);
-                    auto& mesh = mesh_object->mesh();
-                    perform_disconnect_cells(mesh);
+                ImGui::BeginDisabled(!has_facets);
+                {
+                    if (ImGui::Button("Connect facets", ImVec2(-1.0f, 0.0f))) {
+                        assert(mesh_object != nullptr);
+                        auto& mesh = mesh_object->mesh();
+                        perform_connect_facets(mesh);
+                    }
+
+                    if (ImGui::Button("Disconnect facets", ImVec2(-1.0f, 0.0f))) {
+                        assert(mesh_object != nullptr);
+                        auto& mesh = mesh_object->mesh();
+                        perform_disconnect_facets(mesh);
+                    }
                 }
+                ImGui::EndDisabled();
+
+                ImGui::Separator();
+
+                ImGui::BeginDisabled(!has_cells);
+                {
+                    if (ImGui::Button("Connect cells", ImVec2(-1.0f, 0.0f))) {
+                        assert(mesh_object != nullptr);
+                        auto& mesh = mesh_object->mesh();
+                        perform_connect_cells(mesh);
+                    }
+
+                    if (ImGui::Button("Disconnect cells", ImVec2(-1.0f, 0.0f))) {
+                        assert(mesh_object != nullptr);
+                        auto& mesh = mesh_object->mesh();
+                        perform_disconnect_cells(mesh);
+                    }
+                }
+                ImGui::EndDisabled();
             }
             ImGui::EndDisabled();
         }

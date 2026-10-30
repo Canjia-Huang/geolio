@@ -4,48 +4,56 @@
 //
 #ifndef GEOLIO_MESH_REPAIR_COLOCATE_APPLICATION_H
 #define GEOLIO_MESH_REPAIR_COLOCATE_APPLICATION_H
-#include "mesh_application.h"
+#include <geolio/geobox/application/base_application.h>
 #include <geolio/geobox/object/mesh_object.h>
 #include <geogram/points/colocate.h>
 
 namespace geolio::geobox
 {
-    class MeshRepairColocateApplication : public MeshApplication {
+    class MeshRepairColocateApplication : public BaseApplication {
     public:
         explicit MeshRepairColocateApplication(std::vector<std::shared_ptr<BaseObject>>& objects)
-            : MeshApplication("colocate", objects)
+            : BaseApplication("colocate", objects)
         {
             menu_tooltip_ = "GEO::mesh_colocate_vertices_no_check(...)";
         }
 
     protected:
-        bool is_mesh_valid(const GEO::Mesh& mesh) override {
-            return mesh.vertices.nb() > 0;
-        }
-
-        void draw_window_contents_details() override {
-            {
-                ImGui::SetNextItemWidth(slider_width_);
-
-                constexpr double min_colocate_epsilon = 0;
-                ImGui::DragScalar(
-                    "Colocate epsilon", ImGuiDataType_Double,
-                    &colocate_epsilon, 0.0001f, &min_colocate_epsilon, nullptr,
-                    "%.4f");
-            }
+        void draw_window_contents() override {
+            // The mesh picker, offering the meshes this application accepts.
+            const bool selection_changed = draw_mesh_selector(
+                [](const GEO::Mesh& mesh) {
+                    return mesh.vertices.nb() > 0;
+                });
 
             ImGui::Separator();
 
-            if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
-                // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-                // weak_ptr selection first.
-                const auto selected_object = selected_mesh_object_.lock();
-                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                if (mesh_object != nullptr) {
-                    auto& mesh = mesh_object->mesh();
-                    perform(mesh);
+            // When no mesh object is selected, everything below the picker
+            // (the parameters and the button that runs the operation) is
+            // non-interactive.
+            ImGui::BeginDisabled(selected_mesh_object_.expired());
+            {
+                {
+                    ImGui::SetNextItemWidth(slider_width_);
+
+                    constexpr double min_colocate_epsilon = 0;
+                    ImGui::DragScalar(
+                        "Colocate epsilon", ImGuiDataType_Double,
+                        &colocate_epsilon, 0.0001f, &min_colocate_epsilon, nullptr,
+                        "%.4f");
+                }
+
+                ImGui::Separator();
+
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
+                    if (const auto mesh_object = selected_mesh();
+                        mesh_object != nullptr) {
+                        auto& mesh = mesh_object->mesh();
+                        perform(mesh);
+                        }
                 }
             }
+            ImGui::EndDisabled();
         }
 
         void perform(GEO::Mesh& mesh) const {
