@@ -92,6 +92,25 @@ namespace geolio::geobox
 
         auto& mesh() { return mesh_; }
 
+        /**
+         * @brief Returns the names of the vertex attributes that hold one
+         *        double per vertex.
+         * @details Those are the attributes a per-vertex weight can be read
+         *          from, e.g. the weight of
+         *          GEO::mesh_generate_random_samples_on_surface() (bound to a
+         *          GEO::Attribute<double> on mesh.vertices.attributes()).
+         *          Integer and vector attributes are left out -- the former
+         *          cannot be bound to a double attribute, the latter hold
+         *          several components per vertex -- as are the display-only
+         *          copies this object builds for the renderer (see
+         *          DISPLAY_ATTRIBUTE_NAME and DISPLAY_TEX_COORD_NAME), which
+         *          are not attributes of the mesh.
+         * @return Semicolon-separated attribute names, as stored on the
+         *         vertices (e.g. "weight"), in the order the vertex store
+         *         lists them. Empty when the vertices carry no such attribute.
+         */
+        std::string vertex_scalar_attribute_names() const;
+
     protected:
         /**
          * @brief Facet and cell counts broken down by kind, for the Info

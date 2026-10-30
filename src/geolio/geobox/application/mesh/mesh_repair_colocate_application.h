@@ -34,6 +34,8 @@ namespace geolio::geobox
                     "%.4f");
             }
 
+            ImGui::Separator();
+
             if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
                 // std::dynamic_pointer_cast needs a shared_ptr, so lock the
                 // weak_ptr selection first.

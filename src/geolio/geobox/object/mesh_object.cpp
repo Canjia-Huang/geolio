@@ -419,7 +419,7 @@ namespace geolio::geobox
                     element_row("Edges", mesh_.edges.nb());
                 if (mesh_.facets.nb() > 0) {
                     if (kind_row("Facets", mesh_.facets.nb())) {
-                        detail_row("triangles", element_counts_.triangles);
+                        detail_row("tris", element_counts_.triangles);
                         detail_row("quads", element_counts_.quads);
                         detail_row("polygons", element_counts_.polygons);
                         ImGui::TreePop();
@@ -433,8 +433,7 @@ namespace geolio::geobox
                             "tets", "hexes", "prisms", "pyramids", "connectors"
                         };
                         static_assert(
-                            sizeof(CELL_TYPE_NAMES) /
-                            sizeof(CELL_TYPE_NAMES[0]) ==
+                            std::size(CELL_TYPE_NAMES) ==
                             GEO::MESH_NB_CELL_TYPES,
                             "one name per GeoGram cell type");
                         for (int type = 0;
@@ -1987,6 +1986,39 @@ namespace geolio::geobox
             if (!result.empty())
                 result += ';';
             result += attribute;
+        }
+        return result;
+    }
+
+    std::string MeshObject::vertex_scalar_attribute_names(
+        ) const {
+        // The attributes stored on the vertices, whatever their type: the
+        // elements of the other sub-elements (edges, facets, cells, ...) are
+        // not vertex weights.
+        GEO::vector<std::string> names;
+        mesh_.vertices.attributes().list_attribute_names(names);
+
+        std::string result;
+        for (const std::string& name : names) {
+            const GEO::AttributeStore* store =
+                mesh_.vertices.attributes().find_attribute_store(name);
+            // A per-vertex weight is one double per vertex: attributes of
+            // another element type (int, bool, ...) cannot be bound to a
+            // GEO::Attribute<double>, and the vector ones hold more than one
+            // component per vertex (the sampler reads one value per vertex).
+            if (store == nullptr ||
+                store->element_typeid_name() != typeid(double).name() ||
+                store->dimension() != 1)
+                continue;
+            // The display copies are built by this object for the renderer,
+            // not written by the user's data (see DISPLAY_ATTRIBUTE_NAME and
+            // DISPLAY_TEX_COORD_NAME).
+            if (name == DISPLAY_ATTRIBUTE_NAME ||
+                name == DISPLAY_TEX_COORD_NAME)
+                continue;
+            if (!result.empty())
+                result += ';';
+            result += name;
         }
         return result;
     }
