@@ -1005,6 +1005,7 @@ namespace geolio::geobox
 
         /* Create object */
         const auto object_ptr = std::make_shared<MeshObject>(
+            get_filename(filepath),
             filepath,
             my_colormaps_,
             mesh);

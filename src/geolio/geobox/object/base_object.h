@@ -23,12 +23,10 @@ namespace geolio::geobox
          * @param[in] name object name.
          * @param[in] filepath Path to the source asset.
          */
-        BaseObject(
-            std::string name,
-            std::string filepath
-            ) : name_(std::move(name)),
-                filepath_(std::move(filepath)),
-                unique_id_(generate_random_string(22))
+        BaseObject(std::string name, std::string filepath)
+            : name_(std::move(name)),
+              filepath_(std::move(filepath)),
+              unique_id_(generate_random_string(22))
         {}
 
         /**

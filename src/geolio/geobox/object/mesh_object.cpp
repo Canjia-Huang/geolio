@@ -234,10 +234,11 @@ namespace geolio::geobox
     }
 
     MeshObject::MeshObject(
-        const std::string& filepath,
+        std::string name,
+        std::string filepath,
         const std::vector<ColormapInfo>& colormaps,
         const GEO::Mesh& mesh
-        ) : BaseObject(get_filename(filepath), filepath),
+        ) : BaseObject(std::move(name), std::move(filepath)),
             colormaps_(colormaps)
     {
         mesh_.copy(mesh);
