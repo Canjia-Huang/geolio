@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 #include <geogram/mesh/mesh.h>
 #include <geolio/geobox/object/mesh_object.h>
@@ -21,7 +22,16 @@ namespace geolio::test
      */
     class TestMeshObject : public geobox::MeshObject {
     public:
-        using MeshObject::MeshObject;
+        /**
+         * @brief Builds the object under test from a mesh built in memory.
+         * @details The scenarios of the tests below come from make_*_mesh(),
+         *          not from a file, so the object gets a name and the mesh only.
+         * @param[in] name Name of the object.
+         * @param[in] mesh Mesh to display.
+         */
+        TestMeshObject(std::string name, const GEO::Mesh& mesh)
+            : MeshObject(std::move(name), std::string(), mesh) {
+        }
 
         void select(const std::string& attribute) { set_attribute(attribute); }
 
@@ -190,8 +200,9 @@ namespace geolio::test
          * @brief Colormaps the tests select from: an ordinary one and the
          *        random one, as GeoBox builds them.
          * @details Only the names matter here: the textures are bound while
-         *          drawing only. The list is static because MeshObject keeps a
-         *          reference to it.
+         *          drawing only. The fixture below installs this table into the
+         *          process-wide colormap library, which is where the objects
+         *          read the colormaps from.
          */
         const std::vector<geobox::ColormapInfo>& test_colormaps() {
             static const std::vector<geobox::ColormapInfo> colormaps = [] {
@@ -266,13 +277,37 @@ namespace geolio::test
     }
 
     /**
+     * @brief Installs the colormap table the tests select from.
+     * @details A MeshObject is no longer handed the colormaps it draws with:
+     *          it reads the process-wide colormap library, which the
+     *          application builds while its GL context is current (see
+     *          ColormapLibrary). The tests run without a GL context, so the
+     *          fixture installs a table of names and texture ids directly --
+     *          nothing is uploaded, and the entries only have to tell the
+     *          colormaps apart. It is cleared afterwards so that no test
+     *          depends on the table of the one before it.
+     */
+    class MeshObjectAttributeRangeTest : public ::testing::Test {
+    protected:
+        void SetUp() override {
+            geobox::ColormapLibrary::instance().set_colormaps(
+                test_colormaps());
+        }
+
+        void TearDown() override {
+            geobox::ColormapLibrary::instance().set_colormaps(
+                std::vector<geobox::ColormapInfo>());
+        }
+    };
+
+    /**
      * @brief The colormap spans exactly the range the min/max fields read.
      */
-    TEST(MeshObjectAttributeRangeTest, ColormapSpansTheMinMaxFields) {
+    TEST_F(MeshObjectAttributeRangeTest, ColormapSpansTheMinMaxFields) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.select_colormap(VIRIDIS);
         object.set_field(0.0f, 3.0f);
@@ -295,11 +330,11 @@ namespace geolio::test
      *          FlipReversesTheColormapMapping). Reading the fields in
      *          increasing order also keeps the clamping consistent.
      */
-    TEST(MeshObjectAttributeRangeTest, BoundsAreOrdered) {
+    TEST_F(MeshObjectAttributeRangeTest, BoundsAreOrdered) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.set_field(3.0f, 0.0f);
 
@@ -315,11 +350,11 @@ namespace geolio::test
      *          displayed values keep being clamped to the ordered range, so the
      *          source attribute and the display copy are unaffected.
      */
-    TEST(MeshObjectAttributeRangeTest, FlipReversesTheColormapMapping) {
+    TEST_F(MeshObjectAttributeRangeTest, FlipReversesTheColormapMapping) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.select_colormap(VIRIDIS);
         object.set_field(0.0f, 3.0f);
@@ -349,11 +384,16 @@ namespace geolio::test
      * @details Smooth sampling interpolates between the colormap entries;
      *          hard boundaries need the nearest-filtered texture instead.
      */
-    TEST(MeshObjectAttributeRangeTest, SmoothToggleSelectsTheColormapTexture) {
+    TEST_F(MeshObjectAttributeRangeTest, SmoothToggleSelectsTheColormapTexture) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", filtered_test_colormaps(), mesh);
+        // The two texture ids the toggle picks from, installed in place of the
+        // table the fixture set.
+        geobox::ColormapLibrary::instance().set_colormaps(
+            filtered_test_colormaps());
+
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
 
         // Smooth by default: the interpolating texture is sampled...
@@ -372,7 +412,7 @@ namespace geolio::test
      *          attribute an OBJ file stores on facet corners. Scalar and 3D
      *          attributes cannot be used as texture coordinates.
      */
-    TEST(MeshObjectAttributeRangeTest, TextureAttributesAreListed) {
+    TEST_F(MeshObjectAttributeRangeTest, TextureAttributesAreListed) {
         GEO::Mesh mesh;
         mesh.vertices.set_dimension(3);
         mesh.vertices.create_vertices(3);
@@ -388,7 +428,7 @@ namespace geolio::test
         tex_coords.create_vector_attribute(
             mesh.facet_corners.attributes(), "tex_coord", 2);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
 
         // The 2D texture coordinates are offered...
         const std::string attributes = object.texture_attributes();
@@ -409,7 +449,7 @@ namespace geolio::test
      *          (see update_display_tex_coords()), which is hidden from the
      *          attribute chooser.
      */
-    TEST(MeshObjectAttributeRangeTest, UvScaleStretchesTextureCoordinates) {
+    TEST_F(MeshObjectAttributeRangeTest, UvScaleStretchesTextureCoordinates) {
         GEO::Mesh mesh;
         mesh.vertices.set_dimension(3);
         mesh.vertices.create_vertices(3);
@@ -426,7 +466,7 @@ namespace geolio::test
             tex_coords[2 * c + 1] = 0.2 * double(c + 1);
         }
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select_tex_coords("facet_corners.tex_coord");
 
         // Disabled by default: the selected attribute is sampled directly.
@@ -478,11 +518,11 @@ namespace geolio::test
      * @details While it is disabled the image is sampled once, as if
      *          tex_repeat were 1.
      */
-    TEST(MeshObjectAttributeRangeTest, TextureRepeatIsOnlyAppliedWhenEnabled) {
+    TEST_F(MeshObjectAttributeRangeTest, TextureRepeatIsOnlyAppliedWhenEnabled) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
 
         object.set_tex_repeat(4, false);
         EXPECT_EQ(object.repeat(), 1u);
@@ -499,11 +539,11 @@ namespace geolio::test
      * @details The GUI hides the TEXTURE painting mode then (see
      *          draw_object_properties()).
      */
-    TEST(MeshObjectAttributeRangeTest, MeshWithoutTextureCoordinatesIsNotTexturable) {
+    TEST_F(MeshObjectAttributeRangeTest, MeshWithoutTextureCoordinatesIsNotTexturable) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         EXPECT_TRUE(object.texture_attributes().empty());
     }
 
@@ -515,11 +555,11 @@ namespace geolio::test
      *          it is colored like the max bound, and a value below the min
      *          bound like the min bound.
      */
-    TEST(MeshObjectAttributeRangeTest, ValuesOutsideTheRangeTakeTheEndColors) {
+    TEST_F(MeshObjectAttributeRangeTest, ValuesOutsideTheRangeTakeTheEndColors) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.select_colormap(VIRIDIS);
         object.set_field(0.0f, 3.0f);
@@ -542,11 +582,11 @@ namespace geolio::test
     /**
      * @brief The values of the range are mapped linearly onto the colormap.
      */
-    TEST(MeshObjectAttributeRangeTest, ValuesInsideTheRangeAreMappedLinearly) {
+    TEST_F(MeshObjectAttributeRangeTest, ValuesInsideTheRangeAreMappedLinearly) {
         GEO::Mesh mesh;
         make_cell_index_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.select_colormap(VIRIDIS);
         object.set_field(0.0f, 4.0f);
@@ -567,11 +607,11 @@ namespace geolio::test
      *          first texel; narrowing the fields is what spreads them over the
      *          colormap (see ColormapSpansTheMinMaxFields).
      */
-    TEST(MeshObjectAttributeRangeTest, AutorangeStillCoversNoIndex) {
+    TEST_F(MeshObjectAttributeRangeTest, AutorangeStillCoversNoIndex) {
         GEO::Mesh mesh;
         make_cell_index_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
 
         EXPECT_DOUBLE_EQ(object.field_min(), 0.0);
@@ -586,11 +626,11 @@ namespace geolio::test
      *          which then shares the color of the max bound (see
      *          ValuesOutsideTheRangeTakeTheEndColors).
      */
-    TEST(MeshObjectAttributeRangeTest, RandomColormapFollowsTheRange) {
+    TEST_F(MeshObjectAttributeRangeTest, RandomColormapFollowsTheRange) {
         GEO::Mesh mesh;
         make_cell_index_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.select_colormap(RANDOM);
         object.set_field(0.0f, 10.0f);
@@ -613,11 +653,11 @@ namespace geolio::test
      *          part of those inputs: a stale copy would color the elements with
      *          the values of a range the fields no longer read.
      */
-    TEST(MeshObjectAttributeRangeTest, DisplayCopyFollowsTheRange) {
+    TEST_F(MeshObjectAttributeRangeTest, DisplayCopyFollowsTheRange) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.select_colormap(VIRIDIS);
         object.set_field(0.0f, 3.0f);
@@ -650,11 +690,11 @@ namespace geolio::test
      *          the tests pin down that it is invisible to the rest of the
      *          application and that it does not alter the source attribute.
      */
-    TEST(MeshObjectAttributeRangeTest, DisplayCopyIsHiddenFromTheAttributeList) {
+    TEST_F(MeshObjectAttributeRangeTest, DisplayCopyIsHiddenFromTheAttributeList) {
         GEO::Mesh mesh;
         make_zero_to_three_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.set_field(0.0f, 3.0f);
 
@@ -688,11 +728,11 @@ namespace geolio::test
      *          replacing it with the range of the newly selected attribute
      *          would color the elements with a range the fields no longer read.
      */
-    TEST(MeshObjectAttributeRangeTest, UserRangeSurvivesSelectingAnAttribute) {
+    TEST_F(MeshObjectAttributeRangeTest, UserRangeSurvivesSelectingAnAttribute) {
         GEO::Mesh mesh;
         make_cell_index_mesh(mesh);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.v_cell");
         object.select_colormap(VIRIDIS);
         object.set_field(0.0f, 4.0f);
@@ -718,7 +758,7 @@ namespace geolio::test
     /**
      * @brief Without a sentinel, values are mapped linearly, as before.
      */
-    TEST(MeshObjectAttributeRangeTest, ContinuousAttributeIsMappedLinearly) {
+    TEST_F(MeshObjectAttributeRangeTest, ContinuousAttributeIsMappedLinearly) {
         GEO::Mesh mesh;
         mesh.vertices.set_dimension(3);
         mesh.vertices.create_vertices(11);
@@ -730,7 +770,7 @@ namespace geolio::test
             quality[v] = static_cast<double>(v);
         }
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.quality");
         object.select_colormap(RANDOM);
 
@@ -751,7 +791,7 @@ namespace geolio::test
      *          a float64 attribute that happens to contain the same number is
      *          a plain continuous attribute and is mapped like any other value.
      */
-    TEST(MeshObjectAttributeRangeTest, SentinelIsNotSpecialForFloatAttributes) {
+    TEST_F(MeshObjectAttributeRangeTest, SentinelIsNotSpecialForFloatAttributes) {
         GEO::Mesh mesh;
         mesh.vertices.set_dimension(3);
         mesh.vertices.create_vertices(2);
@@ -763,7 +803,7 @@ namespace geolio::test
         quality[0] = 0.0;
         quality[1] = static_cast<double>(GEO::NO_INDEX);
 
-        TestMeshObject object("test", test_colormaps(), mesh);
+        TestMeshObject object("test", mesh);
         object.select("vertices.quality");
         object.select_colormap(RANDOM);
 

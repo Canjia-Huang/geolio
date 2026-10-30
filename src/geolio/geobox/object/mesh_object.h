@@ -40,6 +40,9 @@ namespace geolio::geobox
      * @brief Mesh-backed object rendered by GeoBox.
      * @details This class wraps a GEO::Mesh and exposes the viewer controls needed to
      *          display vertices, surface facets, edges, and volume cells.
+     * @details The colormaps a scalar attribute can be displayed with are not
+     *          part of the object: they are the constant set of the application
+     *          (see ColormapLibrary), read here through colormaps().
      * @ref <geogram_gfx/gui/simple_mesh_application.cpp> SimpleMeshApplication
      */
     class MeshObject : public BaseObject {
@@ -48,13 +51,11 @@ namespace geolio::geobox
          * @brief Constructs a mesh object from a display name and a mesh instance.
          * @param[in] name Object name.
          * @param[in] filepath Path to the source asset.
-         * @param[in] colormaps Available colormap textures for scalar attribute rendering.
          * @param[in] mesh Source mesh data to render.
          */
         explicit MeshObject(
             std::string name,
             std::string filepath,
-            const std::vector<ColormapInfo>& colormaps,
             const GEO::Mesh& mesh);
 
         /**
@@ -415,6 +416,21 @@ namespace geolio::geobox
         }
 
         /**
+         * @brief Returns the colormaps the attribute display selects from.
+         * @details The set of colormaps is a property of the application, not of
+         *          the object being displayed: it does not change while the
+         *          objects live, and every object samples the same one. It is
+         *          therefore not handed to the constructor, and not stored here;
+         *          reading it through this accessor is what keeps the objects
+         *          valid across a rebuild of the table (see
+         *          ColormapLibrary::initialize()).
+         * @return The process-wide colormap table, in display order.
+         */
+        static const std::vector<ColormapInfo>& colormaps() {
+            return ColormapLibrary::instance().colormaps();
+        }
+
+        /**
          * @brief Returns the colormap texture the attribute is sampled with.
          * @details The smoothed texture while smooth_colormap_ is set, and its
          *          nearest-filtered variant otherwise (see
@@ -422,16 +438,17 @@ namespace geolio::geobox
          *          neighboring colormap entries into a gradient, while
          *          GL_NEAREST gives each entry a flat color band separated from
          *          the next one by a hard boundary.
-         * @param[in] index Index of the colormap in the colormap list.
+         * @param[in] index Index of the colormap in colormaps().
          * @return The texture to bind, or 0 when @p index is out of range.
          */
         GLuint colormap_texture(GEO::index_t index) const {
-            if (index >= colormaps_.size())
+            const ColormapInfo* colormap =
+                ColormapLibrary::instance().colormap(index);
+            if (colormap == nullptr)
                 return 0;
-            const ColormapInfo& colormap = colormaps_[index];
-            if (smooth_colormap_ || colormap.nearest_texture == 0)
-                return colormap.texture;
-            return colormap.nearest_texture;
+            if (smooth_colormap_ || colormap->nearest_texture == 0)
+                return colormap->texture;
+            return colormap->nearest_texture;
         }
 
         /**
@@ -450,9 +467,10 @@ namespace geolio::geobox
          *          discarded instead of drawn black (see draw_scene()).
          */
         bool colormap_is_transparent() const {
-            return current_colormap_index_ < colormaps_.size() &&
-                   colormaps_[current_colormap_index_].name ==
-                       TRANSPARENT_COLORMAP_NAME;
+            const ColormapInfo* colormap =
+                ColormapLibrary::instance().colormap(current_colormap_index_);
+            return colormap != nullptr &&
+                   colormap->name == TRANSPARENT_COLORMAP_NAME;
         }
 
         /**
@@ -658,7 +676,6 @@ namespace geolio::geobox
         bool show_colored_cells_ = false;
         bool show_hexes_ = true;
         bool show_connectors_ = true;
-        const std::vector<ColormapInfo>& colormaps_;
 
         // Wireframe of the volume cells (the edges of mesh.cells, drawn by
         // GLUP while rendering the volume).
@@ -729,6 +746,9 @@ namespace geolio::geobox
         /** Store the texture-coordinate attribute lives in. */
         GEO::MeshElementsFlags tex_coord_subelements_ = GEO::MESH_NONE;
 
+        /**
+         * @brief Index of the selected colormap in colormaps().
+         */
         GEO::index_t current_colormap_index_ = 0;
 
         /**

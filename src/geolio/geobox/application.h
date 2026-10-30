@@ -6,7 +6,6 @@
 #define GEOLIO_APPLICATION_H
 
 #include <geogram_gfx/gui/simple_mesh_application.h>
-#include "colormap.h"
 #include "application/base_application.h"
 #include "application/application_menu.h"
 #include "geolio/geobox/object/base_object.h"
@@ -56,20 +55,13 @@ namespace geolio::geobox
 
     protected:
         /**
-         * @brief Populates @c my_colormaps_ after the OpenGL context is ready.
-         * @details The base class initializes its own colormap table in a non-virtual method,
-         *          so this helper is called explicitly to fill the GeoBox-specific map list.
-         */
-        void init_colormaps();
-
-        /**
          * @brief Initializes the OpenGL-dependent application state.
          */
         void GL_initialize() override;
 
         /**
          * @brief Releases the OpenGL-dependent application state (offscreen
-         *        scene framebuffer).
+         *        scene framebuffer, colormap table, image texture cache).
          */
         void GL_terminate() override;
 
@@ -195,8 +187,6 @@ namespace geolio::geobox
          * @return true if the file was loaded successfully; false otherwise.
          */
         bool load(const std::string& filepath) override;
-
-        std::vector<geolio::geobox::ColormapInfo> my_colormaps_;
 
         /** True when the rendered scene (camera, mesh state, ...) changed and
          *  the 3D view must be re-rendered. Cleared after each full render. */

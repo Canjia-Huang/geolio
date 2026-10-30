@@ -236,10 +236,8 @@ namespace geolio::geobox
     MeshObject::MeshObject(
         std::string name,
         std::string filepath,
-        const std::vector<ColormapInfo>& colormaps,
         const GEO::Mesh& mesh
-        ) : BaseObject(std::move(name), std::move(filepath)),
-            colormaps_(colormaps)
+        ) : BaseObject(std::move(name), std::move(filepath))
     {
         mesh_.copy(mesh);
         mesh_gfx_.set_mesh(&mesh_);
@@ -433,9 +431,13 @@ namespace geolio::geobox
                     ImGui::OpenPopup("##Colormap");
                 }
                 if (ImGui::BeginPopup("##Colormap")) {
-                    for (GEO::index_t i = 0; i < colormaps_.size(); ++i) {
+                    const std::vector<ColormapInfo>& available_colormaps =
+                        colormaps();
+                    for (GEO::index_t i = 0;
+                         i < available_colormaps.size();
+                         ++i) {
                         if (ImGui::ImageButton(
-                            colormaps_[i].name.c_str(),
+                            available_colormaps[i].name.c_str(),
 			                static_cast<ImTextureID>(colormap_texture(i)),
                             ImVec2(100.0f*s, 8.0f*s))
                             ) {

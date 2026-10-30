@@ -8,9 +8,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "application.h"
 #include <algorithm>
-#include <array>
 #include <cstring>
-#include <random>
 #include <unordered_set>
 #include <vector>
 #include <geogram/basic/command_line.h>
@@ -21,11 +19,7 @@
 #include "geolio/common/log.h"
 #include "geolio/common/parse_filepath.h"
 #include "object/mesh_object.h"
-// Colormaps GeoBox adds to the GeoGram ones, as embedded XPM definitions (see
-// init_colormaps()). They are the 5th, 17th and 18th colormaps of Graphite.
-#include "colormaps/turbo.xpm"
-#include "colormaps/transparent.xpm"
-#include "colormaps/grayscale.xpm"
+#include "colormap.h"
 #include <geolio/geobox/application/register_applications.h>
 #include <geogram_gfx/full_screen_effects/ambient_occlusion.h>
 #include <geogram_gfx/full_screen_effects/unsharp_masking.h>
@@ -254,31 +248,11 @@ namespace geolio::geobox
 
     void GeoBoxApplication::GL_terminate(
         ) {
-        // Release the colormap textures GeoBox owns: the nearest-filtered
-        // variant of every colormap, and the smoothed texture of every
-        // colormap the base class does not know about (random, and the turbo,
-        // transparent and grayscale colormaps added in init_colormaps()). The
-        // smoothed textures of the GeoGram colormaps belong to the base class,
-        // which releases them in SimpleMeshApplication::GL_terminate().
-        for (auto& colormap : my_colormaps_) {
-            if (colormap.nearest_texture != 0 &&
-                colormap.nearest_texture != colormap.texture) {
-                glDeleteTextures(1, &colormap.nearest_texture);
-            }
-            colormap.nearest_texture = 0;
-
-            bool belongs_to_base = false;
-            for (const auto& base_colormap : colormaps_) {
-                if (base_colormap.texture == colormap.texture) {
-                    belongs_to_base = true;
-                    break;
-                }
-            }
-            if (!belongs_to_base && colormap.texture != 0) {
-                glDeleteTextures(1, &colormap.texture);
-                colormap.texture = 0;
-            }
-        }
+        // Release the colormap textures GeoBox owns. They are the property of
+        // the process-wide colormap library rather than of this application,
+        // because the objects that draw with them do not know the application
+        // (see ColormapLibrary).
+        ColormapLibrary::instance().terminate();
         // The images displayed by the TEXTURE painting mode are cached by
         // file name and shared by the objects (see MeshObject::texture()).
         release_texture_cache();
@@ -380,97 +354,18 @@ namespace geolio::geobox
         }
     }
 
-    void GeoBoxApplication::init_colormaps(
-        ) {
-        // GeoBox offers a subset of the GeoGram colormaps: the 1st, 4th, 5th,
-        // 6th and 10th of the list it builds (french, rainbow, cei_60757,
-        // inferno, blue_red). The turbo, transparent and grayscale colormaps
-        // (the 5th, 17th and 18th of Graphite) and the random colormap are
-        // appended below as well. The names are matched rather than the
-        // indices, so the subset still selects the same colormaps if GeoGram
-        // reorders its table.
-        static constexpr std::array<const char*, 5> KEPT_COLORMAPS = {
-            "french", "rainbow", "cei_60757", "inferno", "blue_red"
-        };
-        const auto is_kept = [](const std::string& name) {
-            for (const char* kept : KEPT_COLORMAPS) {
-                if (name == kept)
-                    return true;
-            }
-            return false;
-        };
-
-        // The base's SimpleApplication::init_colormaps() (non-virtual) already
-        // created the 10 colormap textures into its own colormaps_ member
-        // during GL_initialize(). Reuse those texture IDs instead of creating a
-        // second set of GL textures, so no extra GL state is touched at startup.
-        my_colormaps_.clear();
-        my_colormaps_.reserve(KEPT_COLORMAPS.size() + 4);
-        for (const auto& cm : colormaps_) {
-            if (!is_kept(cm.name))
-                continue;
-            geolio::geobox::ColormapInfo info;
-            info.texture = cm.texture;
-            // The base's textures are smoothed (linear filtering and
-            // mipmaps). The attribute display can ask for hard color
-            // boundaries instead, so build the nearest-filtered variant of
-            // each colormap once, here, rather than per draw.
-            info.nearest_texture =
-                geolio::geobox::create_nearest_colormap_texture(cm.texture);
-            info.name = cm.name;
-            my_colormaps_.push_back(info);
-        }
-
-        // Colormaps GeoBox adds to the GeoGram ones (see the XPM definitions
-        // included at the top of this file). init_colormap() builds both the
-        // smoothed texture and its nearest-filtered variant.
-        geolio::geobox::init_colormap("turbo", turbo_xpm, my_colormaps_);
-        geolio::geobox::init_colormap(
-            "transparent", transparent_xpm, my_colormaps_);
-        geolio::geobox::init_colormap("grayscale", grayscale_xpm, my_colormaps_);
-
-        // A colormap whose every texel is a random color; sampled with
-        // GL_NEAREST so the individual random pixels stay distinct instead of
-        // being blended into a gradient by linear filtering.
-        constexpr GLsizei kSize = 256;
-        std::vector<GLubyte> pixels(4 * kSize);
-        std::mt19937 rng(std::random_device{}());
-        std::uniform_int_distribution<int> dist(0, 255);
-        for (GLsizei i = 0; i < kSize; ++i) {
-            pixels[4 * i + 0] = static_cast<GLubyte>(dist(rng));
-            pixels[4 * i + 1] = static_cast<GLubyte>(dist(rng));
-            pixels[4 * i + 2] = static_cast<GLubyte>(dist(rng));
-            pixels[4 * i + 3] = 255;
-        }
-
-        geolio::geobox::ColormapInfo info;
-        info.name = geolio::geobox::RANDOM_COLORMAP_NAME;
-        glGenTextures(1, &info.texture);
-        glBindTexture(GL_TEXTURE_2D, info.texture);
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_RGBA, kSize, 1, 0,
-            GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        // This texture already samples with GL_NEAREST: it is its own
-        // hard-boundary variant. Interpolating the random texels would erase
-        // the distinct color each value is meant to get.
-        info.nearest_texture = info.texture;
-
-        my_colormaps_.push_back(info);
-    }
-
     void GeoBoxApplication::GL_initialize(
         ) {
-        // The base's SimpleApplication::init_colormaps() is non-virtual and
-        // fills its own colormaps_ member, so call ours explicitly to fill
-        // my_colormaps_ (needs a GL context, hence this override).
         SimpleMeshApplication::GL_initialize();
-        init_colormaps();
+
+        // Build the colormap table GeoBox offers. It belongs to the
+        // process-wide library rather than to the application, so that the
+        // objects that draw with it -- which know nothing of the application,
+        // and can be created by any sub-application -- can read it too.
+        // Uploading the textures needs the GL context, which is why it is done
+        // here, right after the base class set the GL state up (and built its
+        // own, larger colormap table).
+        ColormapLibrary::instance().initialize();
     }
 
     void GeoBoxApplication::ImGui_initialize(
@@ -1007,7 +902,6 @@ namespace geolio::geobox
         const auto object_ptr = std::make_shared<MeshObject>(
             get_filename(filepath),
             filepath,
-            my_colormaps_,
             mesh);
 
         objects_.push_back(object_ptr);
