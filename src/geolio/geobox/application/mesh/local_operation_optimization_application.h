@@ -33,8 +33,9 @@ namespace geolio::geobox
             // (v_max <= v_min means unbounded; the value is clamped to >= 1
             // when the user releases the drag).
             {
-                int rounds = static_cast<int>(rounds_nb_);
                 ImGui::SetNextItemWidth(slider_width_);
+
+                int rounds = static_cast<int>(rounds_nb_);
                 if (ImGui::DragInt("Rounds", &rounds, 0.05f, 1, 0))
                     rounds_nb_ = static_cast<GEO::index_t>(std::max(rounds, 1));
             }
@@ -43,11 +44,12 @@ namespace geolio::geobox
             // and a clickable text on the right that re-initializes the value
             // from the selected mesh's average edge length.
             {
-                constexpr double min_edge_length = 1e-4;
                 ImGui::SetNextItemWidth(slider_width_);
+
+                constexpr double min_edge_length = 1e-4;
                 if (ImGui::DragScalar(
                     "##target_edge_length", ImGuiDataType_Double,
-                    &target_edge_length_, 0.001f, &min_edge_length, nullptr,
+                    &target_edge_length_, 0.0001f, &min_edge_length, nullptr,
                     "%.4f"))
                     target_edge_length_ = std::max(target_edge_length_, min_edge_length);
 
@@ -129,6 +131,7 @@ namespace geolio::geobox
 
         template <GEO::index_t DIM>
         void perform(GEO::Mesh& mesh) {
+            LOG::TRACE("{}", application_name_);
             assert(mesh.facets.nb() > 0);
             assert(mesh.facets.are_simplices());
 
@@ -141,6 +144,8 @@ namespace geolio::geobox
             TLOO.allow_collapse_fixed_edges = allow_collapse_fixed_edges_;
             TLOO.allow_smooth_fixed_edges_vertices = allow_smooth_fixed_edges_vertices_;
             TLOO.optimize(rounds_nb_, target_edge_length_);
+
+            LOG::INFO("Done {}!", application_name_);
         }
 
         /* Parameters */

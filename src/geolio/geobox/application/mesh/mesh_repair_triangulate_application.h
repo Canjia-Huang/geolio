@@ -36,8 +36,12 @@ namespace geolio::geobox
             }
         }
 
-        static void perform(GEO::Mesh& mesh) {
+        void perform(GEO::Mesh& mesh) const {
+            LOG::TRACE("{}", application_name_);
+
             GEO::mesh_repair(mesh, GEO::MESH_REPAIR_TRIANGULATE);
+
+            LOG::INFO("Done {}!", application_name_);
         }
     };
 }
