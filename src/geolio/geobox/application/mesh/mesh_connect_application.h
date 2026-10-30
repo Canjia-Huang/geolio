@@ -24,63 +24,60 @@ namespace geolio::geobox
         }
 
         void draw_window_contents_details() override {
-            if (ImGui::Button("Connect facets", ImVec2(-1.0f, 0.0f))) {
-                // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-                // weak_ptr selection first.
-                const auto selected_object = selected_mesh_object_.lock();
-                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                if (mesh_object != nullptr) {
+            bool has_facets = false;
+            bool has_cells = false;
+
+            // std::dynamic_pointer_cast needs a shared_ptr, so lock the
+            // weak_ptr selection first.
+            const auto selected_object = selected_mesh_object_.lock();
+            const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
+            if (mesh_object != nullptr) {
+                const auto& mesh = mesh_object->mesh();
+                if (mesh.facets.nb() > 0)
+                    has_facets = true;
+                if (mesh.cells.nb() > 0)
+                    has_cells = true;
+            }
+
+            ImGui::BeginDisabled(!has_facets);
+            {
+                if (ImGui::Button("Connect facets", ImVec2(-1.0f, 0.0f))) {
+                    assert(mesh_object != nullptr);
                     auto& mesh = mesh_object->mesh();
                     perform_connect_facets(mesh);
                 }
-            }
 
-            if (ImGui::Button("Connect cells", ImVec2(-1.0f, 0.0f))) {
-                // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-                // weak_ptr selection first.
-                const auto selected_object = selected_mesh_object_.lock();
-                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                if (mesh_object != nullptr) {
-                    auto& mesh = mesh_object->mesh();
-                    perform_connect_cells(mesh);
-                }
-            }
-
-            if (ImGui::Button("Disconnect facets", ImVec2(-1.0f, 0.0f))) {
-                // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-                // weak_ptr selection first.
-                const auto selected_object = selected_mesh_object_.lock();
-                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                if (mesh_object != nullptr) {
+                if (ImGui::Button("Disconnect facets", ImVec2(-1.0f, 0.0f))) {
+                    assert(mesh_object != nullptr);
                     auto& mesh = mesh_object->mesh();
                     perform_disconnect_facets(mesh);
                 }
             }
+            ImGui::EndDisabled();
 
-            if (ImGui::Button("Disconnect cells", ImVec2(-1.0f, 0.0f))) {
-                // std::dynamic_pointer_cast needs a shared_ptr, so lock the
-                // weak_ptr selection first.
-                const auto selected_object = selected_mesh_object_.lock();
-                const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
-                if (mesh_object != nullptr) {
+            ImGui::Separator();
+
+            ImGui::BeginDisabled(!has_cells);
+            {
+                if (ImGui::Button("Connect cells", ImVec2(-1.0f, 0.0f))) {
+                    assert(mesh_object != nullptr);
+                    auto& mesh = mesh_object->mesh();
+                    perform_connect_cells(mesh);
+                }
+
+                if (ImGui::Button("Disconnect cells", ImVec2(-1.0f, 0.0f))) {
+                    assert(mesh_object != nullptr);
                     auto& mesh = mesh_object->mesh();
                     perform_disconnect_cells(mesh);
                 }
             }
+            ImGui::EndDisabled();
         }
 
         void perform_connect_facets(GEO::Mesh& mesh) const {
             LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
             mesh.facets.connect();
-
-            LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
-        }
-
-        void perform_connect_cells(GEO::Mesh& mesh) const {
-            LOG::TRACE("{}({})", application_name_, __FUNCTION__);
-
-            mesh.cells.connect();
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
@@ -92,6 +89,14 @@ namespace geolio::geobox
                 for (const auto& fc : mesh.facets.corners(f))
                     mesh.facet_corners.set_adjacent_facet(fc, GEO::NO_FACET);
             }
+
+            LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
+        }
+
+        void perform_connect_cells(GEO::Mesh& mesh) const {
+            LOG::TRACE("{}({})", application_name_, __FUNCTION__);
+
+            mesh.cells.connect();
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
