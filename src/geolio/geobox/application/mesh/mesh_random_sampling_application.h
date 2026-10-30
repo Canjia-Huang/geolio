@@ -25,13 +25,21 @@ namespace geolio::geobox
         }
 
         void draw_window_contents_details() override {
+            {
+                ImGui::SetNextItemWidth(slider_width_);
+
+                ImGui::DragInt(
+                    "Samples nb",
+                    &samples_nb, 1, 0, 1e8);
+            }
+
             if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
                 // std::dynamic_pointer_cast needs a shared_ptr, so lock the
                 // weak_ptr selection first.
                 const auto selected_object = selected_mesh_object_.lock();
                 const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(selected_object);
                 if (mesh_object != nullptr) {
-                    auto& mesh = mesh_object->mesh();
+                    const auto& mesh = mesh_object->mesh();
                     perform(mesh);
                 }
             }
@@ -61,7 +69,7 @@ namespace geolio::geobox
             /* Build samples object */
             GEO::Mesh samples_mesh(DIM);
             samples_mesh.vertices.assign_points(sample_points.data(), DIM, samples_nb);
-            // const auto samples_object = std::make_shared<MeshObject>("samples", )
+            objects_.push_back(std::make_shared<MeshObject>("samples", "", samples_mesh));
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }

@@ -7,6 +7,7 @@
 #include "application_registry.h"
 #include "mesh/local_operation_optimization_application.h"
 #include "mesh/mesh_connect_application.h"
+#include "mesh/mesh_random_sampling_application.h"
 #include "mesh/mesh_repair_colocate_application.h"
 #include "mesh/mesh_repair_triangulate_application.h"
 
@@ -42,6 +43,7 @@ namespace geolio::geobox
         geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "mesh", "optimization");
         geolio_register_BaseApplication_creator(MeshRepairColocateApplication, "mesh", "repair");
         geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication, "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRandomSamplingApplication, "mesh");
     }
 }
 
