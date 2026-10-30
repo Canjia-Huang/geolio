@@ -131,7 +131,7 @@ namespace geolio::geobox
 
         template <GEO::index_t DIM>
         void perform(GEO::Mesh& mesh) {
-            LOG::TRACE("{}", application_name_);
+            LOG::TRACE("{}({})", application_name_, __FUNCTION__);
             assert(mesh.facets.nb() > 0);
             assert(mesh.facets.are_simplices());
 
@@ -145,7 +145,7 @@ namespace geolio::geobox
             TLOO.allow_smooth_fixed_edges_vertices = allow_smooth_fixed_edges_vertices_;
             TLOO.optimize(rounds_nb_, target_edge_length_);
 
-            LOG::INFO("Done {}!", application_name_);
+            LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
 
         /* Parameters */

@@ -15,7 +15,7 @@ namespace geolio::geobox
         explicit MeshRepairTriangulateApplication(const std::vector<std::shared_ptr<BaseObject>>& objects)
             : MeshApplication("triangulate", objects)
         {
-            menu_tooltip_ = "GEO::mesh_repair(GEO::MESH_REPAIR_TRIANGULATE)";
+            menu_tooltip_ = "GEO::mesh_repair(..., GEO::MESH_REPAIR_TRIANGULATE)";
         }
 
     protected:
@@ -37,11 +37,11 @@ namespace geolio::geobox
         }
 
         void perform(GEO::Mesh& mesh) const {
-            LOG::TRACE("{}", application_name_);
+            LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
             GEO::mesh_repair(mesh, GEO::MESH_REPAIR_TRIANGULATE);
 
-            LOG::INFO("Done {}!", application_name_);
+            LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
     };
 }

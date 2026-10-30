@@ -6,6 +6,7 @@
 #define GEOLIO_APPLICATIONS_H
 #include "application_registry.h"
 #include "mesh/local_operation_optimization_application.h"
+#include "mesh/mesh_connect_application.h"
 #include "mesh/mesh_repair_colocate_application.h"
 #include "mesh/mesh_repair_triangulate_application.h"
 
@@ -37,6 +38,7 @@ namespace geolio::geobox
      *          only walks the resulting tree, so it never needs to change.
      */
     inline void register_additional_Applications() {
+        geolio_register_BaseApplication_creator(MeshConnectApplication, "Mesh");
         geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "Mesh", "Optimization");
         geolio_register_BaseApplication_creator(MeshRepairColocateApplication, "Mesh", "Repair");
         geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication, "Mesh", "Repair");

@@ -15,7 +15,7 @@ namespace geolio::geobox
         explicit MeshRepairColocateApplication(const std::vector<std::shared_ptr<BaseObject>>& objects)
             : MeshApplication("colocate", objects)
         {
-            menu_tooltip_ = "GEO::mesh_colocate_vertices_no_check";
+            menu_tooltip_ = "GEO::mesh_colocate_vertices_no_check(...)";
         }
 
     protected:
@@ -47,7 +47,7 @@ namespace geolio::geobox
         }
 
         void perform(GEO::Mesh& mesh) const {
-            LOG::TRACE("{}", application_name_);
+            LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
             GEO::vector<GEO::index_t> old2new;
 
@@ -103,10 +103,11 @@ namespace geolio::geobox
             for(const auto& fc: mesh.facet_corners)
                 mesh.facet_corners.set_adjacent_facet(fc, GEO::NO_FACET);
 
-            LOG::INFO("Done {}!", application_name_);
+            LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
 
         double colocate_epsilon = 0.0;
     };
 }
+
 #endif //GEOLIO_MESH_REPAIR_COLOCATE_APPLICATION_H
