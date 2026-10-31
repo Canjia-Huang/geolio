@@ -8,6 +8,8 @@
 #include <geolio/geobox/application/base_application.h>
 #include <geolio/common/log.h>
 
+#include "geolio/LpCVT/lp_cvt.h"
+
 namespace geolio::geobox
 {
     class CentroidalVoronoiTesselationApplication : public BaseApplication {
@@ -61,6 +63,20 @@ namespace geolio::geobox
                     ImGui::Separator();
                 }
 
+                {
+                    ImGui::Checkbox("LpCVT", &use_LpCVT_);
+                    if (use_LpCVT_) {
+                        ImGui::SetNextItemWidth(slider_width_);
+                        if (ImGui::SliderInt("p", &p_, 4, 16, "%d", ImGuiSliderFlags_AlwaysClamp)) {
+                            if (p_ % 2 != 0)
+                                --p_;
+                            assert(LpCentroidalVoronoiTesselation::is_supported_norm_exponent(p_));
+                        }
+                    }
+                }
+
+                ImGui::Separator();
+
                 auto& base_surface = base_surface_object->mesh();
                 auto& samples = samples_object->mesh();
 
@@ -80,13 +96,18 @@ namespace geolio::geobox
 
                 ImGui::Separator();
 
+                ImGui::BeginDisabled(use_LpCVT_);
                 {
+                    if (use_LpCVT_)
+                        Lloyd_iterations_ = false;
+
                     ImGui::Checkbox("Lloyd iter.", &Lloyd_iterations_);
                     ImGui::SameLine();
                     bool Newton = !Lloyd_iterations_;
                     if (ImGui::Checkbox("Newton iter.", &Newton))
                         Lloyd_iterations_ = !Newton;
                 }
+                ImGui::EndDisabled();
 
                 {
                     ImGui::SetNextItemWidth(slider_width_);
@@ -139,16 +160,22 @@ namespace geolio::geobox
 
             const GEO::index_t DIM = base_surface.vertices.dimension();
 
-            GEO::CentroidalVoronoiTesselation CVT(&base_surface);
-            CVT.set_volumetric(volumetric_);
-            CVT.set_points(samples.vertices.nb(), samples.vertices.point_ptr(0));
+            std::shared_ptr<GEO::CentroidalVoronoiTesselation> CVT_ptr;
+            if (use_LpCVT_)
+                CVT_ptr = std::make_shared<LpCentroidalVoronoiTesselation>(&base_surface, p_, volumetric_);
+            else {
+                CVT_ptr = std::make_shared<GEO::CentroidalVoronoiTesselation>(&base_surface);
+                CVT_ptr->set_volumetric(volumetric_);
+            }
+
+            CVT_ptr->set_points(samples.vertices.nb(), samples.vertices.point_ptr(0));
             if (Lloyd_iterations_)
-                CVT.Lloyd_iterations(iterations_nb_);
+                CVT_ptr->Lloyd_iterations(iterations_nb_);
             else
-                CVT.Newton_iterations(iterations_nb_);
+                CVT_ptr->Newton_iterations(iterations_nb_);
 
             for (const auto& v : samples.vertices)
-                std::ranges::copy_n(CVT.embedding(v), DIM, samples.vertices.point_ptr(v));
+                std::ranges::copy_n(CVT_ptr->embedding(v), DIM, samples.vertices.point_ptr(v));
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
@@ -157,6 +184,9 @@ namespace geolio::geobox
         std::weak_ptr<MeshObject> samples_object_;
 
         MeshObject::AttributeInfo weight_attribute_;
+
+        bool use_LpCVT_ = false;
+        int p_ = 4;
 
         bool volumetric_ = false;
         bool Lloyd_iterations_ = true; // false -> Newton iterations
