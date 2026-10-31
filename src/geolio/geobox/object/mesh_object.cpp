@@ -2321,6 +2321,17 @@ namespace geolio::geobox
         return result;
     }
 
+    bool MeshObject::can_write_extension(
+        const std::string& extension
+        ) const {
+        // The formats GeoLio registers to read the files of other tools have no
+        // save() (see geolio/io/io.h): they are read-only, whatever the mesh.
+        static const char* const CAN_WRITE_EXTENSIONS[] = {
+            "geogram", "mesh", "msh", "obj", "off", "pts", "stl"
+        };
+        return std::ranges::find(CAN_WRITE_EXTENSIONS, extension) != std::end(CAN_WRITE_EXTENSIONS);
+    }
+
     bool MeshObject::save(
         const std::string& filename
         ) {

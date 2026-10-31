@@ -614,23 +614,58 @@ namespace geolio::geobox
     void GeoBoxApplication::open_object_save_dialog(
         const std::shared_ptr<BaseObject>& object
         ) {
-        const std::string extensions = supported_write_file_extensions();
-        if (extensions.empty())
+        // The formats the dialog offers: the ones the application knows how to
+        // write (the extensions the registered IO handlers answer for) that the
+        // object also accepts -- what a kind of object can store is up to the
+        // object (see BaseObject::can_write_extension()).
+        std::vector<std::string> registered_extensions;
+        GEO::String::split_string(
+            supported_write_file_extensions(), ';', registered_extensions);
+
+        const auto writable = [&](const std::string& extension) {
+            return !extension.empty() &&
+                   std::ranges::find(registered_extensions, extension) !=
+                       registered_extensions.end() &&
+                   object->can_write_extension(extension);
+        };
+
+        // The default format is the one of the file the object was read from,
+        // and .geogram for an object that was not read from a file (or that
+        // cannot be written in its original format).
+        const std::string original_extension =
+            GEO::FileSystem::extension(object->filepath());
+        const std::string default_extension =
+            writable(original_extension) ? original_extension : "geogram";
+
+        // The format list of the dialog starts on its first entry, so the
+        // default format goes first; the other writable formats follow, in the
+        // order the application registered them.
+        std::vector<std::string> extensions;
+        if (writable(default_extension))
+            extensions.push_back(default_extension);
+        for (const std::string& extension : registered_extensions) {
+            if (extension == default_extension || !writable(extension))
+                continue;
+            extensions.push_back(extension);
+        }
+        if (extensions.empty()) {
+            LOG::WARN(
+                "`{}` cannot be saved: no file format is available for it.",
+                object->name());
             return;
+        }
 
         // The dialog proposes the name of the file the object was read from --
         // its name only, without the directory: the dialog shows the directory
         // it saves into, and repeating the path in the name box is noise. An
-        // object that was not read from a file is proposed its own name, with
-        // the first extension the application can write.
-        std::string suggested;
+        // object that was not read from a file is proposed its own name. Either
+        // way with the default format, which the dialog starts on.
+        std::string name;
         if (!object->filepath().empty())
-            suggested = GEO::FileSystem::base_name(object->filepath(), false);
-        if (suggested.empty()) {
-            std::vector<std::string> written_extensions;
-            GEO::String::split_string(extensions, ';', written_extensions);
-            suggested = object->name() + "." + written_extensions[0];
-        }
+            name = GEO::FileSystem::base_name(object->filepath(), true);
+        if (name.empty())
+            name = object->name();
+        std::string suggested = name + "." + default_extension;
         suggested.resize(
             std::min(
                 suggested.size(),
@@ -641,10 +676,9 @@ namespace geolio::geobox
         object_to_save_ = object;
         ImGui::OpenFileDialog(
             "##object_save_dlg",
-            extensions.c_str(),
+            GEO::String::join_strings(extensions, ';').c_str(),
             filename_,
-            ImGuiExtFileDialogFlags_Save
-        );
+            ImGuiExtFileDialogFlags_Save);
     }
 
     void GeoBoxApplication::draw_object_properties_window(

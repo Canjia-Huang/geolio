@@ -141,8 +141,12 @@ namespace geolio::geobox
         /**
          * @brief Opens the "Save as..." file dialog of one object.
          * @details Called by the context menu of the object in the object list.
-         *          The dialog itself is answered by draw_gui(), which saves the
-         *          object it was opened for (see object_to_save_).
+         *          The dialog only offers the formats the object accepts (see
+         *          BaseObject::can_write_extension()), and starts on the format
+         *          the object was read from -- or on .geogram when it was not
+         *          read from a file. The dialog itself is answered by
+         *          draw_gui(), which saves the object it was opened for (see
+         *          object_to_save_).
          * @param[in] object Object to save.
          */
         void open_object_save_dialog(const std::shared_ptr<BaseObject>& object);

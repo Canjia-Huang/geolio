@@ -134,6 +134,19 @@ namespace geolio::geobox
          */
         bool save(const std::string& filename) override;
 
+        /**
+         * @brief Whether the mesh can be written in a file format.
+         * @details A mesh is written by the mesh IO handler registered for the
+         *          extension. The handlers GeoLio adds for the formats of other
+         *          tools only read them (see
+         *          geolio::register_additional_MeshIOHandlers()), so those
+         *          extensions are refused: choosing one in the save dialog could
+         *          only fail.
+         */
+        [[nodiscard]] bool can_write_extension(
+            const std::string& extension
+            ) const override;
+
         // ---------------------------------------------------------------------
         // Display, for the applications that compute what should be shown
         // ---------------------------------------------------------------------

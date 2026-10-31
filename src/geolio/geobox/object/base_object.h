@@ -71,6 +71,24 @@ namespace geolio::geobox
         virtual void draw_scene(bool lighting) = 0;
 
         /**
+         * @brief Whether the object can be written in a file format.
+         * @details The save dialog only offers the formats the object accepts,
+         *          so what a kind of object can store is decided here, by the
+         *          object type -- e.g. MeshObject keeps out the mesh formats
+         *          that can only be read. Extensions for which no IO handler is
+         *          registered are never offered, whatever this returns.
+         * @param[in] extension Extension of the format, without the dot (e.g.
+         *            "obj", "geogram").
+         * @return true when the object can be saved in that format.
+         */
+        [[nodiscard]] virtual bool can_write_extension(
+            const std::string& extension
+            ) const {
+            static_cast<void>(extension);
+            return false;
+        }
+
+        /**
          * @brief Saves the data of the object to @p filename.
          * @details Written in the format the file extension asks for. The
          *          default does nothing: a class whose data cannot be written
