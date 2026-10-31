@@ -41,6 +41,13 @@ namespace geolio::geobox
         [[nodiscard]] const std::string& name() const { return name_; }
 
         /**
+         * @brief Returns the path of the file the object was read from.
+         * @return The path, or an empty string when the object was not read
+         *         from a file (e.g. the result of an operation).
+         */
+        [[nodiscard]] const std::string& filepath() const { return filepath_; }
+
+        /**
          * @brief Returns whether the object is currently visible.
          * @return true if the object should be rendered; false otherwise.
          */
@@ -62,6 +69,19 @@ namespace geolio::geobox
          * @param[in] lighting Whether scene lighting should be enabled.
          */
         virtual void draw_scene(bool lighting) = 0;
+
+        /**
+         * @brief Saves the data of the object to @p filename.
+         * @details Written in the format the file extension asks for. The
+         *          default does nothing: a class whose data cannot be written
+         *          leaves the object as it is.
+         * @param[in] filename Path of the file to write.
+         * @return true when the file was written.
+         */
+        virtual bool save(const std::string& filename) {
+            static_cast<void>(filename);
+            return false;
+        }
 
         /**
          * @brief Retrieves the object's axis-aligned bounding box.

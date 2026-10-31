@@ -120,6 +120,20 @@ namespace geolio::geobox
          */
         void mesh_changed();
 
+        /**
+         * @brief Saves the mesh of this object to @p filename.
+         * @details Written through the GeoGram mesh IO factory, i.e. in the
+         *          format the file extension asks for, with the handlers the
+         *          application registered (see
+         *          register_additional_MeshIOHandlers()), the same ones the
+         *          load menu uses. The attributes of the mesh are saved too:
+         *          what an application computed (e.g. the sizing field of
+         *          GEO::compute_sizing_field()) is part of the object's data.
+         * @param[in] filename Path of the file to write.
+         * @return true when the file was written.
+         */
+        bool save(const std::string& filename) override;
+
         // ---------------------------------------------------------------------
         // Display, for the applications that compute what should be shown
         // ---------------------------------------------------------------------

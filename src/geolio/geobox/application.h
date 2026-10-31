@@ -139,6 +139,15 @@ namespace geolio::geobox
         void draw_objects_properties();
 
         /**
+         * @brief Opens the "Save as..." file dialog of one object.
+         * @details Called by the context menu of the object in the object list.
+         *          The dialog itself is answered by draw_gui(), which saves the
+         *          object it was opened for (see object_to_save_).
+         * @param[in] object Object to save.
+         */
+        void open_object_save_dialog(const std::shared_ptr<BaseObject>& object);
+
+        /**
          * @brief Draws the object properties window container.
          */
         void draw_object_properties_window() override;
@@ -218,6 +227,10 @@ namespace geolio::geobox
 
         std::vector<std::shared_ptr<BaseObject>> objects_;
         std::weak_ptr<BaseObject> selected_object_;
+
+        /** The object whose "Save as..." dialog is open, i.e. the one whose
+         *  context menu entry was used (see open_object_save_dialog()). */
+        std::weak_ptr<BaseObject> object_to_save_;
 
         // Current size of the Object Properties window, tracked so its
         // right edge can be kept flush against the viewport's right edge.

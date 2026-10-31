@@ -11,6 +11,7 @@
 #include <geogram/image/image.h>
 #include <geogram/image/image_library.h>
 #include <geogram/mesh/mesh_geometry.h>
+#include <geogram/mesh/mesh_io.h>
 #include <geogram_gfx/GLUP/GLUP.h>
 // glupPrivateVertex*()/glupPrivateTexCoord*(): the immediate-mode entry points
 // used by MeshGfx::draw_vertex() and MeshGfx::draw_attribute_as_tex_coord(),
@@ -2315,6 +2316,24 @@ namespace geolio::geobox
             }
         }
         return result;
+    }
+
+    bool MeshObject::save(
+        const std::string& filename
+        ) {
+        // The data an application computed lives in the attributes of the mesh
+        // (e.g. the "weight" of a sizing field): unlike the default flags, which
+        // save none, all of them are written.
+        GEO::MeshIOFlags flags;
+        flags.set_attributes(GEO::MESH_ALL_ATTRIBUTES);
+
+        // A .geogram file stores double precision coordinates: promote them
+        // first, as GeoGram's mesh applications do, so that a mesh loaded in
+        // single precision is written faithfully.
+        if (GEO::FileSystem::extension(filename) == "geogram")
+            mesh_.vertices.set_double_precision();
+
+        return GEO::mesh_save(mesh_, filename, flags);
     }
 
     bool MeshObject::display_attribute(

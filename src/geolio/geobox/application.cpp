@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <vector>
 #include <geogram/basic/command_line.h>
+#include <geogram/basic/file_system.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram_gfx/GLUP/GLUP.h>
 #include <geogram_gfx/third_party/imgui/imgui_internal.h>
@@ -318,8 +319,19 @@ namespace geolio::geobox
         if (ImGui::FileDialog("##load_dlg", filename_, GEO::geo_imgui_string_length))
             load(filename_);
 
-        if (ImGui::FileDialog("##save_dlg", filename_, GEO::geo_imgui_string_length))
-            save(filename_);
+        // The "Save as..." of an object (see draw_objects_properties()): the
+        // dialog was opened on the object whose row was right-clicked.
+        if (ImGui::FileDialog(
+                "##object_save_dlg", filename_, GEO::geo_imgui_string_length)) {
+            if (const auto object = object_to_save_.lock()) {
+                if (object->save(filename_))
+                    LOG::INFO("Saved `{}` to {}", object->name(), filename_);
+                else
+                    LOG::ERROR(
+                        "Could not save `{}` to {}", object->name(), filename_);
+            }
+            object_to_save_.reset();
+        }
 
         if (status_bar_->active()) {
             const auto w = static_cast<float>(get_frame_buffer_width());
@@ -583,11 +595,56 @@ namespace geolio::geobox
                 selected_object_ = base_object;
             ImGui::PopStyleVar();
 
+            // Right-clicking the row acts on that object: the operations that
+            // need to know which object they work on belong here, not in the
+            // File menu.
+            if (ImGui::BeginPopupContextItem()) {
+                if (ImGui::MenuItem(GEO::icon_UTF8("save") + " Save as..."))
+                    open_object_save_dialog(base_object);
+                ImGui::EndPopup();
+            }
+
             ++it;
             ImGui::PopID();
 
             ImGui::Separator();
         }
+    }
+
+    void GeoBoxApplication::open_object_save_dialog(
+        const std::shared_ptr<BaseObject>& object
+        ) {
+        const std::string extensions = supported_write_file_extensions();
+        if (extensions.empty())
+            return;
+
+        // The dialog proposes the name of the file the object was read from --
+        // its name only, without the directory: the dialog shows the directory
+        // it saves into, and repeating the path in the name box is noise. An
+        // object that was not read from a file is proposed its own name, with
+        // the first extension the application can write.
+        std::string suggested;
+        if (!object->filepath().empty())
+            suggested = GEO::FileSystem::base_name(object->filepath(), false);
+        if (suggested.empty()) {
+            std::vector<std::string> written_extensions;
+            GEO::String::split_string(extensions, ';', written_extensions);
+            suggested = object->name() + "." + written_extensions[0];
+        }
+        suggested.resize(
+            std::min(
+                suggested.size(),
+                std::size_t(GEO::geo_imgui_string_length - 1)));
+        std::copy(suggested.begin(), suggested.end(), filename_);
+        filename_[suggested.size()] = '\0';
+
+        object_to_save_ = object;
+        ImGui::OpenFileDialog(
+            "##object_save_dlg",
+            extensions.c_str(),
+            filename_,
+            ImGuiExtFileDialogFlags_Save
+        );
     }
 
     void GeoBoxApplication::draw_object_properties_window(
@@ -665,9 +722,9 @@ namespace geolio::geobox
                             LOG::ERROR("Could not save {}", current_file_);
                     }
                 }
-                if (!supported_write_file_extensions().empty())
-                    draw_save_menu();
-
+                // "Save as..." lives in the context menu of the objects of the
+                // scene (see draw_objects_properties()): the File menu cannot
+                // know which object to save, since the scene holds several.
                 draw_fileops_menu();
 
                 draw_about();
