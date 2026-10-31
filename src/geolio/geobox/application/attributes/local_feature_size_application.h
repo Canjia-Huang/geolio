@@ -60,10 +60,19 @@ namespace geolio::geobox
 
                 ImGui::Separator();
 
-                auto& mesh = mesh_object->mesh();
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
+                    perform(mesh_object->mesh());
 
-                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)))
-                    perform(mesh);
+                    // GEO::compute_sizing_field() stores the sizing field in the
+                    // "weight" attribute of the vertices: show it, together with
+                    // the vertices it is defined on, so that the result of the
+                    // operation is what the user sees.
+                    mesh_object->mesh_changed();
+                    if (!mesh_object->display_attribute(kWeightAttribute))
+                        LOG::WARN(
+                            "The mesh has no `{}` attribute to display.",
+                            kWeightAttribute);
+                }
             }
             ImGui::EndDisabled();
         }
@@ -78,6 +87,11 @@ namespace geolio::geobox
 
         /** The mesh object picked with draw_mesh_selector(). */
         std::weak_ptr<MeshObject> selected_mesh_object_;
+
+        /** Attribute GEO::compute_sizing_field() stores the sizing field in
+         *  (see its documentation: "the sizing field is stored into the vertex
+         *  weights"). */
+        static constexpr auto kWeightAttribute = "vertices.weight";
 
         float gradation_ = 1;
         int nb_lfs_samples_ = 0;

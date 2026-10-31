@@ -275,7 +275,9 @@ namespace geolio::geobox
             }
 
             if (mesh_objects.empty()) {
-                ImGui::TextDisabled(("No `"+std::string(label)+"` object available.").c_str());
+                const std::string no_object =
+                    std::string("No `") + label + "` object available.";
+                ImGui::TextDisabled("%s", no_object.c_str());
                 return changed;
             }
 
@@ -358,7 +360,9 @@ namespace geolio::geobox
             }
 
             if (attributes.empty()) {
-                ImGui::TextDisabled(("No matching `"+std::string(label)+"`.").c_str());
+                const std::string no_match =
+                    std::string("No matching `") + label + "`.";
+                ImGui::TextDisabled("%s", no_match.c_str());
                 if (selection.subelements != GEO::MESH_NONE) {
                     selection = MeshObject::AttributeInfo();
                     changed = true;

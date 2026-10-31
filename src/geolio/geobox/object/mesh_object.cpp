@@ -1201,9 +1201,9 @@ namespace geolio::geobox
         ImGui::Spacing();
         ImGui::Separator();
 
-        // What the repair removes (see repair_invalid_elements()). They only
-        // apply when the mesh is repaired: skipping it keeps the mesh as it
-        // was loaded.
+        // What the repair removes (see
+        // repair_invalid_vertices_and_elements()). They only apply when the mesh
+        // is repaired: skipping it keeps the mesh as it was loaded.
         ImGui::Checkbox("remove invalid vertices", &remove_invalid_vertices_);
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
@@ -2315,6 +2315,30 @@ namespace geolio::geobox
             }
         }
         return result;
+    }
+
+    bool MeshObject::display_attribute(
+        const std::string& attribute
+        ) {
+        // The name comes in the "subelements.name" form (see attribute_names()).
+        std::string subelements_name;
+        std::string name;
+        GEO::String::split_string(attribute, '.', subelements_name, name);
+        const GEO::MeshElementsFlags subelements =
+            GEO::Mesh::name_to_subelements_type(subelements_name);
+        if (subelements == GEO::MESH_NONE || name.empty())
+            return false;
+
+        // Asking for an attribute the mesh does not have would leave the
+        // colormap sampling nothing: the request is refused, and what the object
+        // displays stays as it is.
+        if (!mesh_.get_subelements_by_type(subelements).attributes().
+                is_defined(name))
+            return false;
+
+        set_attribute(attribute);
+        painting_mode_ = PaintingMode::ATTRIBUTE;
+        return true;
     }
 
     void MeshObject::set_attribute(

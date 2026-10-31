@@ -87,7 +87,7 @@ namespace geolio::geobox
                 ImGui::Separator();
 
                 if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)))
-                        perform(mesh);
+                    perform(mesh);
             }
             ImGui::EndDisabled();
         }

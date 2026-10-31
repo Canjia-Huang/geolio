@@ -120,6 +120,48 @@ namespace geolio::geobox
          */
         void mesh_changed();
 
+        // ---------------------------------------------------------------------
+        // Display, for the applications that compute what should be shown
+        // ---------------------------------------------------------------------
+
+        /**
+         * @brief Displays a scalar attribute of the mesh with the colormap.
+         * @details Selects the attribute the way the painting selector of the
+         *          properties panel does (see set_attribute()), and switches the
+         *          painting mode to ATTRIBUTE, so that what an application just
+         *          computed is what the user sees. The range is autoranged
+         *          unless it was set by hand (see set_attribute()).
+         *          Applications use it to show their result, e.g. the "weight"
+         *          attribute GEO::compute_sizing_field() stores on the
+         *          vertices.
+         * @param[in] attribute Full name of the attribute, as attribute_infos()
+         *            spells it: "vertices.weight", "facets.v_cell", ...
+         * @return true when the mesh has that attribute, which is then the one
+         *         displayed; false when it does not (nothing is changed then).
+         */
+        bool display_attribute(const std::string& attribute);
+
+        /**
+         * @brief Full name of the attribute whose values are displayed with the
+         *        colormap (e.g. "vertices.weight").
+         * @details It is only painted when the painting mode is ATTRIBUTE; the
+         *          object starts on "vertices.point[0]", as GeoGram's mesh
+         *          applications do.
+         */
+        [[nodiscard]] const std::string& displayed_attribute() const {
+            return vertices_point_attribute_name_;
+        }
+
+        /** @brief How the mesh is painted (see PaintingMode). */
+        void set_painting_mode(const PaintingMode mode) { painting_mode_ = mode; }
+        [[nodiscard]] PaintingMode painting_mode() const { return painting_mode_; }
+
+        /** @brief Shows or hides the markers drawn at the mesh vertices. */
+        void set_vertices_visible(const bool visible) {
+            show_vertices_ = visible;
+        }
+        [[nodiscard]] bool vertices_visible() const { return show_vertices_; }
+
         /**
          * @brief One attribute of the mesh, as listed by attribute_infos().
          * @details Describes where the attribute lives and what it holds, so
@@ -796,8 +838,8 @@ namespace geolio::geobox
         InvalidElementCounts invalid_counts_;
 
         /** Elements to delete when the mesh is repaired (see
-         *  repair_invalid_elements()), indexed like the mesh: a non-zero entry
-         *  means the element is invalid. */
+         *  repair_invalid_vertices_and_elements()), indexed like the mesh: a
+         *  non-zero entry means the element is invalid. */
         GEO::vector<GEO::index_t> vertices_to_delete_;
         GEO::vector<GEO::index_t> edges_to_delete_;
         GEO::vector<GEO::index_t> facets_to_delete_;
@@ -813,7 +855,7 @@ namespace geolio::geobox
 
         /** What the validity dialog offers to remove: the vertices whose
          *  coordinates are not finite, and the elements that reference missing
-         *  vertices (see repair_invalid_elements()). */
+         *  vertices (see repair_invalid_vertices_and_elements()). */
         bool remove_invalid_vertices_ = true;
         bool remove_invalid_elements_ = true;
 
