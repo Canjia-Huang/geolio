@@ -196,10 +196,43 @@ namespace geolio::geobox
 
         /**
          * @brief Loads a scene or model from the given file path.
+         * @details A mesh file becomes a MeshObject, a .fra file (which holds the
+         *          vectors of a directional field, not a mesh) becomes a
+         *          DirectionalObject (see load_directional_field()).
          * @param[in] filepath Path to the file to import.
          * @return true if the file was loaded successfully; false otherwise.
          */
         bool load(const std::string& filepath) override;
+
+        /**
+         * @brief File extensions the application can read.
+         * @details The mesh formats GeoGram knows, plus the .fra format of the
+         *          directional fields, which is not one of them (see
+         *          geolio::fra_load()).
+         */
+        std::string supported_read_file_extensions() override;
+
+        /**
+         * @brief File extensions the application can write.
+         * @details The mesh formats GeoGram knows, plus .fra: the "Save as..."
+         *          dialog of a DirectionalObject needs it in the list to offer it
+         *          (see BaseObject::can_write_extension() and
+         *          DirectionalObject::save()).
+         */
+        std::string supported_write_file_extensions() override;
+
+        /**
+         * @brief Loads a directional field from a .fra file, and shows it.
+         * @details The file holds the vectors only (see geolio::fra_load()), so
+         *          the field has nothing to be drawn on yet: it is attached to a
+         *          mesh object of the scene when exactly one of them has as many
+         *          vertices, facets or cells as the field has frames. Otherwise
+         *          the user picks one in the properties of the object, which
+         *          offers the meshes it can be attached to.
+         * @param[in] filepath Path of the .fra file to read.
+         * @return true if the field was read; false otherwise.
+         */
+        bool load_directional_field(const std::string& filepath);
 
         /** True when the rendered scene (camera, mesh state, ...) changed and
          *  the 3D view must be re-rendered. Cleared after each full render. */

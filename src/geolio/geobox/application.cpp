@@ -19,6 +19,7 @@
 #include "imoguizmo.hpp"
 #include "geolio/common/log.h"
 #include "geolio/common/parse_filepath.h"
+#include "geolio/io/fra_io.h"
 #include "file_dialog.h"
 #include "object/mesh_object.h"
 #include "colormap.h"
@@ -638,17 +639,29 @@ namespace geolio::geobox
                    object->can_write_extension(extension);
         };
 
-        // The default format is the one of the file the object was read from,
-        // and .geogram for an object that was not read from a file (or that
-        // cannot be written in its original format).
+        // The default format is the one of the file the object was read from.
+        // An object that was not read from a file -- or that cannot be written
+        // in that format -- defaults to the first format it accepts: there is no
+        // format every kind of object can be written in (.geogram for a mesh,
+        // .fra for a directional field, ...).
         const std::string original_extension =
             GEO::FileSystem::extension(object->filepath());
-        const std::string default_extension =
-            writable(original_extension) ? original_extension : "geogram";
+        std::string default_extension = original_extension;
+        if (!writable(default_extension)) {
+            const auto first = std::ranges::find_if(
+                registered_extensions,
+                [&](const std::string& extension) {
+                    return writable(extension);
+                });
+            default_extension =
+                first != registered_extensions.end() ? *first : std::string();
+        }
 
         // The format list of the dialog starts on its first entry, so the
         // default format goes first; the other writable formats follow, in the
-        // order the application registered them.
+        // order the application registered them. The dialog takes its first
+        // entry as the format it saves in, and the file name below is built with
+        // that one -- the two cannot disagree.
         std::vector<std::string> extensions;
         if (writable(default_extension))
             extensions.push_back(default_extension);
@@ -668,13 +681,14 @@ namespace geolio::geobox
         // its name only, without the directory: the dialog shows the directory
         // it saves into, and repeating the path in the name box is noise. An
         // object that was not read from a file is proposed its own name. Either
-        // way with the default format, which the dialog starts on.
+        // way with the format the dialog starts on, i.e. the first one of the
+        // list.
         std::string name;
         if (!object->filepath().empty())
             name = GEO::FileSystem::base_name(object->filepath(), true);
         if (name.empty())
             name = object->name();
-        std::string suggested = name + "." + default_extension;
+        std::string suggested = name + "." + extensions.front();
         suggested.resize(
             std::min(
                 suggested.size(),
@@ -1005,10 +1019,51 @@ namespace geolio::geobox
         scene_dirty_ = true;
     }
 
+    namespace
+    {
+        /**
+         * @brief Adds the extensions of the directional fields to a list of
+         *        mesh formats.
+         * @details .fra is not a mesh format: GeoLio reads and writes the
+         *          vectors of a field with its own functions (see
+         *          geolio::fra_load()), so GeoGram does not list it, and the
+         *          file dialogs would not offer it.
+         * @param[in] mesh_extensions Extensions of the mesh formats, separated
+         *            by ';' (possibly empty).
+         * @return The same list, followed by .fra.
+         */
+        std::string with_directional_field_extension(
+            const std::string& mesh_extensions
+            ) {
+            std::string extensions = mesh_extensions;
+            if (!extensions.empty())
+                extensions += ';';
+            extensions += "fra";
+            return extensions;
+        }
+    }
+
+    std::string GeoBoxApplication::supported_read_file_extensions(
+        ) {
+        return with_directional_field_extension(
+            SimpleMeshApplication::supported_read_file_extensions());
+    }
+
+    std::string GeoBoxApplication::supported_write_file_extensions(
+        ) {
+        return with_directional_field_extension(
+            SimpleMeshApplication::supported_write_file_extensions());
+    }
+
     bool GeoBoxApplication::load(
         const std::string& filepath
         ) {
         home();
+
+        // The .fra files hold the vectors of a directional field, not a mesh:
+        // they are read by load_directional_field(), not by the mesh loader.
+        if (GEO::FileSystem::extension(filepath) == "fra")
+            return load_directional_field(filepath);
 
         GEO::Mesh mesh;
         if (!mesh.load(filepath)) {
@@ -1035,6 +1090,66 @@ namespace geolio::geobox
 
         scene_dirty_ = true;
 
+        return true;
+    }
+
+    bool GeoBoxApplication::load_directional_field(
+        const std::string& filepath
+        ) {
+        GEO::index_t vectors_nb_per_element = GEO::NO_INDEX;
+        std::vector<double> vectors;
+        if (!fra_load(filepath, vectors_nb_per_element, vectors)) {
+            LOG::ERROR("Cannot load a directional field from `{}`!", filepath);
+            return false;
+        }
+
+        const auto object = std::make_shared<DirectionalObject>(
+            get_filename(filepath),
+            filepath,
+            objects_,
+            vectors_nb_per_element,
+            vectors);
+
+        // The field draws vectors on the elements of a mesh: when exactly one
+        // mesh object of the scene has as many elements as the field has
+        // frames, it is attached to it, so that the file shows up without
+        // having to pick anything. When several meshes match -- or one matches
+        // in several ways -- the properties of the object offer the choice.
+        {
+            std::shared_ptr<MeshObject> candidate;
+            GEO::MeshElementsFlags candidate_kind = GEO::MESH_NONE;
+            bool ambiguous = false;
+            for (const auto& other : objects_) {
+                const auto mesh_object =
+                    std::dynamic_pointer_cast<MeshObject>(other);
+                if (mesh_object == nullptr)
+                    continue;
+                const auto kinds = object->attachable_subelements(*mesh_object);
+                if (kinds.empty())
+                    continue;
+                ambiguous = ambiguous || candidate != nullptr ||
+                            kinds.size() != 1;
+                candidate = mesh_object;
+                candidate_kind = kinds.front();
+            }
+            if (!ambiguous && candidate != nullptr)
+                object->attach_to(candidate, candidate_kind);
+        }
+
+        objects_.push_back(object);
+        // Without a mesh the object is not drawn, and has no extent to frame
+        // the camera on (see DirectionalObject::attached()).
+        if (object->attached())
+            camera_focus(object);
+        selected_object_ = object;
+
+        scene_dirty_ = true;
+
+        LOG::INFO(
+            "Loaded directional field `{}`: {} frames of {} vectors.",
+            object->name(),
+            object->nb_frames(),
+            object->vectors_nb_per_element());
         return true;
     }
 }

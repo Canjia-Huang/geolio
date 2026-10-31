@@ -361,10 +361,13 @@ namespace geolio::geobox
 
         if (candidates.empty()) {
             // What would be needed, so that the message says why nothing is
-            // offered (see attachable_subelements()).
+            // offered (see attachable_subelements()); it is wrapped because the
+            // properties window is narrow.
+            ImGui::PushTextWrapPos(0.0f);
             ImGui::TextDisabled(
                 "No mesh object with %u vertices, facets or cells.",
                 static_cast<unsigned>(nb_frames()));
+            ImGui::PopTextWrapPos();
             return attached;
         }
 
