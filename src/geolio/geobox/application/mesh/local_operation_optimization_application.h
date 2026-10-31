@@ -22,6 +22,7 @@ namespace geolio::geobox
         void draw_window_contents() override {
             // The mesh picker, offering the meshes this application accepts.
             const bool selection_changed = draw_mesh_selector(
+                selected_mesh_object_,
                 [](const GEO::Mesh& mesh) {
                     return mesh.facets.nb() > 0 && mesh.facets.are_simplices();
                 });
@@ -33,7 +34,7 @@ namespace geolio::geobox
             // (the parameters and the button that runs the operation) is
             // non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
-            if (const auto mesh_object = selected_mesh();
+            if (const auto mesh_object = selected_mesh_object_.lock();
                 mesh_object != nullptr
                 ) {
                 auto& mesh = mesh_object->mesh();
@@ -114,7 +115,7 @@ namespace geolio::geobox
         }
 
         void init_target_edge_length() {
-            const auto mesh_object = selected_mesh();
+            const auto mesh_object = selected_mesh_object_.lock();
             if (mesh_object == nullptr) {
                 target_edge_length_ = 1;
                 return;
@@ -160,6 +161,9 @@ namespace geolio::geobox
         bool allow_split_fixed_edges_ = true;
         bool allow_collapse_fixed_edges_ = true;
         bool allow_smooth_fixed_edges_vertices_ = true;
+
+        /** The mesh object picked with draw_mesh_selector(). */
+        std::weak_ptr<MeshObject> selected_mesh_object_;
     };
 }
 

@@ -101,7 +101,9 @@ namespace geolio::geobox
          *          cached bounding box, the display copies of the attributes
          *          and the buffers of the renderer -- would otherwise keep
          *          describing the mesh as it was before the operation.
-         * @ref BaseApplication::perform_on_mesh() for the usual call site.
+         *          The applications call mesh_changed() after an operation
+         *          (see MeshConnectApplication, MeshRepairTriangulateApplication,
+         *          ...).
          */
         auto& mesh() { return mesh_; }
 

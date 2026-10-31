@@ -189,11 +189,10 @@ namespace geolio::geobox
          * @brief Predicate deciding which meshes an application can work on.
          * @details Called with the mesh of every candidate object; an object
          *          whose mesh it rejects is not offered by
-         *          draw_mesh_selector(). The mesh of the current selection is
-         *          filtered too: a mesh that stops matching (e.g. because a
-         *          previous run of the application changed its connectivity)
-         *          drops the selection.
-         * @ref MeshApplication::is_mesh_valid() for the usual implementation.
+         *          draw_mesh_selector(). The mesh of a selection is filtered
+         *          too: a mesh that stops matching (e.g. because a previous run
+         *          of the application changed its connectivity) clears that
+         *          selection.
          */
         using MeshFilter = std::function<bool(const GEO::Mesh&)>;
 
@@ -206,27 +205,40 @@ namespace geolio::geobox
          * @ref MeshRandomSamplingApplication::is_weight_attribute() for an
          *      example (one double per vertex).
          */
-        using AttributeFilter = std::function<bool(const MeshObject::AttributeInfo&)>;
+        using AttributeFilter =
+            std::function<bool(const MeshObject::AttributeInfo&)>;
 
         /**
-         * @brief Draws the "Mesh" combo box, i.e. lets the user pick the mesh
-         *        object an application works on.
+         * @brief Draws a mesh object picker, i.e. lets the user pick one of
+         *        the meshes of the scene.
          * @details Offers every MeshObject of the scene whose mesh matches
-         *          @p filter, and updates selected_mesh_object_ with what the
-         *          user picks (see selected_mesh()). A single candidate is
-         *          selected automatically, so that an application whose scene
-         *          holds one mesh is usable right away, and a selected mesh
-         *          that no longer matches @p filter drops the selection.
+         *          @p filter, and stores what the user picks in @p selection.
+         *          A single candidate is selected automatically, so that an
+         *          application whose scene holds one mesh is usable right away,
+         *          and a selection whose mesh no longer matches @p filter is
+         *          cleared.
+         *          The selection belongs to the caller, so an application that
+         *          works on several meshes declares one selection per mesh and
+         *          draws one picker for each of them:
+         *          @code
+         *          draw_mesh_selector(base_surface_, facets_filter, "Surface");
+         *          draw_mesh_selector(samples_, vertices_filter, "Samples");
+         *          @endcode
+         * @param[in,out] selection The selected mesh object: set when the user
+         *            picks one, cleared when the mesh it names cannot be picked
+         *            any more. Lock it to use it: the scene owns the
+         *            objects, so a weak pointer never keeps a mesh the scene
+         *            dropped alive.
          * @param[in] filter Which meshes can be picked; all of them when
          *            empty.
-         * @param[in] label  Text shown on the left of the combo box. It also
+         * @param[in] label Text shown on the left of the combo box. It also
          *            names the ImGui item, so it must differ from the label of
-         *            another selector drawn in the same window.
+         *            another picker drawn in the same window.
          * @return true when the selection changed, i.e. when the application
-         *         has to refresh what it derived from the selected mesh (see
-         *         MeshApplication::after_selecting_mesh()).
+         *         has to refresh what it derived from the selected mesh.
          */
         bool draw_mesh_selector(
+            std::weak_ptr<MeshObject>& selection,
             const MeshFilter& filter = {},
             const char* label = "Mesh"
             ) {
@@ -245,8 +257,8 @@ namespace geolio::geobox
             }
 
             // A single candidate is picked automatically.
-            if (mesh_objects.size() == 1 && selected_mesh_object_.expired()) {
-                selected_mesh_object_ = mesh_objects[0];
+            if (mesh_objects.size() == 1 && selection.expired()) {
+                selection = mesh_objects[0];
                 changed = true;
             }
 
@@ -254,11 +266,11 @@ namespace geolio::geobox
             // previous run of the application may have changed it): drop the
             // selection, which also disables the parameters of the
             // application until another mesh is picked.
-            if (const auto selected = selected_mesh_object_.lock();
+            if (const auto selected = selection.lock();
                 selected != nullptr &&
                 std::ranges::find(mesh_objects, selected) ==
                     mesh_objects.end()) {
-                selected_mesh_object_.reset();
+                selection.reset();
                 changed = true;
             }
 
@@ -268,7 +280,7 @@ namespace geolio::geobox
             }
 
             // Index of the currently selected mesh object, -1 when none.
-            const auto selected = selected_mesh_object_.lock();
+            const auto selected = selection.lock();
             int current_index = -1;
             for (std::size_t i = 0; i < mesh_objects.size(); ++i) {
                 if (mesh_objects[i] == selected) {
@@ -296,7 +308,7 @@ namespace geolio::geobox
                         (current_index == static_cast<int>(i));
                     if (ImGui::Selectable(
                             mesh_objects[i]->name().c_str(), is_selected)) {
-                        selected_mesh_object_ = mesh_objects[i];
+                        selection = mesh_objects[i];
                         changed = true;
                     }
                     if (is_selected)
@@ -308,35 +320,30 @@ namespace geolio::geobox
         }
 
         /**
-         * @brief The mesh object picked with draw_mesh_selector().
-         * @return The selected object, or nullptr when none is selected.
-         */
-        [[nodiscard]] std::shared_ptr<MeshObject> selected_mesh() const {
-            return selected_mesh_object_.lock();
-        }
-
-        /**
          * @brief Draws the attribute picker of a mesh object.
          * @details Offers the attributes of @p mesh_object that match
-         *          @p filter (see MeshObject::attribute_infos()) and updates
-         *          selected_attribute_ with what the user picks. The
-         *          attributes the object only builds to draw the mesh are not
-         *          offered (they are not attributes of the mesh).
-         *          "none" is the first entry of the list when @p allow_none is
-         *          true, i.e. the application accepts being given no attribute;
-         *          otherwise the first matching attribute is selected
-         *          automatically. A selected attribute that is not offered any
-         *          more (another mesh picked, mesh reloaded) falls back to the
-         *          first entry.
+         *          @p filter (see MeshObject::attribute_infos()) and stores
+         *          what the user picks in @p selection. The attributes the
+         *          object builds only to draw the mesh are not offered (they
+         *          are not attributes of the mesh). The first matching
+         *          attribute is selected automatically; a selection that is
+         *          not offered any more (another mesh picked, mesh reloaded)
+         *          falls back to it. The selection belongs to the caller, like
+         *          the one of draw_mesh_selector().
+         * @param[in,out] selection The selected attribute; its default value
+         *            (GEO::MESH_NONE sub-elements, empty name) stands for "no
+         *            attribute". Its \c name is the name the GeoGram attribute
+         *            API uses, and \c subelements the store it lives on.
          * @param[in] mesh_object Mesh whose attributes are offered.
          * @param[in] filter Which attributes can be picked; all of them when
          *            empty.
          * @param[in] label Text shown on the left of the combo box; it also
-         *            names the ImGui item, so two selectors drawn in the same
+         *            names the ImGui item, so two pickers drawn in the same
          *            window need different labels.
          * @return true when the selection changed.
          */
         bool draw_attribute_selector(
+            MeshObject::AttributeInfo& selection,
             const MeshObject& mesh_object,
             const AttributeFilter& filter = {},
             const char* label = "Attr."
@@ -351,40 +358,30 @@ namespace geolio::geobox
             }
 
             if (attributes.empty()) {
-                ImGui::TextDisabled("%s", "No matching attribute.");
-                if (selected_attribute_.subelements != GEO::MESH_NONE) {
-                    selected_attribute_ = MeshObject::AttributeInfo();
+                ImGui::TextDisabled("No matching attribute.");
+                if (selection.subelements != GEO::MESH_NONE) {
+                    selection = MeshObject::AttributeInfo();
                     changed = true;
                 }
                 return changed;
             }
 
-            // Entries of the combo, aligned with the names it shows: "none"
-            // (an empty selection) first when picking no attribute is allowed,
-            // then the attributes that matched the filter.
-            std::vector<MeshObject::AttributeInfo> entries;
-            entries.insert(entries.end(), attributes.begin(), attributes.end());
-
             // The attribute the selection names may not be offered any more:
-            // fall back to the first entry, i.e. to "none" (or to the first
-            // attribute when the application requires one).
+            // fall back to the first attribute that matched the filter.
             std::size_t selected = 0;
-            for (std::size_t i = 0; i < entries.size(); ++i) {
-                if (entries[i].full_name() == selected_attribute_.full_name())
+            for (std::size_t i = 0; i < attributes.size(); ++i) {
+                if (attributes[i].full_name() == selection.full_name())
                     selected = i;
             }
-            if (entries[selected].full_name() !=
-                selected_attribute_.full_name()) {
+            if (attributes[selected].full_name() != selection.full_name()) {
                 selected = 0;
                 changed = true;
             }
-            selected_attribute_ = entries[selected];
+            selection = attributes[selected];
 
             std::string items;
-            for (const auto & entry : entries) {
-                const std::string name = entry.full_name();
-                // The empty name is the "picking no attribute" entry.
-                items += name.empty() ? "none" : name;
+            for (const auto& attribute : attributes) {
+                items += attribute.full_name();
                 items.push_back('\0');
             }
 
@@ -394,8 +391,7 @@ namespace geolio::geobox
             const std::string combo_id = std::string("##") + label;
             int current_index = static_cast<int>(selected);
             if (ImGui::Combo(combo_id.c_str(), &current_index, items.c_str())) {
-                selected_attribute_ =
-                    entries[static_cast<std::size_t>(current_index)];
+                selection = attributes[static_cast<std::size_t>(current_index)];
                 changed = true;
             }
             return changed;
@@ -412,13 +408,6 @@ namespace geolio::geobox
         std::vector<std::string> menu_path_{UNGROUPED_APPLICATIONS_MENU_NAME};
 
         bool window_visible_ = false;
-
-        /** The mesh object picked with draw_mesh_selector(). */
-        std::weak_ptr<MeshObject> selected_mesh_object_;
-
-        /** The attribute picked with draw_attribute_selector(); the default
-         *  value (subelements == GEO::MESH_NONE, empty name) means "none". */
-        MeshObject::AttributeInfo selected_attribute_;
 
         /** Width used by every slider/drag of the applications: 75% of the
          *  default item width. Refreshed at the beginning of each

@@ -43,6 +43,7 @@ namespace geolio::geobox
         void draw_window_contents() override {
             // The mesh picker, offering the meshes this application accepts.
             const bool selection_changed = draw_mesh_selector(
+                selected_mesh_object_,
                 [](const GEO::Mesh& mesh) {
                     return mesh.facets.nb() > 0 || mesh.cells.nb() > 0;
                 });
@@ -53,7 +54,7 @@ namespace geolio::geobox
             // (the parameters and the button that runs the operation) is
             // non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
-            if (const auto mesh_object = selected_mesh();
+            if (const auto mesh_object = selected_mesh_object_.lock();
                 mesh_object != nullptr
                 ) {
                 const auto& mesh = mesh_object->mesh();
@@ -93,9 +94,9 @@ namespace geolio::geobox
                     ImGui::Checkbox("Weighted by vertex attribute", &vertex_weighted_);
                     if (vertex_weighted_)
                         draw_attribute_selector(
+                            weight_attribute_,
                             *mesh_object,
-                            &MeshRandomSamplingApplication::is_weight_attribute,
-                            "Attr.");
+                            &MeshRandomSamplingApplication::is_weight_attribute);
                 }
 
                 ImGui::Separator();
@@ -120,8 +121,9 @@ namespace geolio::geobox
             // case the sampling is area-proportional, as GeoGram does.
             if (mesh_v_weight_.is_bound())
                 mesh_v_weight_.unbind();
-            if (vertex_weighted_ && !selected_attribute_.name.empty())
-                mesh_v_weight_.bind_if_is_compatible(mesh.vertices.attributes(), selected_attribute_.name);
+            if (vertex_weighted_ && !weight_attribute_.name.empty())
+                mesh_v_weight_.bind_if_is_compatible(
+                    mesh.vertices.attributes(), weight_attribute_.name);
 
             /* Sampling */
             std::vector<double> sample_points;
@@ -163,8 +165,16 @@ namespace geolio::geobox
         int samples_nb = 1e3;
 
         /** Whether the sampling is weighted by a vertex attribute (see
-         *  selected_attribute_ for which one). */
+         *  weight_attribute_ for which one). */
         bool vertex_weighted_ = false;
+
+        /** The mesh object picked with draw_mesh_selector(). */
+        std::weak_ptr<MeshObject> selected_mesh_object_;
+
+        /** The vertex attribute weighting the sampling, picked with
+         *  draw_attribute_selector(); its default value (GEO::MESH_NONE
+         *  sub-elements, empty name) means "not weighted". */
+        MeshObject::AttributeInfo weight_attribute_;
 
         GEO::Attribute<double> mesh_v_weight_;
     };

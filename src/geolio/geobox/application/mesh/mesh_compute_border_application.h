@@ -21,6 +21,7 @@ namespace geolio::geobox
         void draw_window_contents() override {
             // The mesh picker, offering the meshes this application accepts.
             const bool selection_changed = draw_mesh_selector(
+                selected_mesh_object_,
                 [](const GEO::Mesh& mesh) {
                     return mesh.cells.nb() > 0;
                 });
@@ -31,7 +32,7 @@ namespace geolio::geobox
             // (the parameters and the button that runs the operation) is
             // non-interactive.
             ImGui::BeginDisabled(selected_mesh_object_.expired());
-            if (const auto mesh_object = selected_mesh();
+            if (const auto mesh_object = selected_mesh_object_.lock();
                 mesh_object != nullptr
                 ) {
                 auto& mesh = mesh_object->mesh();
@@ -51,6 +52,9 @@ namespace geolio::geobox
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
+
+        /** The mesh object picked with draw_mesh_selector(). */
+        std::weak_ptr<MeshObject> selected_mesh_object_;
     };
 }
 
