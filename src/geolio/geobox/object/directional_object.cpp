@@ -12,6 +12,7 @@
 #include <geogram_gfx/imgui_ext/icon_font.h>
 
 #include <geolio/common/log.h>
+#include <geolio/geobox/object/mesh_object.h>
 #include <geolio/io/fra_io.h>
 
 namespace geolio::geobox
@@ -28,75 +29,167 @@ namespace geolio::geobox
         /** @brief Number of default colors above. */
         constexpr GEO::index_t NB_AXIS_COLORS =
             sizeof(AXIS_COLORS) / sizeof(AXIS_COLORS[0]);
+
+        /** @brief Name of the elements a field can be attached to. */
+        const char* subelements_label(const GEO::MeshElementsFlags subelements) {
+            switch (subelements) {
+                case GEO::MESH_VERTICES:
+                    return "vertices";
+                case GEO::MESH_FACETS:
+                    return "facets";
+                case GEO::MESH_CELLS:
+                    return "cells";
+                default:
+                    return "nothing";
+            }
+        }
     }
 
     DirectionalObject::DirectionalObject(
         std::string name,
         std::string filepath,
-        const GEO::Mesh& mesh,
+        ApplicationObjects& objects,
         const GEO::index_t vectors_nb_per_element,
-        const std::vector<double>& vectors,
-        const GEO::MeshElementsFlags subelements
+        const std::vector<double>& vectors
         ) : BaseObject(std::move(name), std::move(filepath)),
             vectors_(vectors),
             vectors_nb_per_element_(vectors_nb_per_element),
-            subelements_(subelements)
+            objects_(objects)
     {
-        // The vectors are drawn from the center of the element they belong to.
-        const bool volumetric = subelements_ == GEO::MESH_CELLS;
-        const GEO::index_t nb = volumetric ? mesh.cells.nb() : mesh.facets.nb();
-        centers_.reserve(nb);
-        for (GEO::index_t e = 0; e < nb; ++e) {
-            centers_.push_back(
-                volumetric ? GEO::Geom::mesh_cell_center(mesh, e)
-                           : GEO::Geom::mesh_facet_center(mesh, e));
-        }
-
-        // The size of the mesh, to interpret the length of the vectors (see
-        // length()): it has to be measured before the visualization mesh is
-        // built, and on the mesh the field is defined on -- the visualization
-        // mesh is empty at this point, and only holds unit-long edges anyway.
-        {
-            double xyzmin[3] = {0.0, 0.0, 0.0};
-            double xyzmax[3] = {0.0, 0.0, 0.0};
-            bool first = true;
-            for (GEO::index_t v = 0; v < mesh.vertices.nb(); ++v) {
-                const double* p = mesh.vertices.point_ptr(v);
-                for (GEO::coord_index_t c = 0; c < 3; ++c) {
-                    if (first || p[c] < xyzmin[c])
-                        xyzmin[c] = p[c];
-                    if (first || p[c] > xyzmax[c])
-                        xyzmax[c] = p[c];
-                }
-                first = false;
-            }
-            double d2 = 0.0;
-            for (GEO::coord_index_t c = 0; c < 3; ++c) {
-                const double d = xyzmax[c] - xyzmin[c];
-                d2 += d * d;
-            }
-            elements_bbox_diagonal_ =
-                d2 > 0.0 ? static_cast<float>(std::sqrt(d2)) : 1.0f;
-        }
-
         // One style per axis, the axes being told apart by their color.
         axis_styles_.resize(vectors_nb_per_element_);
         for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis)
             axis_styles_[axis].color = AXIS_COLORS[axis % NB_AXIS_COLORS];
 
-        if (vectors_.size() != 3 * vectors_nb_per_element_ * nb) {
-            LOG::ERROR(
-                "Directional field `{}`: {} values for {} elements of {} "
-                "vectors, expected {}.",
-                name_,
-                vectors_.size(),
-                nb,
-                vectors_nb_per_element_,
-                3 * vectors_nb_per_element_ * nb);
-            vectors_.clear();
+        // Nothing is drawn until the field is attached to a mesh object (see
+        // attach_to()): the .fra format holds the vectors only.
+        build_visualization_mesh();
+    }
+
+    GEO::index_t DirectionalObject::nb_frames(
+        ) const {
+        if (vectors_nb_per_element_ == 0)
+            return 0;
+        return GEO::index_t(vectors_.size() / (3 * vectors_nb_per_element_));
+    }
+
+    std::vector<GEO::MeshElementsFlags> DirectionalObject::attachable_subelements(
+        const MeshObject& mesh_object
+        ) const {
+        std::vector<GEO::MeshElementsFlags> kinds;
+        const GEO::index_t nb = nb_frames();
+        if (nb == 0)
+            return kinds;
+
+        const GEO::Mesh& mesh = mesh_object.mesh();
+        if (mesh.vertices.nb() == nb)
+            kinds.push_back(GEO::MESH_VERTICES);
+        if (mesh.facets.nb() == nb)
+            kinds.push_back(GEO::MESH_FACETS);
+        if (mesh.cells.nb() == nb)
+            kinds.push_back(GEO::MESH_CELLS);
+        return kinds;
+    }
+
+    bool DirectionalObject::attach_to(
+        const std::shared_ptr<MeshObject>& mesh_object,
+        const GEO::MeshElementsFlags subelements
+        ) {
+        if (mesh_object == nullptr || subelements == GEO::MESH_NONE) {
+            mesh_object_.reset();
+            subelements_ = GEO::MESH_NONE;
+            centers_.clear();
+            build_visualization_mesh();
+            return false;
         }
 
+        // The frames need one element to sit on each.
+        const GEO::Mesh& mesh = mesh_object->mesh();
+        GEO::index_t nb_subelements = 0;
+        switch (subelements) {
+            case GEO::MESH_VERTICES:
+                nb_subelements = mesh.vertices.nb();
+                break;
+            case GEO::MESH_FACETS:
+                nb_subelements = mesh.facets.nb();
+                break;
+            case GEO::MESH_CELLS:
+                nb_subelements = mesh.cells.nb();
+                break;
+            default:
+                break;
+        }
+        if (nb_subelements != nb_frames()) {
+            LOG::ERROR(
+                "`{}` has {} {} for the {} frames of `{}`: the field is not "
+                "attached to it.",
+                mesh_object->name(),
+                nb_subelements,
+                subelements_label(subelements),
+                nb_frames(),
+                name_);
+            return false;
+        }
+
+        mesh_object_ = mesh_object;
+        subelements_ = subelements;
+        read_centers();
         build_visualization_mesh();
+        return true;
+    }
+
+    void DirectionalObject::read_centers(
+        ) {
+        centers_.clear();
+        elements_bbox_diagonal_ = 1.0f;
+
+        const auto mesh_object = mesh_object_.lock();
+        if (mesh_object == nullptr)
+            return;
+        const GEO::Mesh& mesh = mesh_object->mesh();
+
+        // The frames are drawn from the center of the element they sit on.
+        const GEO::index_t nb = nb_frames();
+        centers_.reserve(nb);
+        switch (subelements_) {
+            case GEO::MESH_VERTICES:
+                for (GEO::index_t v = 0; v < nb; ++v)
+                    centers_.push_back(mesh.vertices.point(v));
+                break;
+            case GEO::MESH_FACETS:
+                for (GEO::index_t f = 0; f < nb; ++f)
+                    centers_.push_back(GEO::Geom::mesh_facet_center(mesh, f));
+                break;
+            case GEO::MESH_CELLS:
+                for (GEO::index_t c = 0; c < nb; ++c)
+                    centers_.push_back(GEO::Geom::mesh_cell_center(mesh, c));
+                break;
+            default:
+                break;
+        }
+
+        // The size of the mesh, to interpret the length of the vectors (see
+        // length()).
+        double xyzmin[3] = {0.0, 0.0, 0.0};
+        double xyzmax[3] = {0.0, 0.0, 0.0};
+        bool first = true;
+        for (GEO::index_t v = 0; v < mesh.vertices.nb(); ++v) {
+            const double* p = mesh.vertices.point_ptr(v);
+            for (GEO::coord_index_t c = 0; c < 3; ++c) {
+                if (first || p[c] < xyzmin[c])
+                    xyzmin[c] = p[c];
+                if (first || p[c] > xyzmax[c])
+                    xyzmax[c] = p[c];
+            }
+            first = false;
+        }
+        double d2 = 0.0;
+        for (GEO::coord_index_t c = 0; c < 3; ++c) {
+            const double d = xyzmax[c] - xyzmin[c];
+            d2 += d * d;
+        }
+        elements_bbox_diagonal_ =
+            d2 > 0.0 ? static_cast<float>(std::sqrt(d2)) : 1.0f;
     }
 
     void DirectionalObject::build_visualization_mesh(
@@ -158,11 +251,15 @@ namespace geolio::geobox
         BaseObject::draw_object_properties();
 
         ImGui::Text(
-            "%u vectors per %s, %u %s",
+            "%u vectors per element, %u frames",
             static_cast<unsigned>(vectors_nb_per_element_),
-            subelements_ == GEO::MESH_CELLS ? "cell" : "facet",
-            static_cast<unsigned>(nb_elements()),
-            subelements_ == GEO::MESH_CELLS ? "cells" : "facets");
+            static_cast<unsigned>(nb_frames()));
+
+        ImGui::Separator();
+
+        // Where the frames come from: the mesh object they are attached to, and
+        // which of its elements they sit on (see attach_to()).
+        draw_attachment_pickers();
 
         ImGui::Separator();
 
@@ -214,6 +311,103 @@ namespace geolio::geobox
         }
 
         ImGui::PopID();
+    }
+
+    bool DirectionalObject::draw_attachment_pickers(
+        ) {
+        bool attached = false;
+
+        // The objects the field can be attached to: those with as many vertices,
+        // facets or cells as it has frames.
+        std::vector<std::shared_ptr<MeshObject>> candidates;
+        for (const auto& object : objects_) {
+            const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(object);
+            if (mesh_object == nullptr ||
+                attachable_subelements(*mesh_object).empty()) {
+                continue;
+            }
+            candidates.push_back(mesh_object);
+        }
+
+        if (candidates.empty()) {
+            ImGui::TextDisabled(
+                "No mesh object with %u vertices, facets or cells.",
+                static_cast<unsigned>(nb_frames()));
+            return attached;
+        }
+
+        // A single mesh object, with a single kind of element to attach to, is
+        // picked automatically: the field shows up as soon as it is created.
+        auto selected = mesh_object_.lock();
+        if (selected == nullptr && candidates.size() == 1) {
+            const auto kinds = attachable_subelements(*candidates[0]);
+            if (kinds.size() == 1) {
+                attached = attach_to(candidates[0], kinds[0]);
+                selected = candidates[0];
+            }
+        }
+
+        // The mesh object: its name, or a placeholder while none is attached.
+        std::string preview =
+            selected != nullptr ? selected->name() : "Select a mesh object";
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Mesh");
+        ImGui::SameLine();
+        if (ImGui::BeginCombo("##attach_mesh", preview.c_str())) {
+            for (const auto& candidate : candidates) {
+                const bool is_selected = candidate == selected;
+                if (ImGui::Selectable(candidate->name().c_str(), is_selected)) {
+                    // Keep the kind of element of the previous mesh when it
+                    // still works, so switching between two meshes of the same
+                    // kind does not lose the choice.
+                    const auto kinds = attachable_subelements(*candidate);
+                    const auto current = std::ranges::find(kinds, subelements_);
+                    attached = attach_to(
+                        candidate,
+                        current != kinds.end() ? subelements_ : kinds.front());
+                    selected = candidate;
+                }
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+        // The kind of element the frames sit on. It is picked when the mesh
+        // offers several kinds with the right number of elements, and shown --
+        // there is nothing to pick -- when it offers a single one, so that the
+        // panel always says where the frames sit.
+        if (selected != nullptr) {
+            const auto kinds = attachable_subelements(*selected);
+            if (kinds.size() == 1) {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Attach to");
+                ImGui::SameLine();
+                ImGui::TextDisabled(
+                    "%s (%u)",
+                    subelements_label(kinds.front()),
+                    static_cast<unsigned>(nb_frames()));
+            }
+            if (kinds.size() > 1) {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Attach to");
+                ImGui::SameLine();
+                std::string kind_preview = subelements_label(subelements_);
+                if (ImGui::BeginCombo("##attach_kind", kind_preview.c_str())) {
+                    for (const auto kind : kinds) {
+                        const bool is_selected = kind == subelements_;
+                        if (ImGui::Selectable(subelements_label(kind), is_selected)) {
+                            attached = attach_to(selected, kind);
+                        }
+                        if (is_selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+        }
+
+        return attached;
     }
 
     void DirectionalObject::draw_scene(
@@ -345,22 +539,33 @@ namespace geolio::geobox
             return;
         }
 
+        // The file has to hold whole frames of as many vectors as the object
+        // draws per frame; how many frames there are is free to change, since the
+        // mesh the field is attached to can follow (see attach_to()).
         if (vectors_nb_per_element != vectors_nb_per_element_ ||
-            vectors.size() != 3 * vectors_nb_per_element_ * nb_elements()) {
+            (vectors_nb_per_element_ != 0 &&
+             vectors.size() % (3 * vectors_nb_per_element_) != 0)) {
             LOG::ERROR(
-                "`{}` holds {} elements of {} vectors, but the object was "
-                "created for {} elements of {} vectors.",
+                "`{}` holds {} values of {} vectors per element, but the object "
+                "was created for {} vectors per element.",
                 filepath_,
-                vectors_nb_per_element != 0
-                    ? vectors.size() / (3 * vectors_nb_per_element)
-                    : 0,
+                vectors.size(),
                 vectors_nb_per_element,
-                nb_elements(),
                 vectors_nb_per_element_);
             return;
         }
 
         vectors_ = std::move(vectors);
+
+        // The frames were read for the mesh they are attached to: they may not
+        // describe it any more, in which case the field is left unattached rather
+        // than drawn on the wrong elements.
+        if (const auto mesh_object = mesh_object_.lock();
+            mesh_object != nullptr && !attach_to(mesh_object, subelements_)) {
+            mesh_object_.reset();
+            subelements_ = GEO::MESH_NONE;
+        }
+        read_centers();
         build_visualization_mesh();
         LOG::INFO("Reloaded the vectors of `{}`.", name_);
     }

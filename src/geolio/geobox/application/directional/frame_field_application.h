@@ -49,6 +49,13 @@ namespace geolio::geobox
                         mesh.cells.nb() > 0 && mesh.cells.are_simplices();
                     if (!has_tets)
                         volumetric_ = false;
+                    else if (mesh.facets.nb() == 0) {
+                        // The surface of such a mesh is the border of its cells
+                        // (see perform()): the field can only be drawn on the
+                        // cells, which are the elements of the object that owns
+                        // the mesh.
+                        volumetric_ = true;
+                    }
                     ImGui::BeginDisabled(!has_tets);
                     {
                         ImGui::Checkbox("Volumetric", &volumetric_);
@@ -78,7 +85,7 @@ namespace geolio::geobox
                 ImGui::Separator();
 
                 if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)))
-                    perform(mesh);
+                    perform(mesh_object);
             }
             ImGui::EndDisabled();
         }
@@ -92,8 +99,9 @@ namespace geolio::geobox
          * @return The object that displays the field, or nullptr when the field
          *         could not be computed.
          */
-        void perform(const GEO::Mesh& mesh) const {
+        void perform(const std::shared_ptr<MeshObject>& mesh_object) const {
             LOG::TRACE("{}({})", application_name_, __FUNCTION__);
+            const GEO::Mesh& mesh = mesh_object->mesh();
 
             // GeoGram computes the field from the facets of the mesh, and its
             // solver works on their adjacency. The facets of a tetrahedral mesh
@@ -153,13 +161,20 @@ namespace geolio::geobox
                 return;
             }
 
-            objects_.push_back(std::make_shared<DirectionalObject>(
-                "frame field",
-                "",
-                *surface,
-                NB_VECTORS_PER_ELEMENT,
-                vectors,
-                volumetric_ ? GEO::MESH_CELLS : GEO::MESH_FACETS));
+            // The frames sit on the elements of the mesh object: the field is
+            // attached to it, so that it follows the mesh and offers it in its
+            // properties (see DirectionalObject::attach_to()).
+            const auto object = std::make_shared<DirectionalObject>(
+                "frame field", "", objects_, NB_VECTORS_PER_ELEMENT, vectors);
+            if (!object->attach_to(
+                    mesh_object,
+                    volumetric_ ? GEO::MESH_CELLS : GEO::MESH_FACETS)) {
+                LOG::ERROR(
+                    "The field does not describe the elements of `{}`.",
+                    mesh_object->name());
+                return;
+            }
+            objects_.push_back(object);
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }

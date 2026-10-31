@@ -5,6 +5,9 @@
 #ifndef GEOLIO_BASE_OBJECT_H
 #define GEOLIO_BASE_OBJECT_H
 
+#include <memory>
+#include <string>
+#include <vector>
 #include <imgui.h>
 #include <geolio/common/utils.h>
 #include <geolio/common/parse_filepath.h>
@@ -171,6 +174,12 @@ namespace geolio::geobox
          */
         GEO::vec4f title_color_ = GEO::vec4f(0.05f, 0.18f, 0.50f, 1.0f);
     };
+
+    /** Objects container shared by the main application and its
+     *  sub-applications, in display order. Objects that depend on another
+     *  object of the scene (e.g. a field attached to a mesh) keep a reference
+     *  to it to offer the objects they can depend on. */
+    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
 }
 
 #endif //GEOLIO_BASE_OBJECT_H

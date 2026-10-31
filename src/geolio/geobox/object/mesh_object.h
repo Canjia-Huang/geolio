@@ -108,6 +108,14 @@ namespace geolio::geobox
         auto& mesh() { return mesh_; }
 
         /**
+         * @brief The mesh of this object, read only.
+         * @details Used by the objects that draw something about a mesh without
+         *          modifying it (see DirectionalObject, which attaches its frames
+         *          to the elements of a mesh object).
+         */
+        [[nodiscard]] const auto& mesh() const { return mesh_; }
+
+        /**
          * @brief Tells this object that its mesh was modified in place.
          * @details To be called after an operation changed the mesh behind the
          *          object's back (see mesh()). What the object derived from the

@@ -23,10 +23,6 @@ namespace geolio::geobox
      */
     inline constexpr auto UNGROUPED_APPLICATIONS_MENU_NAME = "ungrouped";
 
-    /** Objects container shared by the main application and its
-     *  sub-applications. */
-    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
-
     /**
      * @brief Base class for plugin-style sub-applications (e.g. mesh apps)
      *        embedded in the main GeoBox application.
