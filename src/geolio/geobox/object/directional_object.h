@@ -137,6 +137,26 @@ namespace geolio::geobox
          */
         [[nodiscard]] bool attached() const;
 
+        /**
+         * @brief The mesh the frames are attached to, or nullptr when the field
+         *        is not attached (see attached()).
+         * @details That is the mesh of mesh_object(), the one the frames are
+         *          drawn from the elements of. The mutable overload is the one an
+         *          operation that works on that mesh needs (e.g. the streamline
+         *          tracer, which stores its directions on it).
+         */
+        [[nodiscard]] const GEO::Mesh* attached_mesh() const;
+        [[nodiscard]] GEO::Mesh* attached_mesh();
+
+        /**
+         * @brief Name of the elements a field can be attached to.
+         * @param[in] subelements One of GEO::MESH_VERTICES, GEO::MESH_FACETS and
+         *            GEO::MESH_CELLS (GEO::MESH_NONE for no attachment).
+         * @return "vertices", "facets", "cells", or "nothing".
+         */
+        [[nodiscard]] static const char* subelements_name(
+            GEO::MeshElementsFlags subelements);
+
         /** @brief The elements of the mesh the frames are attached to: one of
          *  GEO::MESH_VERTICES, GEO::MESH_FACETS and GEO::MESH_CELLS, or
          *  GEO::MESH_NONE while the field is not attached. */

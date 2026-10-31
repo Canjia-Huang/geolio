@@ -30,19 +30,7 @@ namespace geolio::geobox
         constexpr GEO::index_t NB_AXIS_COLORS =
             sizeof(AXIS_COLORS) / sizeof(AXIS_COLORS[0]);
 
-        /** @brief Name of the elements a field can be attached to. */
-        const char* subelements_label(const GEO::MeshElementsFlags subelements) {
-            switch (subelements) {
-                case GEO::MESH_VERTICES:
-                    return "vertices";
-                case GEO::MESH_FACETS:
-                    return "facets";
-                case GEO::MESH_CELLS:
-                    return "cells";
-                default:
-                    return "nothing";
-            }
-        }
+
     }
 
     DirectionalObject::DirectionalObject(
@@ -91,6 +79,33 @@ namespace geolio::geobox
         return kinds;
     }
 
+    const char* DirectionalObject::subelements_name(
+        const GEO::MeshElementsFlags subelements
+        ) {
+        switch (subelements) {
+            case GEO::MESH_VERTICES:
+                return "vertices";
+            case GEO::MESH_FACETS:
+                return "facets";
+            case GEO::MESH_CELLS:
+                return "cells";
+            default:
+                return "nothing";
+        }
+    }
+
+    const GEO::Mesh* DirectionalObject::attached_mesh(
+        ) const {
+        const auto mesh_object = mesh_object_.lock();
+        return mesh_object != nullptr ? &mesh_object->mesh() : nullptr;
+    }
+
+    GEO::Mesh* DirectionalObject::attached_mesh(
+        ) {
+        const auto mesh_object = mesh_object_.lock();
+        return mesh_object != nullptr ? &mesh_object->mesh() : nullptr;
+    }
+
     bool DirectionalObject::attached(
         ) const {
         return subelements_ != GEO::MESH_NONE &&
@@ -132,7 +147,7 @@ namespace geolio::geobox
                 "attached to it.",
                 mesh_object->name(),
                 nb_subelements,
-                subelements_label(subelements),
+                subelements_name(subelements),
                 nb_frames(),
                 name_);
             return false;
@@ -345,8 +360,10 @@ namespace geolio::geobox
         }
 
         if (candidates.empty()) {
+            // What would be needed, so that the message says why nothing is
+            // offered (see attachable_subelements()).
             ImGui::TextDisabled(
-                "No matching mesh object.",
+                "No mesh object with %u vertices, facets or cells.",
                 static_cast<unsigned>(nb_frames()));
             return attached;
         }
@@ -400,18 +417,18 @@ namespace geolio::geobox
                 ImGui::SameLine();
                 ImGui::TextDisabled(
                     "%s (%u)",
-                    subelements_label(kinds.front()),
+                    subelements_name(kinds.front()),
                     static_cast<unsigned>(nb_frames()));
             }
             if (kinds.size() > 1) {
                 ImGui::AlignTextToFramePadding();
                 ImGui::TextUnformatted("Attach to");
                 ImGui::SameLine();
-                std::string kind_preview = subelements_label(subelements_);
+                std::string kind_preview = subelements_name(subelements_);
                 if (ImGui::BeginCombo("##attach_kind", kind_preview.c_str())) {
                     for (const auto kind : kinds) {
                         const bool is_selected = kind == subelements_;
-                        if (ImGui::Selectable(subelements_label(kind), is_selected)) {
+                        if (ImGui::Selectable(subelements_name(kind), is_selected)) {
                             attached = attach_to(selected, kind);
                         }
                         if (is_selected)

@@ -16,6 +16,7 @@
 #include "points/centroidal_voronoi_tesselation_application.h"
 #include "points/restricted_voronoi_diagram_application.h"
 #include "directional/frame_field_application.h"
+#include "directional/streamline_tracing_application.h"
 
 namespace geolio::geobox
 {
@@ -47,6 +48,7 @@ namespace geolio::geobox
     inline void register_additional_Applications() {
         geolio_register_BaseApplication_creator(LocalFeatureSizeApplication, "attributes");
         geolio_register_BaseApplication_creator(FrameFieldApplication, "directional");
+        geolio_register_BaseApplication_creator(StreamlineTracingApplication, "directional");
         geolio_register_BaseApplication_creator(CentroidalVoronoiTesselationApplication, "points");
         geolio_register_BaseApplication_creator(RestrictedVoronoiDiagramApplication, "points");
         geolio_register_BaseApplication_creator(MeshCleanApplication, "mesh");
