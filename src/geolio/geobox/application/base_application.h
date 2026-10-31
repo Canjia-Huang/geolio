@@ -158,7 +158,7 @@ namespace geolio::geobox
                 ImGuiCond_FirstUseEver,
                 ImVec2(0.5f, 0.5f)
             );
-            ImGui::SetNextWindowBgAlpha(0.6f);
+            ImGui::SetNextWindowBgAlpha(0.9f);
             if (ImGui::Begin(application_name_.c_str(), &window_visible_)) {
                 // Width shared by the numeric sliders/drags of the
                 // applications: 75% of the default item width. It is computed
