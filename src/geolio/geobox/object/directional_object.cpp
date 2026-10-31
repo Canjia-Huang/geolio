@@ -250,64 +250,66 @@ namespace geolio::geobox
         // BaseObject::draw_object_properties()).
         BaseObject::draw_object_properties();
 
-        ImGui::Text(
-            "%u vectors per element, %u frames",
-            static_cast<unsigned>(vectors_nb_per_element_),
-            static_cast<unsigned>(nb_frames()));
+        if (ImGui::CollapsingHeader("Info", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text(
+                "%u vectors per element, %u frames",
+                static_cast<unsigned>(vectors_nb_per_element_),
+                static_cast<unsigned>(nb_frames()));
 
-        ImGui::Separator();
+            ImGui::Separator();
 
-        // Where the frames come from: the mesh object they are attached to, and
-        // which of its elements they sit on (see attach_to()).
-        draw_attachment_pickers();
-
-        ImGui::Separator();
-
-        // Whether the vectors are drawn in both directions: a, -a, b, -b, ...
-        // With it, the axes of a frame are lines through the center of their
-        // element instead of being oriented.
-        ImGui::Checkbox("draw opposite", &draw_opposite_);
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "Draw each vector in both directions: a and -a, b and -b, ...");
+            // Where the frames come from: the mesh object they are attached to, and
+            // which of its elements they sit on (see attach_to()).
+            draw_attachment_pickers();
         }
 
-        // The length and the width are the same for all the axes.
-        ImGui::DragFloat("len.", &length_, 0.001f, 0.0f, 1e8, "%.3f");
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "Length of the vectors, as a fraction of the diagonal of the mesh the field is defined on (%.3f).",
-                elements_bbox_diagonal_);
-        }
+        if (ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // Whether the vectors are drawn in both directions: a, -a, b, -b, ...
+            // With it, the axes of a frame are lines through the center of their
+            // element instead of being oriented.
+            ImGui::Checkbox("draw opposite", &draw_opposite_);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Draw each vector in both directions: a and -a, b and -b, ...");
+            }
 
-        ImGui::DragFloat("wid.", &width_, 0.01f, 0.0f, 1e8, "%.2f");
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "Width of the lines the vectors are drawn with.");
-        }
+            // The length and the width are the same for all the axes.
+            ImGui::DragFloat("len.", &length_, 0.001f, 0.0f, 1e8, "%.3f");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Length of the vectors, as a fraction of the diagonal of the mesh the field is defined on (%.3f).",
+                    elements_bbox_diagonal_);
+            }
 
-        ImGui::Separator();
+            ImGui::DragFloat("wid.", &width_, 0.01f, 0.0f, 1e8, "%.2f");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Width of the lines the vectors are drawn with.");
+            }
 
-        // One row per axis: whether it is drawn, and its color.
-        for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
-            ImGui::PushID(static_cast<int>(axis));
+            ImGui::Separator();
 
-            AxisStyle& style = axis_styles_[axis];
-            ImGui::Checkbox("##visible", &style.visible);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Show the vectors of this axis.");
+            // One row per axis: whether it is drawn, and its color.
+            for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
+                ImGui::PushID(static_cast<int>(axis));
 
-            ImGui::SameLine();
+                AxisStyle& style = axis_styles_[axis];
+                ImGui::Checkbox("##visible", &style.visible);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Show the vectors of this axis.");
 
-            ImGui::ColorEdit3WithPalette("#color", style.color.data());
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Color of the vectors of this axis.");
+                ImGui::SameLine();
 
-            ImGui::SameLine();
+                ImGui::ColorEdit3WithPalette("#color", style.color.data());
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Color of the vectors of this axis.");
 
-            ImGui::Text("Axis %u", static_cast<unsigned>(axis));
+                ImGui::SameLine();
 
-            ImGui::PopID();
+                ImGui::Text("Axis %u", static_cast<unsigned>(axis));
+
+                ImGui::PopID();
+            }
         }
 
         ImGui::PopID();
@@ -331,7 +333,7 @@ namespace geolio::geobox
 
         if (candidates.empty()) {
             ImGui::TextDisabled(
-                "No mesh object with %u vertices, facets or cells.",
+                "No matching mesh object.",
                 static_cast<unsigned>(nb_frames()));
             return attached;
         }
