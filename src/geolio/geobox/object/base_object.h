@@ -5,6 +5,7 @@
 #ifndef GEOLIO_BASE_OBJECT_H
 #define GEOLIO_BASE_OBJECT_H
 
+#include <imgui.h>
 #include <geolio/common/utils.h>
 #include <geolio/common/parse_filepath.h>
 #include <geogram/basic/geometry.h>
@@ -62,13 +63,24 @@ namespace geolio::geobox
         /**
          * @brief Draws the object-specific property widgets in the GUI.
          */
-        virtual void draw_object_properties() = 0;
+        virtual void draw_object_properties() {
+            if (std::filesystem::exists(filepath_)) {
+                if (ImGui::Button("Reload", ImVec2(-1, 0)))
+                    reload();
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", filepath_.c_str());
+
+                ImGui::Separator();
+            }
+        }
 
         /**
          * @brief Renders the object in the scene.
          * @param[in] lighting Whether scene lighting should be enabled.
          */
         virtual void draw_scene(bool lighting) = 0;
+
+        virtual void reload() {}
 
         /**
          * @brief Whether the object can be written in a file format.

@@ -283,19 +283,12 @@ namespace geolio::geobox
         ) {
         ImGui::PushID(this);
 
+        BaseObject::draw_object_properties();
+
         // An operation may have changed the mesh since the last frame (see
         // mesh_changed()): the Info panel and the border controls below would
         // otherwise show what the mesh was before it.
         update_mesh_caches();
-
-        if (std::filesystem::exists(filepath_)) {
-            if (ImGui::Button("Reload", ImVec2(-1, 0)))
-                reload();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", filepath_.c_str());
-
-            ImGui::Separator();
-        }
 
         if (!data_valid_) {
             // The mesh was kept as it is (the validity dialog was answered with
