@@ -177,7 +177,14 @@ namespace geolio::geobox
          */
         std::vector<AttributeInfo> attribute_infos() const;
 
+        bool check_validity() override;
+
+        void draw_validity_dialog() override;
+
+        [[nodiscard]] bool renderable() const override { return data_valid_; }
+
     protected:
+
         /**
          * @brief Facet and cell counts broken down by kind, for the Info
          *        panel.
@@ -220,6 +227,20 @@ namespace geolio::geobox
          * @return true if at least one facet edge is on the border.
          */
         bool compute_surface_has_borders() const;
+
+        /**
+         * @brief Removes the invalid elements the validity dialog offers to
+         *        remove.
+         * @details Deletes the elements check_validity() flagged (the edges,
+         *          facets and cells that reference missing vertices), then the
+         *          vertices whose coordinates are not finite when the dialog
+         *          asked for it. Elements are deleted first, since deleting
+         *          vertices re-indexes the elements that reference them (see
+         *          GEO::MeshVertices::delete_elements()). The validity check is
+         *          run again afterwards, so that the elements that a vertex
+         *          removal left behind are reported again.
+         */
+        void repair_invalid_vertices_and_elements();
 
         /**
          * @brief Recomputes what this object caches about the mesh.
@@ -758,6 +779,43 @@ namespace geolio::geobox
         /** Whether the mesh was modified since the caches above were
          *  computed (see mesh_changed() and update_mesh_caches()). */
         bool mesh_caches_dirty_ = false;
+
+        /** Number of invalid elements of each kind, as found by the validity
+         *  check (see check_validity()). */
+        struct InvalidElementCounts {
+            GEO::index_t vertices = 0;
+            GEO::index_t edges = 0;
+            GEO::index_t facets = 0;
+            GEO::index_t cells = 0;
+
+            /** @brief Whether at least one element is invalid. */
+            [[nodiscard]] bool any() const {
+                return vertices != 0 || edges != 0 || facets != 0 || cells != 0;
+            }
+        };
+        InvalidElementCounts invalid_counts_;
+
+        /** Elements to delete when the mesh is repaired (see
+         *  repair_invalid_elements()), indexed like the mesh: a non-zero entry
+         *  means the element is invalid. */
+        GEO::vector<GEO::index_t> vertices_to_delete_;
+        GEO::vector<GEO::index_t> edges_to_delete_;
+        GEO::vector<GEO::index_t> facets_to_delete_;
+        GEO::vector<GEO::index_t> cells_to_delete_;
+
+        /** Whether the data of the mesh can be rendered, i.e. whether the last
+         *  validity check found nothing invalid (see check_validity()). */
+        bool data_valid_ = true;
+
+        /** Whether the warning of check_validity() still has to be shown (see
+         *  draw_validity_dialog()). */
+        bool validity_dialog_pending_ = false;
+
+        /** What the validity dialog offers to remove: the vertices whose
+         *  coordinates are not finite, and the elements that reference missing
+         *  vertices (see repair_invalid_elements()). */
+        bool remove_invalid_vertices_ = true;
+        bool remove_invalid_elements_ = true;
 
         bool show_vertices_ = false;
         /**

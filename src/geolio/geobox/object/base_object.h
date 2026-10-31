@@ -70,6 +70,41 @@ namespace geolio::geobox
          */
         virtual void get_bbox(double* xyzmin, double* xyzmax) const = 0;
 
+        /**
+         * @brief Whether the data of the object can be rendered.
+         * @details False while check_validity() reports data that the drawing
+         *          passes cannot read. Such an object is left out of the scene
+         *          (see GeoBoxApplication::draw_scene()), and the camera is not
+         *          framed on it: reading its data would make the renderer access
+         *          memory outside of it, which crashes the application.
+         * @return true when draw_scene() can run.
+         */
+        [[nodiscard]] virtual bool renderable() const { return true; }
+
+        /**
+         * @brief Checks whether the data of the object can be rendered.
+         * @details Called every time an object is created, before it is drawn:
+         *          data that cannot be rendered (element indices out of range,
+         *          coordinates that are not finite, ...) makes the drawing
+         *          passes read outside the object's data, which crashes the
+         *          application. A concrete class calls it at the end of its
+         *          constructor, where its own overrides are dispatched, and
+         *          keeps what it found so that draw_validity_dialog() can
+         *          report it.
+         * @return true when the data of the object can be rendered.
+         */
+        virtual bool check_validity() { return true; }
+
+        /**
+         * @brief Warns the user about the invalid data check_validity() found.
+         * @details Drawn once per frame by the main application, on top of
+         *          everything else, while the object still has something to
+         *          report: the dialog cannot be dismissed without choosing what
+         *          to do with the invalid data (see MeshObject).
+         *          Defaults to nothing to report.
+         */
+        virtual void draw_validity_dialog() {}
+
     protected:
         const std::string name_;
         const std::string filepath_;

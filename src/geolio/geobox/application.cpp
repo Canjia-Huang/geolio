@@ -342,6 +342,11 @@ namespace geolio::geobox
 
         draw_rotation_gizmo();
 
+        // Objects whose data cannot be rendered warn about it here, on top of
+        // the rest of the UI (they are modal, so they cannot be skipped).
+        for (const auto& object : objects_)
+            object->draw_validity_dialog();
+
         // All the file dialogs of the frame (Load/Save menu entries, texture
         // image pickers, ...) have been drawn at this point: give the ones
         // that just appeared a comfortable size.
@@ -634,7 +639,10 @@ namespace geolio::geobox
     void GeoBoxApplication::draw_scene(
         ) {
         for (const auto& base_object : objects_) {
-            if (base_object->visible())
+            // An object whose data cannot be rendered is left out of the scene:
+            // drawing it would read outside of it (see
+            // BaseObject::renderable()).
+            if (base_object->visible() && base_object->renderable())
                 base_object->draw_scene(lighting_);
         }
     }
@@ -917,7 +925,12 @@ namespace geolio::geobox
         objects_.push_back(object_ptr);
 
         /* Focus */
-        camera_focus(object_ptr);
+        // The object checked its own data when it was created (see
+        // MeshObject::check_validity()): framing a camera on data that cannot be
+        // read would put coordinates that are not finite in the view matrix,
+        // which breaks the display of the whole scene.
+        if (object_ptr->renderable())
+            camera_focus(object_ptr);
         selected_object_ = object_ptr;
 
         scene_dirty_ = true;

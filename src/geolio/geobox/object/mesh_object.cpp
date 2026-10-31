@@ -268,6 +268,13 @@ namespace geolio::geobox
         // Default image of the TEXTURE painting mode: the UV checker bundled
         // in the texture directory (see default_texture_filename()).
         texture_filename_ = default_texture_filename();
+
+        // Data that cannot be rendered crashes the drawing passes: the object
+        // checks it as soon as it exists, and warns the user if it has to (see
+        // draw_validity_dialog()). Done here, in the most derived constructor,
+        // because a virtual call in the base constructor would not reach the
+        // check of this class.
+        MeshObject::check_validity();
     }
 
     void MeshObject::draw_object_properties(
@@ -283,6 +290,20 @@ namespace geolio::geobox
             reload();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("%s", filepath_.c_str());
+
+        if (!data_valid_) {
+            // The mesh was kept as it is (the validity dialog was answered with
+            // "skip"), so it is not drawn. Checking again re-opens the dialog,
+            // where it can be repaired.
+            ImGui::TextDisabled("Not displayed: invalid data.");
+            if (ImGui::Button("Check validity", ImVec2(-1, 0)))
+                check_validity();
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Run the validity check again, and offer to repair the "
+                    "mesh.");
+            }
+        }
 
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Info")) {
@@ -889,6 +910,13 @@ namespace geolio::geobox
         if (mesh_gfx_.mesh() == nullptr)
             return;
 
+        // Invalid data would make the drawing passes read outside the mesh (see
+        // check_validity()): the object stays out of the scene until it is
+        // repaired. The application skips it too (see
+        // GeoBoxApplication::draw_scene()).
+        if (!data_valid_)
+            return;
+
         // An operation may have changed the mesh since the last frame (see
         // mesh_changed()).
         update_mesh_caches();
@@ -1024,6 +1052,218 @@ namespace geolio::geobox
             bbox_diag_ = static_cast<float>(std::sqrt(d2));
         }
         return bbox_diag_;
+    }
+
+    bool MeshObject::check_validity(
+        ) {
+        const GEO::index_t VERTICES_NB = mesh_.vertices.nb();
+        const GEO::index_t DIM = mesh_.vertices.dimension();
+
+        // The elements to remove are recorded while the mesh is scanned: the
+        // dialog lets the user decide later (see draw_validity_dialog()), and
+        // repairing then only applies the vectors below.
+        invalid_counts_ = InvalidElementCounts();
+        vertices_to_delete_.assign(mesh_.vertices.nb(), 0);
+        edges_to_delete_.assign(mesh_.edges.nb(), 0);
+        facets_to_delete_.assign(mesh_.facets.nb(), 0);
+        cells_to_delete_.assign(mesh_.cells.nb(), 0);
+
+        // Vertices whose coordinates are not finite: they poison every
+        // computation that reads them (bounding box, normals, ...).
+        for (const auto& v : mesh_.vertices) {
+            const auto p = mesh_.vertices.point_ptr(v);
+            for (GEO::index_t d = 0; d < DIM; ++d) {
+                if (std::isnan(p[d]) || std::isinf(p[d])) {
+                    ++invalid_counts_.vertices;
+                    vertices_to_delete_[v] = 1;
+                    break;
+                }
+            }
+        }
+
+        // Elements that reference a vertex the mesh does not have: the drawing
+        // passes would read outside the vertex array.
+        for (const auto& e : mesh_.edges) {
+            if (mesh_.edges.vertex(e, 0) >= VERTICES_NB ||
+                mesh_.edges.vertex(e, 1) >= VERTICES_NB
+                ) {
+                ++invalid_counts_.edges;
+                edges_to_delete_[e] = 1;
+            }
+        }
+
+        for (const auto& f : mesh_.facets) {
+            for (GEO::index_t lv = 0, lv_end = mesh_.facets.nb_vertices(f);
+                 lv < lv_end; ++lv) {
+                if (mesh_.facets.vertex(f, lv) >= VERTICES_NB) {
+                    ++invalid_counts_.facets;
+                    facets_to_delete_[f] = 1;
+                    break;
+                }
+            }
+        }
+
+        for (const auto& c : mesh_.cells) {
+            for (GEO::index_t lv = 0, lv_end = mesh_.cells.nb_vertices(c);
+                 lv < lv_end; ++lv) {
+                if (mesh_.cells.vertex(c, lv) >= VERTICES_NB) {
+                    ++invalid_counts_.cells;
+                    cells_to_delete_[c] = 1;
+                    break;
+                }
+            }
+        }
+
+        // Invalid data cannot be handed to the drawing passes at all: they
+        // would read outside the mesh (which crashes the application), so the
+        // object stops being drawn until the mesh is repaired (see
+        // renderable() and draw_scene()).
+        data_valid_ = !invalid_counts_.any();
+
+        // The warning is due for as long as the invalid data is there: it can
+        // only be dismissed by keeping the mesh as it is or by repairing it
+        // (see draw_validity_dialog()).
+        validity_dialog_pending_ = !data_valid_;
+
+        if (validity_dialog_pending_) {
+            LOG::WARN(
+                "Mesh `{}` is invalid: {} invalid vertices, {} edges, "
+                "{} facets, {} cells.",
+                name_,
+                invalid_counts_.vertices,
+                invalid_counts_.edges,
+                invalid_counts_.facets,
+                invalid_counts_.cells);
+        }
+
+        return !validity_dialog_pending_;
+    }
+
+    void MeshObject::draw_validity_dialog(
+        ) {
+        if (!validity_dialog_pending_)
+            return;
+
+        // The popup is opened again on every frame while the invalid data was
+        // not dealt with: it has no close button, and the Escape key would
+        // otherwise dismiss it, which must not be possible -- the user has to
+        // choose between keeping the mesh as it is and repairing it. Its name
+        // carries the object id, so that two invalid objects do not share one.
+        const std::string popup_name = "Invalid mesh##" + unique_id_;
+        ImGui::OpenPopup(popup_name.c_str());
+        if (!ImGui::BeginPopupModal(
+                popup_name.c_str(), nullptr,
+                ImGuiWindowFlags_AlwaysAutoResize |
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoMove)) {
+            return;
+        }
+
+        ImGui::PushStyleColor(
+            ImGuiCol_Text,
+            ImVec4(
+                title_color_.x, title_color_.y, title_color_.z, title_color_.w));
+        ImGui::Text("The mesh of \"%s\"", name_.c_str());
+        ImGui::PopStyleColor();
+        ImGui::TextUnformatted("cannot be rendered as it is:");
+
+        ImGui::Spacing();
+        // One entry per kind of invalid element, in the plural of its actual
+        // count; the kinds the mesh has none of are left out.
+        const auto invalid_kind = [](
+            const GEO::index_t count,
+            const char* singular,
+            const char* plural,
+            const char* reason
+            ) {
+            ImGui::BulletText(
+                "%u invalid %s (%s)",
+                static_cast<unsigned>(count), count == 1 ? singular : plural, reason);
+        };
+        if (invalid_counts_.vertices != 0) {
+            invalid_kind(
+                invalid_counts_.vertices, "vertex", "vertices",
+                "NaN/non-finite coordinates");
+        }
+        if (invalid_counts_.edges != 0) {
+            invalid_kind(
+                invalid_counts_.edges, "edge", "edges", "missing vertices");
+        }
+        if (invalid_counts_.facets != 0) {
+            invalid_kind(
+                invalid_counts_.facets, "facet", "facets", "missing vertices");
+        }
+        if (invalid_counts_.cells != 0) {
+            invalid_kind(
+                invalid_counts_.cells, "cell", "cells", "missing vertices");
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+
+        // What the repair removes (see repair_invalid_elements()). They only
+        // apply when the mesh is repaired: skipping it keeps the mesh as it
+        // was loaded.
+        ImGui::Checkbox("remove invalid vertices", &remove_invalid_vertices_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Remove the vertices whose coordinates are NaN/not finite.\n"
+                "Used when the mesh is repaired.");
+        }
+        ImGui::Checkbox("remove invalid elements", &remove_invalid_elements_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Remove the edges, facets and cells that reference\n"
+                "missing vertices. Used when the mesh is repaired.");
+        }
+
+        ImGui::Separator();
+
+        // The button says what closing the dialog does: repairing the mesh
+        // removes what the checkboxes ask for, skipping it keeps the mesh as it
+        // is.
+        const char* const action = remove_invalid_elements_
+            ? "Repair this mesh"
+            : "Skip this mesh";
+        if (ImGui::Button(action, ImVec2(-1.0f, 0.0f))) {
+            if (remove_invalid_elements_)
+                repair_invalid_vertices_and_elements();
+            validity_dialog_pending_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                remove_invalid_elements_
+                    ? "Remove the invalid elements (and the invalid vertices if\n"
+                      "selected), then display the mesh."
+                    : "Keep the mesh as it was loaded, and leave it out of the\n"
+                      "3D view. Check \"remove invalid elements\" to repair it\n"
+                      "instead.");
+        }
+
+        ImGui::EndPopup();
+    }
+
+    void MeshObject::repair_invalid_vertices_and_elements(
+        ) {
+        // Elements first: deleting vertices re-indexes the elements that
+        // reference them (see GEO::MeshVertices::delete_elements()).
+        if (remove_invalid_elements_) {
+            if (invalid_counts_.edges != 0)
+                mesh_.edges.delete_elements(edges_to_delete_, false);
+            if (invalid_counts_.facets != 0)
+                mesh_.facets.delete_elements(facets_to_delete_, false);
+            if (invalid_counts_.cells != 0)
+                mesh_.cells.delete_elements(cells_to_delete_, false);
+        }
+        if (remove_invalid_vertices_ && invalid_counts_.vertices != 0)
+            mesh_.vertices.delete_elements(vertices_to_delete_, false);
+
+        // Removing a vertex leaves NO_VERTEX in the elements that referenced it,
+        // so the mesh may still be invalid: the check tells, and keeps the
+        // dialog (with the new counts) open if it is.
+        mesh_changed();
+        check_validity();
     }
 
     void MeshObject::draw_points(
