@@ -13,9 +13,9 @@ namespace geolio::geobox
     class CVTApplication : public BaseApplication {
     public:
         explicit CVTApplication(ApplicationObjects& objects)
-            : BaseApplication("CVT", objects)
+            : BaseApplication("centroidal Voronoi tesselation", objects)
         {
-            menu_tooltip_ = "GEO::";
+            menu_tooltip_ = "GEO::CentroidalVoronoiTesselation";
         }
 
     protected:

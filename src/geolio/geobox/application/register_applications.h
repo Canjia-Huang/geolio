@@ -12,6 +12,7 @@
 #include "mesh/mesh_repair_triangulate_application.h"
 #include "mesh/mesh_compute_border_application.h"
 #include "points/CVT_application.h"
+#include "attributes/local_feature_size_application.h"
 
 namespace geolio::geobox
 {
@@ -41,6 +42,7 @@ namespace geolio::geobox
      *          only walks the resulting tree, so it never needs to change.
      */
     inline void register_additional_Applications() {
+        geolio_register_BaseApplication_creator(LocalFeatureSizeApplication, "attributes");
         geolio_register_BaseApplication_creator(CVTApplication, "points");
         geolio_register_BaseApplication_creator(MeshComputeBorderApplication, "mesh");
         geolio_register_BaseApplication_creator(MeshConnectApplication, "mesh");

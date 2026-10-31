@@ -92,7 +92,7 @@ namespace geolio::geobox
             ImGui::EndDisabled();
         }
 
-        void perform(const GEO::Mesh& mesh) {
+        void perform(const GEO::Mesh& mesh) const {
             LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
             const GEO::index_t DIM = mesh.vertices.dimension() > 2 ? 3 : 2;
