@@ -4,20 +4,10 @@
 //
 #ifndef GEOLIO_COLORMAP_H
 #define GEOLIO_COLORMAP_H
-#include <cstddef>
 #include <string>
 #include <vector>
+#include <geogram/basic/numeric.h>
 #include <geogram_gfx/third_party/glad/glad.h>
-#include <geogram_gfx/gui/colormaps/french.xpm>
-#include <geogram_gfx/gui/colormaps/black_white.xpm>
-#include <geogram_gfx/gui/colormaps/viridis.xpm>
-#include <geogram_gfx/gui/colormaps/rainbow.xpm>
-#include <geogram_gfx/gui/colormaps/cei_60757.xpm>
-#include <geogram_gfx/gui/colormaps/inferno.xpm>
-#include <geogram_gfx/gui/colormaps/magma.xpm>
-#include <geogram_gfx/gui/colormaps/parula.xpm>
-#include <geogram_gfx/gui/colormaps/plasma.xpm>
-#include <geogram_gfx/gui/colormaps/blue_red.xpm>
 
 namespace geolio::geobox
 {
@@ -86,40 +76,7 @@ namespace geolio::geobox
      * @return The nearest-filtered texture, or 0 when \p texture is 0 (no
      *         OpenGL context, as in the unit tests).
      */
-    inline GLuint create_nearest_colormap_texture(
-        const GLuint texture
-        ) {
-        if (texture == 0)
-            return 0;
-
-        glBindTexture(GL_TEXTURE_2D, texture);
-        GLint width = 0;
-        GLint height = 0;
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
-        if (width <= 0 || height <= 0) {
-            glBindTexture(GL_TEXTURE_2D, 0);
-            return 0;
-        }
-
-        std::vector<GLubyte> texels(
-            static_cast<std::size_t>(4) * width * height);
-        glGetTexImage(
-            GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texels.data());
-
-        GLuint result = 0;
-        glGenTextures(1, &result);
-        glBindTexture(GL_TEXTURE_2D, result);
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-            GL_RGBA, GL_UNSIGNED_BYTE, texels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        return result;
-    }
+    GLuint create_nearest_colormap_texture(GLuint texture);
 
     /**
      * @brief Builds a single OpenGL texture from an XPM colormap definition.
@@ -131,46 +88,139 @@ namespace geolio::geobox
      * @param[in] xpm_data Pointer array describing the XPM image data.
      * @param[out] colormaps Output list that receives the newly created texture entry.
      */
-    inline void init_colormap(
+    void init_colormap(
         const std::string& name,
-        const char** xpm_data,
+        const char* const* xpm_data,
         std::vector<ColormapInfo>& colormaps
-        ) {
-        colormaps.emplace_back();
-        colormaps.rbegin()->name = name;
-        glGenTextures(1, &colormaps.rbegin()->texture);
-        glBindTexture(GL_TEXTURE_2D, colormaps.rbegin()->texture);
-        GEO::glTexImage2Dxpm(xpm_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(
-            GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR
-        );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        colormaps.rbegin()->nearest_texture =
-            create_nearest_colormap_texture(colormaps.rbegin()->texture);
-    }
+    );
 
     /**
-     * @brief Initializes the built-in GeoBox colormap list.
-     * @param[out] colormaps Vector to populate with the available colormap entries.
+     * @brief The colormaps GeoBox offers, as one process-wide service.
+     * @details The available colormaps do not depend on the object that draws
+     *          them: they are a constant of the application, built once while
+     *          the OpenGL context is current, and read by every object that
+     *          displays a scalar attribute through a colormap (see
+     *          MeshObject::colormap_texture()). Keeping them here is what lets
+     *          MeshObject be constructed without being handed a colormap table,
+     *          and what lets every object see the same table -- including the
+     *          objects created by the sub-applications (see
+     *          BaseApplicationRegistry), which do not have access to the
+     *          application's own members.
+     * @details The library owns the textures it builds: terminate() deletes
+     *          them, and both calls must be made while the GL context that
+     *          built them is current. This mirrors the image texture cache of
+     *          the TEXTURE painting mode (see release_texture_cache()).
+     * @details The table is empty until initialize() is called, so the unit
+     *          tests -- which run without a GL context, and install a table of
+     *          their own through set_colormaps() -- never touch OpenGL here.
      */
-    inline void init_colormaps(
-        std::vector<ColormapInfo>& colormaps
-        ) {
-        init_colormap("french", french_xpm, colormaps);
-        init_colormap("black_white", black_white_xpm, colormaps);
-        init_colormap("viridis", viridis_xpm, colormaps);
-        init_colormap("rainbow", rainbow_xpm, colormaps);
-        init_colormap("cei_60757", cei_60757_xpm, colormaps);
-        init_colormap("inferno", inferno_xpm, colormaps);
-        init_colormap("magma", magma_xpm, colormaps);
-        init_colormap("parula", parula_xpm, colormaps);
-        init_colormap("plasma", plasma_xpm, colormaps);
-        init_colormap("blue_red", blue_red_xpm, colormaps);
-    }
+    class ColormapLibrary {
+    public:
+        /**
+         * @brief Gets the process-wide library instance.
+         */
+        static ColormapLibrary& instance();
+
+        /**
+         * @brief Builds the GeoBox colormap table.
+         * @details Offers a subset of the GeoGram colormaps built by
+         *          SimpleApplication::init_colormaps() -- the 1st, 4th, 5th,
+         *          6th and 10th of that list (french, rainbow, cei_60757,
+         *          inferno, blue_red) -- followed by the colormaps GeoBox adds
+         *          (turbo, transparent and grayscale, the 5th, 17th and 18th
+         *          colormaps of Graphite) and by the random one. The table is
+         *          rebuilt from scratch, so calling this again after
+         *          terminate() is what a recreated GL context needs.
+         * @details A current OpenGL context is required: every entry is
+         *          uploaded as a texture, together with its GL_NEAREST-filtered
+         *          variant (see ColormapInfo::nearest_texture).
+         */
+        void initialize();
+
+        /**
+         * @brief Deletes the textures the library owns and empties the table.
+         * @details Must be called while the GL context that built the textures
+         *          is still current.
+         */
+        void terminate();
+
+        /**
+         * @brief Tests whether the table is empty, i.e. whether neither
+         *        initialize() nor set_colormaps() was called.
+         */
+        [[nodiscard]] bool empty() const {
+            return colormaps_.empty();
+        }
+
+        /**
+         * @brief Returns the colormap table.
+         * @details The reference stays valid until the next initialize(),
+         *          terminate() or set_colormaps(), so callers read the entries
+         *          they need instead of holding on to the reference.
+         */
+        [[nodiscard]] const std::vector<ColormapInfo>& colormaps() const {
+            return colormaps_;
+        }
+
+        /**
+         * @brief Returns the number of colormaps in the table.
+         */
+        [[nodiscard]] GEO::index_t size() const {
+            return static_cast<GEO::index_t>(colormaps_.size());
+        }
+
+        /**
+         * @brief Returns one colormap of the table.
+         * @param[in] index Index of the colormap in colormaps().
+         * @return The colormap, or nullptr when @p index is out of range.
+         */
+        [[nodiscard]] const ColormapInfo* colormap(GEO::index_t index) const;
+
+        /**
+         * @brief Installs a colormap table built elsewhere.
+         * @details Lets a caller (typically a test, or a tool that builds its
+         *          own colormaps) replace the table without touching OpenGL:
+         *          no texture is created, and the textures of the installed
+         *          entries stay owned by the caller. The textures of the table
+         *          being replaced are released first, as terminate() does.
+         * @param[in] colormaps Table to install, in display order.
+         */
+        void set_colormaps(std::vector<ColormapInfo> colormaps);
+
+    private:
+        /**
+         * @brief Builds a colormap from an XPM definition and takes ownership
+         *        of the two textures it creates.
+         */
+        void add_xpm(const std::string& name, const char* const* xpm_data);
+
+        /**
+         * @brief Appends the colormap whose every texel is a random color.
+         * @details Built with GL_NEAREST filtering, so that the individual
+         *          random texels stay distinct instead of being blended into a
+         *          gradient: the colormap is meant to give a distinct color to
+         *          each of a few values.
+         */
+        void add_random();
+
+        /**
+         * @brief Deletes the textures the library owns, if any.
+         */
+        void release_textures();
+
+        ColormapLibrary() = default;
+
+        /** Colormaps offered by the library, in display order. */
+        std::vector<ColormapInfo> colormaps_;
+
+        /**
+         * @brief Textures built by the library, deleted by terminate().
+         * @details An entry's two textures are recorded here when the library
+         *          created them, which is what tells them apart from the
+         *          textures of a table installed by set_colormaps().
+         */
+        std::vector<GLuint> owned_textures_;
+    };
 }
 
 #endif //GEOLIO_COLORMAP_H

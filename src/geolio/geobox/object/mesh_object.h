@@ -6,6 +6,7 @@
 #define GEOLIO_MESH_OBJECT_H
 #include <algorithm>
 #include <string>
+#include <typeinfo>
 #include <vector>
 #include "base_object.h"
 #include <geogram/mesh/mesh.h>
@@ -40,19 +41,22 @@ namespace geolio::geobox
      * @brief Mesh-backed object rendered by GeoBox.
      * @details This class wraps a GEO::Mesh and exposes the viewer controls needed to
      *          display vertices, surface facets, edges, and volume cells.
+     * @details The colormaps a scalar attribute can be displayed with are not
+     *          part of the object: they are the constant set of the application
+     *          (see ColormapLibrary), read here through colormaps().
      * @ref <geogram_gfx/gui/simple_mesh_application.cpp> SimpleMeshApplication
      */
     class MeshObject : public BaseObject {
     public:
         /**
          * @brief Constructs a mesh object from a display name and a mesh instance.
-         * @param[in] name Name used to identify the object in the UI.
-         * @param[in] colormaps Available colormap textures for scalar attribute rendering.
+         * @param[in] name Object name.
+         * @param[in] filepath Path to the source asset.
          * @param[in] mesh Source mesh data to render.
          */
         explicit MeshObject(
-            const std::string& name,
-            const std::vector<ColormapInfo>& colormaps,
+            std::string name,
+            std::string filepath,
             const GEO::Mesh& mesh);
 
         /**
@@ -87,9 +91,171 @@ namespace geolio::geobox
          */
         float bbox_diagonal() const;
 
+        /**
+         * @brief The mesh of this object.
+         * @warning An operation that modifies the mesh in place (its
+         *          connectivity, its coordinates or its attributes) must tell
+         *          the object, with mesh_changed(): everything the object
+         *          derived from the mesh -- the flags of the facets that have
+         *          border edges, the element counts of the Info panel, the
+         *          cached bounding box, the display copies of the attributes
+         *          and the buffers of the renderer -- would otherwise keep
+         *          describing the mesh as it was before the operation.
+         *          The applications call mesh_changed() after an operation
+         *          (see MeshConnectApplication, MeshRepairTriangulateApplication,
+         *          ...).
+         */
         auto& mesh() { return mesh_; }
 
+        /**
+         * @brief Tells this object that its mesh was modified in place.
+         * @details To be called after an operation changed the mesh behind the
+         *          object's back (see mesh()). What the object derived from the
+         *          mesh is refreshed on the next draw, not here: recomputing it
+         *          scans the facets and the cells, so it is only done once,
+         *          whatever the number of draws before it (see
+         *          update_mesh_caches()). The renderer is told right away,
+         *          since it only re-uploads the geometry and the attributes it
+         *          draws once it knows the mesh changed.
+         */
+        void mesh_changed();
+
+        /**
+         * @brief Saves the mesh of this object to @p filename.
+         * @details Written through the GeoGram mesh IO factory, i.e. in the
+         *          format the file extension asks for, with the handlers the
+         *          application registered (see
+         *          register_additional_MeshIOHandlers()), the same ones the
+         *          load menu uses. The attributes of the mesh are saved too:
+         *          what an application computed (e.g. the sizing field of
+         *          GEO::compute_sizing_field()) is part of the object's data.
+         * @param[in] filename Path of the file to write.
+         * @return true when the file was written.
+         */
+        bool save(const std::string& filename) override;
+
+        // ---------------------------------------------------------------------
+        // Display, for the applications that compute what should be shown
+        // ---------------------------------------------------------------------
+
+        /**
+         * @brief Displays a scalar attribute of the mesh with the colormap.
+         * @details Selects the attribute the way the painting selector of the
+         *          properties panel does (see set_attribute()), and switches the
+         *          painting mode to ATTRIBUTE, so that what an application just
+         *          computed is what the user sees. The range is autoranged
+         *          unless it was set by hand (see set_attribute()).
+         *          Applications use it to show their result, e.g. the "weight"
+         *          attribute GEO::compute_sizing_field() stores on the
+         *          vertices.
+         * @param[in] attribute Full name of the attribute, as attribute_infos()
+         *            spells it: "vertices.weight", "facets.v_cell", ...
+         * @return true when the mesh has that attribute, which is then the one
+         *         displayed; false when it does not (nothing is changed then).
+         */
+        bool display_attribute(const std::string& attribute);
+
+        /**
+         * @brief Full name of the attribute whose values are displayed with the
+         *        colormap (e.g. "vertices.weight").
+         * @details It is only painted when the painting mode is ATTRIBUTE; the
+         *          object starts on "vertices.point[0]", as GeoGram's mesh
+         *          applications do.
+         */
+        [[nodiscard]] const std::string& displayed_attribute() const {
+            return vertices_point_attribute_name_;
+        }
+
+        /** @brief How the mesh is painted (see PaintingMode). */
+        void set_painting_mode(const PaintingMode mode) { painting_mode_ = mode; }
+        [[nodiscard]] PaintingMode painting_mode() const { return painting_mode_; }
+
+        /** @brief Shows or hides the markers drawn at the mesh vertices. */
+        void set_vertices_visible(const bool visible) {
+            show_vertices_ = visible;
+        }
+        [[nodiscard]] bool vertices_visible() const { return show_vertices_; }
+
+        /**
+         * @brief One attribute of the mesh, as listed by attribute_infos().
+         * @details Describes where the attribute lives and what it holds, so
+         *          that an application can decide whether it can work with it
+         *          (see BaseApplication::AttributeFilter) and bind it with the
+         *          GeoGram attribute API of the store it belongs to.
+         */
+        struct AttributeInfo {
+            /** Store of the mesh the attribute lives on, one of GEO::MESH_VERTICES, GEO::MESH_EDGES, ... */
+            GEO::MeshElementsFlags subelements = GEO::MESH_NONE;
+            /** Name of the attribute, without its sub-elements prefix (e.g. "weight"). */
+            std::string name;
+            /** Element type, as given by GEO::AttributeStore::element_typeid_name(). */
+            std::string element_type;
+            /** Number of components per element: 1 for a scalar attribute. */
+            GEO::index_t dimension = 0;
+            /** Number of elements the attribute holds a value for. */
+            GEO::index_t nb_elements = 0;
+
+            /**
+             * @brief Tests whether one element is of type \p T.
+             * @details Compares the GeoGram element type name, so it matches
+             *          what the attribute stores were created with:
+             *          holds<double>() is true for a GEO::Attribute<double>,
+             *          holds<GEO::vec3>() for a GEO::Attribute<GEO::vec3>.
+             */
+            template <class T>
+            [[nodiscard]] bool holds() const {
+                return element_type == typeid(T).name();
+            }
+
+            /**
+             * @brief Name of the attribute as the mesh API spells it, i.e.
+             *        with its sub-elements prefix (e.g. "vertices.weight").
+             * @return The full name, or an empty string for the default value
+             *         of the structure, which stands for "no attribute".
+             */
+            [[nodiscard]] std::string full_name() const {
+                if (subelements == GEO::MESH_NONE)
+                    return {};
+                return GEO::Mesh::subelements_type_to_name(subelements) + "." + name;
+            }
+        };
+
+        /**
+         * @brief Lists the attributes of the mesh, on every sub-element.
+         * @details The applications pick the ones they can work on with that
+         *          list (see BaseApplication::draw_attribute_selector()). The
+         *          display-only copies this object builds for the renderer are
+         *          left out: they are not attributes of the mesh (see
+         *          DISPLAY_ATTRIBUTE_NAME and DISPLAY_TEX_COORD_NAME).
+         * @return The attributes, grouped by sub-element in the order of
+         *         GEO::MESH_VERTICES, GEO::MESH_EDGES, ..., and sorted by name
+         *         inside a group.
+         */
+        std::vector<AttributeInfo> attribute_infos() const;
+
+        bool check_validity() override;
+
+        void draw_validity_dialog() override;
+
+        [[nodiscard]] bool renderable() const override { return data_valid_; }
+
     protected:
+
+        /**
+         * @brief Facet and cell counts broken down by kind, for the Info
+         *        panel.
+         * @details Facets are classified by arity (triangle, quad, polygon)
+         *          and cells by their GeoGram type (tet, hex, prism, pyramid,
+         *          connector).
+         */
+        struct ElementCounts {
+            GEO::index_t triangles = 0;
+            GEO::index_t quads = 0;
+            GEO::index_t polygons = 0;
+            /** Indexed by GEO::MeshCellType. */
+            GEO::index_t cells[GEO::MESH_NB_CELL_TYPES] = {0, 0, 0, 0, 0};
+        };
+
         /**
          * @brief Draws the mesh vertices as markers with an absolute
          *        (model-space) size.
@@ -117,6 +283,40 @@ namespace geolio::geobox
          * @return true if at least one facet edge is on the border.
          */
         bool compute_surface_has_borders() const;
+
+        /**
+         * @brief Removes the invalid elements the validity dialog offers to
+         *        remove.
+         * @details Deletes the elements check_validity() flagged (the edges,
+         *          facets and cells that reference missing vertices), then the
+         *          vertices whose coordinates are not finite when the dialog
+         *          asked for it. Elements are deleted first, since deleting
+         *          vertices re-indexes the elements that reference them (see
+         *          GEO::MeshVertices::delete_elements()). The validity check is
+         *          run again afterwards, so that the elements that a vertex
+         *          removal left behind are reported again.
+         */
+        void repair_invalid_vertices_and_elements();
+
+        /**
+         * @brief Recomputes what this object caches about the mesh.
+         * @details The border flag and the element counts both walk the whole
+         *          mesh, so they are recomputed on demand, once per run of
+         *          operations, rather than on each frame: this is a no-op
+         *          unless mesh_changed() (or a reload) asked for it. Called by
+         *          the drawing and by the properties panel before they read
+         *          those caches.
+         */
+        void update_mesh_caches();
+
+        /**
+         * @brief Counts the facets and the cells of each kind.
+         * @details The result is cached in element_counts_ when the mesh is
+         *          set (constructor) or reloaded; it feeds the breakdown rows
+         *          of the Info panel (see draw_object_properties()).
+         * @return The counts, indexed by facet arity and by cell type.
+         */
+        ElementCounts count_elements() const;
 
         /**
          * @brief Draws the explicit 1-D edges of the mesh (mesh.edges).
@@ -413,6 +613,21 @@ namespace geolio::geobox
         }
 
         /**
+         * @brief Returns the colormaps the attribute display selects from.
+         * @details The set of colormaps is a property of the application, not of
+         *          the object being displayed: it does not change while the
+         *          objects live, and every object samples the same one. It is
+         *          therefore not handed to the constructor, and not stored here;
+         *          reading it through this accessor is what keeps the objects
+         *          valid across a rebuild of the table (see
+         *          ColormapLibrary::initialize()).
+         * @return The process-wide colormap table, in display order.
+         */
+        static const std::vector<ColormapInfo>& colormaps() {
+            return ColormapLibrary::instance().colormaps();
+        }
+
+        /**
          * @brief Returns the colormap texture the attribute is sampled with.
          * @details The smoothed texture while smooth_colormap_ is set, and its
          *          nearest-filtered variant otherwise (see
@@ -420,16 +635,17 @@ namespace geolio::geobox
          *          neighboring colormap entries into a gradient, while
          *          GL_NEAREST gives each entry a flat color band separated from
          *          the next one by a hard boundary.
-         * @param[in] index Index of the colormap in the colormap list.
+         * @param[in] index Index of the colormap in colormaps().
          * @return The texture to bind, or 0 when @p index is out of range.
          */
         GLuint colormap_texture(GEO::index_t index) const {
-            if (index >= colormaps_.size())
+            const ColormapInfo* colormap =
+                ColormapLibrary::instance().colormap(index);
+            if (colormap == nullptr)
                 return 0;
-            const ColormapInfo& colormap = colormaps_[index];
-            if (smooth_colormap_ || colormap.nearest_texture == 0)
-                return colormap.texture;
-            return colormap.nearest_texture;
+            if (smooth_colormap_ || colormap->nearest_texture == 0)
+                return colormap->texture;
+            return colormap->nearest_texture;
         }
 
         /**
@@ -448,9 +664,10 @@ namespace geolio::geobox
          *          discarded instead of drawn black (see draw_scene()).
          */
         bool colormap_is_transparent() const {
-            return current_colormap_index_ < colormaps_.size() &&
-                   colormaps_[current_colormap_index_].name ==
-                       TRANSPARENT_COLORMAP_NAME;
+            const ColormapInfo* colormap =
+                ColormapLibrary::instance().colormap(current_colormap_index_);
+            return colormap != nullptr &&
+                   colormap->name == TRANSPARENT_COLORMAP_NAME;
         }
 
         /**
@@ -605,6 +822,57 @@ namespace geolio::geobox
         /** Cached bounding-box diagonal; < 0 means "not computed yet". */
         mutable float bbox_diag_ = -1.0f;
 
+        /**
+         * @brief The element breakdown above, counted when the mesh is set
+         *        (constructor) or reloaded (see count_elements()).
+         * @details Counted once rather than on each GUI frame: the Info panel
+         *          would otherwise walk every facet and every cell of the
+         *          mesh each time it is drawn, which is wasteful on large
+         *          meshes.
+         */
+        ElementCounts element_counts_;
+
+        /** Whether the mesh was modified since the caches above were
+         *  computed (see mesh_changed() and update_mesh_caches()). */
+        bool mesh_caches_dirty_ = false;
+
+        /** Number of invalid elements of each kind, as found by the validity
+         *  check (see check_validity()). */
+        struct InvalidElementCounts {
+            GEO::index_t vertices = 0;
+            GEO::index_t edges = 0;
+            GEO::index_t facets = 0;
+            GEO::index_t cells = 0;
+
+            /** @brief Whether at least one element is invalid. */
+            [[nodiscard]] bool any() const {
+                return vertices != 0 || edges != 0 || facets != 0 || cells != 0;
+            }
+        };
+        InvalidElementCounts invalid_counts_;
+
+        /** Elements to delete when the mesh is repaired (see
+         *  repair_invalid_vertices_and_elements()), indexed like the mesh: a
+         *  non-zero entry means the element is invalid. */
+        GEO::vector<GEO::index_t> vertices_to_delete_;
+        GEO::vector<GEO::index_t> edges_to_delete_;
+        GEO::vector<GEO::index_t> facets_to_delete_;
+        GEO::vector<GEO::index_t> cells_to_delete_;
+
+        /** Whether the data of the mesh can be rendered, i.e. whether the last
+         *  validity check found nothing invalid (see check_validity()). */
+        bool data_valid_ = true;
+
+        /** Whether the warning of check_validity() still has to be shown (see
+         *  draw_validity_dialog()). */
+        bool validity_dialog_pending_ = false;
+
+        /** What the validity dialog offers to remove: the vertices whose
+         *  coordinates are not finite, and the elements that reference missing
+         *  vertices (see repair_invalid_vertices_and_elements()). */
+        bool remove_invalid_vertices_ = true;
+        bool remove_invalid_elements_ = true;
+
         bool show_vertices_ = false;
         /**
          * Absolute (model-space) diameter of the vertex markers, expressed
@@ -656,7 +924,6 @@ namespace geolio::geobox
         bool show_colored_cells_ = false;
         bool show_hexes_ = true;
         bool show_connectors_ = true;
-        const std::vector<ColormapInfo>& colormaps_;
 
         // Wireframe of the volume cells (the edges of mesh.cells, drawn by
         // GLUP while rendering the volume).
@@ -727,6 +994,9 @@ namespace geolio::geobox
         /** Store the texture-coordinate attribute lives in. */
         GEO::MeshElementsFlags tex_coord_subelements_ = GEO::MESH_NONE;
 
+        /**
+         * @brief Index of the selected colormap in colormaps().
+         */
         GEO::index_t current_colormap_index_ = 0;
 
         /**

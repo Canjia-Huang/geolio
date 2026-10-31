@@ -8,12 +8,11 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "application.h"
 #include <algorithm>
-#include <array>
 #include <cstring>
-#include <random>
 #include <unordered_set>
 #include <vector>
 #include <geogram/basic/command_line.h>
+#include <geogram/basic/file_system.h>
 #include <geogram/mesh/mesh_io.h>
 #include <geogram_gfx/GLUP/GLUP.h>
 #include <geogram_gfx/third_party/imgui/imgui_internal.h>
@@ -21,11 +20,7 @@
 #include "geolio/common/log.h"
 #include "geolio/common/parse_filepath.h"
 #include "object/mesh_object.h"
-// Colormaps GeoBox adds to the GeoGram ones, as embedded XPM definitions (see
-// init_colormaps()). They are the 5th, 17th and 18th colormaps of Graphite.
-#include "colormaps/turbo.xpm"
-#include "colormaps/transparent.xpm"
-#include "colormaps/grayscale.xpm"
+#include "colormap.h"
 #include <geolio/geobox/application/register_applications.h>
 #include <geogram_gfx/full_screen_effects/ambient_occlusion.h>
 #include <geogram_gfx/full_screen_effects/unsharp_masking.h>
@@ -87,13 +82,19 @@ namespace geolio::geobox
         /* Register and instantiate every sub-application: instead of
          * hardcoding each concrete application here, the registry is
          * populated by register_additional_Applications() (see
-         * application/applications.h, mirroring how additional MeshIO
-         * handlers are registered in geolio/io/io.h), and each registered
-         * creator is invoked with this application's objects container. */
+         * application/register_applications.h, mirroring how additional
+         * MeshIO handlers are registered in geolio/io/io.h), and each
+         * registered creator is invoked with this application's objects
+         * container. Registration data also carries the sub-menu the
+         * application belongs to, so the menu tree is built here from the
+         * instances themselves: no concrete type is known at this point. */
         register_additional_Applications();
         for (const auto& entry : BaseApplicationRegistry::instance().entries()) {
-            if (auto app = entry.creator(entry.display_name, objects_))
-                applications_.push_back(std::move(app));
+            auto application = entry.creator(entry.menu_path, objects_);
+            if (!application)
+                continue;
+            insert_application_menu_entry(application_menu_, *application);
+            applications_.push_back(std::move(application));
         }
     }
 
@@ -139,7 +140,7 @@ namespace geolio::geobox
     }
 
     void GeoBoxApplication::create_scene_framebuffer(
-        GLsizei w, GLsizei h
+        const GLsizei w, const GLsizei h
         ) {
         delete_scene_framebuffer();
         scene_fb_w_ = w;
@@ -248,31 +249,11 @@ namespace geolio::geobox
 
     void GeoBoxApplication::GL_terminate(
         ) {
-        // Release the colormap textures GeoBox owns: the nearest-filtered
-        // variant of every colormap, and the smoothed texture of every
-        // colormap the base class does not know about (random, and the turbo,
-        // transparent and grayscale colormaps added in init_colormaps()). The
-        // smoothed textures of the GeoGram colormaps belong to the base class,
-        // which releases them in SimpleMeshApplication::GL_terminate().
-        for (auto& colormap : my_colormaps_) {
-            if (colormap.nearest_texture != 0 &&
-                colormap.nearest_texture != colormap.texture) {
-                glDeleteTextures(1, &colormap.nearest_texture);
-            }
-            colormap.nearest_texture = 0;
-
-            bool belongs_to_base = false;
-            for (const auto& base_colormap : colormaps_) {
-                if (base_colormap.texture == colormap.texture) {
-                    belongs_to_base = true;
-                    break;
-                }
-            }
-            if (!belongs_to_base && colormap.texture != 0) {
-                glDeleteTextures(1, &colormap.texture);
-                colormap.texture = 0;
-            }
-        }
+        // Release the colormap textures GeoBox owns. They are the property of
+        // the process-wide colormap library rather than of this application,
+        // because the objects that draw with them do not know the application
+        // (see ColormapLibrary).
+        ColormapLibrary::instance().terminate();
         // The images displayed by the TEXTURE painting mode are cached by
         // file name and shared by the objects (see MeshObject::texture()).
         release_texture_cache();
@@ -324,6 +305,11 @@ namespace geolio::geobox
         draw_controller_properties_window();
         // draw_viewer_properties_window();
         draw_object_properties_window();
+
+        // Built-in ImGui demo window (toggled from the Windows menu). It
+        // passes its own visibility flag so its close button hides it again.
+        if (imgui_demo_visible_)
+            ImGui::ShowDemoWindow(&imgui_demo_visible_);
         // draw_console();
         // draw_command_window();
         // draw_command_line_editor();
@@ -333,8 +319,19 @@ namespace geolio::geobox
         if (ImGui::FileDialog("##load_dlg", filename_, GEO::geo_imgui_string_length))
             load(filename_);
 
-        if (ImGui::FileDialog("##save_dlg", filename_, GEO::geo_imgui_string_length))
-            save(filename_);
+        // The "Save as..." of an object (see draw_objects_properties()): the
+        // dialog was opened on the object whose row was right-clicked.
+        if (ImGui::FileDialog(
+                "##object_save_dlg", filename_, GEO::geo_imgui_string_length)) {
+            if (const auto object = object_to_save_.lock()) {
+                if (object->save(filename_))
+                    LOG::INFO("Saved `{}` to {}", object->name(), filename_);
+                else
+                    LOG::ERROR(
+                        "Could not save `{}` to {}", object->name(), filename_);
+            }
+            object_to_save_.reset();
+        }
 
         if (status_bar_->active()) {
             const auto w = static_cast<float>(get_frame_buffer_width());
@@ -357,6 +354,11 @@ namespace geolio::geobox
 
         draw_rotation_gizmo();
 
+        // Objects whose data cannot be rendered warn about it here, on top of
+        // the rest of the UI (they are modal, so they cannot be skipped).
+        for (const auto& object : objects_)
+            object->draw_validity_dialog();
+
         // All the file dialogs of the frame (Load/Save menu entries, texture
         // image pickers, ...) have been drawn at this point: give the ones
         // that just appeared a comfortable size.
@@ -374,97 +376,18 @@ namespace geolio::geobox
         }
     }
 
-    void GeoBoxApplication::init_colormaps(
-        ) {
-        // GeoBox offers a subset of the GeoGram colormaps: the 1st, 4th, 5th,
-        // 6th and 10th of the list it builds (french, rainbow, cei_60757,
-        // inferno, blue_red). The turbo, transparent and grayscale colormaps
-        // (the 5th, 17th and 18th of Graphite) and the random colormap are
-        // appended below as well. The names are matched rather than the
-        // indices, so the subset still selects the same colormaps if GeoGram
-        // reorders its table.
-        static constexpr std::array<const char*, 5> KEPT_COLORMAPS = {
-            "french", "rainbow", "cei_60757", "inferno", "blue_red"
-        };
-        const auto is_kept = [](const std::string& name) {
-            for (const char* kept : KEPT_COLORMAPS) {
-                if (name == kept)
-                    return true;
-            }
-            return false;
-        };
-
-        // The base's SimpleApplication::init_colormaps() (non-virtual) already
-        // created the 10 colormap textures into its own colormaps_ member
-        // during GL_initialize(). Reuse those texture IDs instead of creating a
-        // second set of GL textures, so no extra GL state is touched at startup.
-        my_colormaps_.clear();
-        my_colormaps_.reserve(KEPT_COLORMAPS.size() + 4);
-        for (const auto& cm : colormaps_) {
-            if (!is_kept(cm.name))
-                continue;
-            geolio::geobox::ColormapInfo info;
-            info.texture = cm.texture;
-            // The base's textures are smoothed (linear filtering and
-            // mipmaps). The attribute display can ask for hard color
-            // boundaries instead, so build the nearest-filtered variant of
-            // each colormap once, here, rather than per draw.
-            info.nearest_texture =
-                geolio::geobox::create_nearest_colormap_texture(cm.texture);
-            info.name = cm.name;
-            my_colormaps_.push_back(info);
-        }
-
-        // Colormaps GeoBox adds to the GeoGram ones (see the XPM definitions
-        // included at the top of this file). init_colormap() builds both the
-        // smoothed texture and its nearest-filtered variant.
-        geolio::geobox::init_colormap("turbo", turbo_xpm, my_colormaps_);
-        geolio::geobox::init_colormap(
-            "transparent", transparent_xpm, my_colormaps_);
-        geolio::geobox::init_colormap("grayscale", grayscale_xpm, my_colormaps_);
-
-        // A colormap whose every texel is a random color; sampled with
-        // GL_NEAREST so the individual random pixels stay distinct instead of
-        // being blended into a gradient by linear filtering.
-        constexpr GLsizei kSize = 256;
-        std::vector<GLubyte> pixels(4 * kSize);
-        std::mt19937 rng(std::random_device{}());
-        std::uniform_int_distribution<int> dist(0, 255);
-        for (GLsizei i = 0; i < kSize; ++i) {
-            pixels[4 * i + 0] = static_cast<GLubyte>(dist(rng));
-            pixels[4 * i + 1] = static_cast<GLubyte>(dist(rng));
-            pixels[4 * i + 2] = static_cast<GLubyte>(dist(rng));
-            pixels[4 * i + 3] = 255;
-        }
-
-        geolio::geobox::ColormapInfo info;
-        info.name = geolio::geobox::RANDOM_COLORMAP_NAME;
-        glGenTextures(1, &info.texture);
-        glBindTexture(GL_TEXTURE_2D, info.texture);
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_RGBA, kSize, 1, 0,
-            GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        // This texture already samples with GL_NEAREST: it is its own
-        // hard-boundary variant. Interpolating the random texels would erase
-        // the distinct color each value is meant to get.
-        info.nearest_texture = info.texture;
-
-        my_colormaps_.push_back(info);
-    }
-
     void GeoBoxApplication::GL_initialize(
         ) {
-        // The base's SimpleApplication::init_colormaps() is non-virtual and
-        // fills its own colormaps_ member, so call ours explicitly to fill
-        // my_colormaps_ (needs a GL context, hence this override).
         SimpleMeshApplication::GL_initialize();
-        init_colormaps();
+
+        // Build the colormap table GeoBox offers. It belongs to the
+        // process-wide library rather than to the application, so that the
+        // objects that draw with it -- which know nothing of the application,
+        // and can be created by any sub-application -- can read it too.
+        // Uploading the textures needs the GL context, which is why it is done
+        // here, right after the base class set the GL state up (and built its
+        // own, larger colormap table).
+        ColormapLibrary::instance().initialize();
     }
 
     void GeoBoxApplication::ImGui_initialize(
@@ -672,11 +595,56 @@ namespace geolio::geobox
                 selected_object_ = base_object;
             ImGui::PopStyleVar();
 
+            // Right-clicking the row acts on that object: the operations that
+            // need to know which object they work on belong here, not in the
+            // File menu.
+            if (ImGui::BeginPopupContextItem()) {
+                if (ImGui::MenuItem(GEO::icon_UTF8("save") + " Save as..."))
+                    open_object_save_dialog(base_object);
+                ImGui::EndPopup();
+            }
+
             ++it;
             ImGui::PopID();
 
             ImGui::Separator();
         }
+    }
+
+    void GeoBoxApplication::open_object_save_dialog(
+        const std::shared_ptr<BaseObject>& object
+        ) {
+        const std::string extensions = supported_write_file_extensions();
+        if (extensions.empty())
+            return;
+
+        // The dialog proposes the name of the file the object was read from --
+        // its name only, without the directory: the dialog shows the directory
+        // it saves into, and repeating the path in the name box is noise. An
+        // object that was not read from a file is proposed its own name, with
+        // the first extension the application can write.
+        std::string suggested;
+        if (!object->filepath().empty())
+            suggested = GEO::FileSystem::base_name(object->filepath(), false);
+        if (suggested.empty()) {
+            std::vector<std::string> written_extensions;
+            GEO::String::split_string(extensions, ';', written_extensions);
+            suggested = object->name() + "." + written_extensions[0];
+        }
+        suggested.resize(
+            std::min(
+                suggested.size(),
+                std::size_t(GEO::geo_imgui_string_length - 1)));
+        std::copy(suggested.begin(), suggested.end(), filename_);
+        filename_[suggested.size()] = '\0';
+
+        object_to_save_ = object;
+        ImGui::OpenFileDialog(
+            "##object_save_dlg",
+            extensions.c_str(),
+            filename_,
+            ImGuiExtFileDialogFlags_Save
+        );
     }
 
     void GeoBoxApplication::draw_object_properties_window(
@@ -728,7 +696,10 @@ namespace geolio::geobox
     void GeoBoxApplication::draw_scene(
         ) {
         for (const auto& base_object : objects_) {
-            if (base_object->visible())
+            // An object whose data cannot be rendered is left out of the scene:
+            // drawing it would read outside of it (see
+            // BaseObject::renderable()).
+            if (base_object->visible() && base_object->renderable())
                 base_object->draw_scene(lighting_);
         }
     }
@@ -751,9 +722,9 @@ namespace geolio::geobox
                             LOG::ERROR("Could not save {}", current_file_);
                     }
                 }
-                if (!supported_write_file_extensions().empty())
-                    draw_save_menu();
-
+                // "Save as..." lives in the context menu of the objects of the
+                // scene (see draw_objects_properties()): the File menu cannot
+                // know which object to save, since the scene holds several.
                 draw_fileops_menu();
 
                 draw_about();
@@ -806,6 +777,11 @@ namespace geolio::geobox
             GEO::icon_UTF8("group-arrows-rotate") + " Arc ball",
             0,
             &arc_ball_visible_
+        );
+        ImGui::MenuItem(
+            GEO::icon_UTF8("flask") + " ImGui demo",
+            0,
+            &imgui_demo_visible_
         );
         {
             bool needs_to_close = false;
@@ -861,13 +837,15 @@ namespace geolio::geobox
 
     void GeoBoxApplication::draw_application_menus(
         ) {
-        if (!applications_.empty()) {
-            if (ImGui::BeginMenu("Application")) {
-                for (const auto& app_ptr : applications_)
-                    app_ptr->draw_menu();
-
-                ImGui::EndMenu();
-            }
+        // Purely generic: the hierarchy and the entries both come from the
+        // menu tree, which is built from the registration data (see
+        // application/register_applications.h). Adding a sub-application or a
+        // new sub-menu level does not require changing this function.
+        if (application_menu_.empty())
+            return;
+        if (ImGui::BeginMenu("Applications")) {
+            draw_application_menu(application_menu_);
+            ImGui::EndMenu();
         }
     }
 
@@ -997,14 +975,19 @@ namespace geolio::geobox
 
         /* Create object */
         const auto object_ptr = std::make_shared<MeshObject>(
+            get_filename(filepath),
             filepath,
-            my_colormaps_,
             mesh);
 
         objects_.push_back(object_ptr);
 
         /* Focus */
-        camera_focus(object_ptr);
+        // The object checked its own data when it was created (see
+        // MeshObject::check_validity()): framing a camera on data that cannot be
+        // read would put coordinates that are not finite in the view matrix,
+        // which breaks the display of the whole scene.
+        if (object_ptr->renderable())
+            camera_focus(object_ptr);
         selected_object_ = object_ptr;
 
         scene_dirty_ = true;

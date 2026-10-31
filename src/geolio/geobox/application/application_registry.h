@@ -15,37 +15,45 @@
 
 namespace geolio::geobox
 {
-    /** Objects container shared by all sub-applications. */
-    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
-
     /**
      * Registry of plugin-style sub-applications (BaseApplication subclasses).
      * Mirrors the MeshIOHandler factory pattern from geolio/io/io.h: concrete
-     * applications register a creator under a stable id at startup, and
+     * applications register a creation function at startup, and
      * GeoBoxApplication instantiates every registered application afterwards.
-     * Unlike the meshio case, sub-applications need constructor arguments
-     * (the display name and the objects container owned by GeoBoxApplication),
-     * so the creator signature carries both instead of being a Factory0.
+     * A concrete application decides its own display name (and gets a unique
+     * instance id) when the class is defined, so registration only adds the
+     * menu placement: where the entry goes under the "Applications" menu.
      */
     class BaseApplicationRegistry {
     public:
         /**
          * @brief Creator function type for a registered sub-application.
          * @details All registered concrete types must provide a constructor
-         *          (std::string application_name, const ApplicationObjects&),
-         *          which is the current convention (see
-         *          LocalOperationOptimizationApplication).
+         *          (ApplicationObjects&), which is the current convention
+         *          (see LocalOperationOptimizationApplication). The container
+         *          is passed by non-const reference so an application can add
+         *          objects to it (e.g. the result of a sampling operation).
+         *          The menu path is passed in, so the menu placement stays out
+         *          of the concrete classes.
          */
         using Creator = std::unique_ptr<BaseApplication>(*)(
-            const std::string& display_name, const ApplicationObjects& objects);
+            const std::vector<std::string>& menu_path,
+            ApplicationObjects& objects
+        );
 
         /**
-         * @brief One registered sub-application: stable id (the lookup key),
-         *        display name (the menu / window title) and its creator.
+         * @brief One registered sub-application: where its entry goes in the
+         *        "Applications" menu, and how to create it.
+         * @details Display name, instance id and tooltip belong to the
+         *          application itself (see BaseApplication), so they are not
+         *          duplicated here.
          */
         struct Entry {
-            std::string id;
-            std::string display_name;
+            /** Parent sub-menu labels, outermost first; when empty, the
+             *  created application defaults to the "ungrouped" sub-menu (see
+             *  BaseApplication::set_menu_path()). */
+            std::vector<std::string> menu_path;
+            /** Creates the application and attaches @c menu_path to it. */
             Creator creator;
         };
 
@@ -57,14 +65,16 @@ namespace geolio::geobox
         template <class ConcreteType>
         struct RegisterCreator {
             /**
-             * @brief Registers @p ConcreteType under @p id.
-             * @param[in] id stable identifier of the application.
-             * @param[in] display_name user-facing name shown in the menu and
-             *            as the window title.
+             * @brief Registers @p ConcreteType.
+             * @param[in] menu_path labels of the parent sub-menus under the
+             *            "Applications" menu, outermost first; when empty, the
+             *            application lands in the "ungrouped" sub-menu.
              */
-            RegisterCreator(const std::string& id, const std::string& display_name) {
+            explicit RegisterCreator(std::vector<std::string> menu_path = {}) {
                 BaseApplicationRegistry::instance().register_creator(
-                    id, display_name, &BaseApplicationRegistry::create<ConcreteType>);
+                    std::move(menu_path),
+                    &BaseApplicationRegistry::create<ConcreteType>
+                );
             }
         };
 
@@ -78,43 +88,33 @@ namespace geolio::geobox
 
         /**
          * @brief Generic creator: instantiates @p ConcreteType with the
-         *        display name and the objects container.
-         * @tparam ConcreteType the sub-application class to instantiate.
+         *        objects container and attaches the menu path to the instance.
+         * @details Menu placement is registration data, so concrete
+         *          applications stay unaware of it and do not need an extra
+         *          constructor parameter; the name comes from the class.
          */
         template <class ConcreteType>
         static std::unique_ptr<BaseApplication> create(
-            const std::string& display_name, const ApplicationObjects& objects) {
-            return std::make_unique<ConcreteType>(display_name, objects);
+            const std::vector<std::string>& menu_path,
+            ApplicationObjects& objects
+            ) {
+            auto application = std::make_unique<ConcreteType>(objects);
+            application->set_menu_path(menu_path);
+            return application;
         }
 
         /**
-         * @brief Registers a creator under a stable id.
-         * @param[in] id stable identifier of the application.
-         * @param[in] display_name user-facing name shown in the menu and as
-         *            the window title.
+         * @brief Registers a creator under a menu path.
+         * @param[in] menu_path sub-menu chain the application lives in.
          * @param[in] creator the creation function.
          */
-        void register_creator(std::string id, std::string display_name, Creator creator) {
-            entries_.push_back({std::move(id), std::move(display_name), creator});
-        }
-
-        /**
-         * @brief Finds a registered entry by its stable id.
-         * @param[in] id stable identifier of the application.
-         * @retval pointer to the entry if found.
-         * @retval nullptr otherwise.
-         */
-        [[nodiscard]] const Entry* find(const std::string& id) const {
-            for (const auto& entry : entries_) {
-                if (entry.id == id)
-                    return &entry;
-            }
-            return nullptr;
+        void register_creator(std::vector<std::string> menu_path, Creator creator) {
+            entries_.push_back({std::move(menu_path), creator});
         }
 
         /**
          * @brief Lists all registered entries in registration order (which is
-         *        the "Application" menu order).
+         *        also the order of the "Applications" menu).
          */
         [[nodiscard]] const std::vector<Entry>& entries() const {
             return entries_;
@@ -131,16 +131,21 @@ namespace geolio::geobox
 /**
  * @brief Helper macro to register a BaseApplication subclass.
  * @details Declares a function-local static RegisterCreator object that, on
- *          the first call of the enclosing function, registers the creator of
- *          @p type under the stable id @p id (displayed as @p display_name).
- *          Mirrors geo_register_MeshIOHandler_creator() from geolio/io/io.h.
+ *          the first call of the enclosing function, registers how to create
+ *          @p type. The display name (and the instance id) are decided by the
+ *          class itself, so they are not passed here. Mirrors
+ *          geo_register_MeshIOHandler_creator() from geolio/io/io.h.
+ *          The optional trailing arguments are the labels of the parent
+ *          sub-menus, outermost first: none means the entry is grouped under
+ *          "ungrouped", while
+ *          geolio_register_BaseApplication_creator(Type, "Mesh", "Remeshing")
+ *          puts it in Applications > Mesh > Remeshing.
  * @param[in] type the ConcreteType subclass of BaseApplication.
- * @param[in] id stable identifier of the application (lookup key).
- * @param[in] display_name user-facing name shown in the menu and as the
- *            window title.
+ * @param[in] ... optional parent sub-menu labels (outermost first).
  */
-#define geolio_register_BaseApplication_creator(type, id, display_name) \
+#define geolio_register_BaseApplication_creator(type, ...) \
     static geolio::geobox::BaseApplicationRegistry::RegisterCreator<type> \
-        GEOLIO_CONCAT(geolio_register_application_creator_, __LINE__)(id, display_name)
+        GEOLIO_CONCAT(geolio_register_application_creator_, __LINE__)( \
+            std::vector<std::string>{__VA_ARGS__})
 
 #endif //GEOLIO_APPLICATION_REGISTRY_H

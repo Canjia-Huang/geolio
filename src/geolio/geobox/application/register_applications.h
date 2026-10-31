@@ -4,10 +4,17 @@
 //
 #ifndef GEOLIO_APPLICATIONS_H
 #define GEOLIO_APPLICATIONS_H
-
 #include "application_registry.h"
-#include "local_operation_optimization_application.h"
-#include <geolio/common/utils.h>
+#include "attributes/local_feature_size_application.h"
+#include "mesh/local_operation_optimization_application.h"
+#include "mesh/mesh_clean_application.h"
+#include "mesh/mesh_compute_border_application.h"
+#include "mesh/mesh_connect_application.h"
+#include "mesh/mesh_random_sampling_application.h"
+#include "mesh/mesh_repair_colocate_application.h"
+#include "mesh/mesh_repair_triangulate_application.h"
+#include "points/centroidal_voronoi_tesselation_application.h"
+#include "points/restricted_voronoi_diagram_application.h"
 
 namespace geolio::geobox
 {
@@ -16,17 +23,37 @@ namespace geolio::geobox
      *        subclasses) into the application registry.
      * @details Mirrors register_additional_MeshIOHandlers() from
      *          geolio/io/io.h: each concrete application is declared here
-     *          with its stable id and display name, and GeoBoxApplication
-     *          instantiates all of them by iterating the registry. Adding a
-     *          new sub-application = include its header here and add one
-     *          geolio_register_BaseApplication_creator() line; the
-     *          GeoBoxApplication constructor no longer needs to change.
+     *          with its sub-menu path, and GeoBoxApplication instantiates all
+     *          of them by iterating the registry. The display name and the
+     *          instance id are decided by the application class itself (see
+     *          BaseApplication), so they are not repeated here.
+     *
+     *          This file is the single place to edit when adding a
+     *          sub-application or a sub-menu:
+     *            - the trailing arguments of
+     *              geolio_register_BaseApplication_creator() are the labels of
+     *              the parent sub-menus, outermost first, so
+     *              ("Mesh", "Optimization") means
+     *              Applications > Mesh > Optimization > entry;
+     *            - leaving them out puts the entry in the "ungrouped"
+     *              sub-menu;
+     *            - applications sharing a path automatically share the
+     *              sub-menu (created once, in registration order), and a
+     *              sub-menu with no application in it never appears.
+     *          The top menu bar (GeoBoxApplication::draw_application_menus())
+     *          only walks the resulting tree, so it never needs to change.
      */
     inline void register_additional_Applications() {
-        geolio_register_BaseApplication_creator(
-            LocalOperationOptimizationApplication,
-            generate_random_string(22),
-            "Mesh optimization");
+        geolio_register_BaseApplication_creator(LocalFeatureSizeApplication, "attributes");
+        geolio_register_BaseApplication_creator(CentroidalVoronoiTesselationApplication, "points");
+        geolio_register_BaseApplication_creator(RestrictedVoronoiDiagramApplication, "points");
+        geolio_register_BaseApplication_creator(MeshCleanApplication, "mesh");
+        geolio_register_BaseApplication_creator(MeshComputeBorderApplication, "mesh");
+        geolio_register_BaseApplication_creator(MeshConnectApplication, "mesh");
+        geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "mesh", "optimization");
+        geolio_register_BaseApplication_creator(MeshRepairColocateApplication, "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication, "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRandomSamplingApplication, "mesh");
     }
 }
 

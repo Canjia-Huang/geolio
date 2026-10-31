@@ -11,6 +11,7 @@
 #include <geogram/image/image.h>
 #include <geogram/image/image_library.h>
 #include <geogram/mesh/mesh_geometry.h>
+#include <geogram/mesh/mesh_io.h>
 #include <geogram_gfx/GLUP/GLUP.h>
 // glupPrivateVertex*()/glupPrivateTexCoord*(): the immediate-mode entry points
 // used by MeshGfx::draw_vertex() and MeshGfx::draw_attribute_as_tex_coord(),
@@ -234,15 +235,15 @@ namespace geolio::geobox
     }
 
     MeshObject::MeshObject(
-        const std::string& name,
-        const std::vector<ColormapInfo>& colormaps,
+        std::string name,
+        std::string filepath,
         const GEO::Mesh& mesh
-        ) : BaseObject(name),
-            colormaps_(colormaps)
+        ) : BaseObject(std::move(name), std::move(filepath))
     {
         mesh_.copy(mesh);
         mesh_gfx_.set_mesh(&mesh_);
         surface_has_borders_ = compute_surface_has_borders();
+        element_counts_ = count_elements();
 
         if (mesh_.edges.nb() == 0 && mesh_.facets.nb() == 0 && mesh_.cells.nb() == 0)
             show_vertices_ = true;
@@ -268,68 +269,211 @@ namespace geolio::geobox
         // Default image of the TEXTURE painting mode: the UV checker bundled
         // in the texture directory (see default_texture_filename()).
         texture_filename_ = default_texture_filename();
+
+        // Data that cannot be rendered crashes the drawing passes: the object
+        // checks it as soon as it exists, and warns the user if it has to (see
+        // draw_validity_dialog()). Done here, in the most derived constructor,
+        // because a virtual call in the base constructor would not reach the
+        // check of this class.
+        MeshObject::check_validity();
     }
 
     void MeshObject::draw_object_properties(
         ) {
         ImGui::PushID(this);
 
-        if (ImGui::Button("Reload", ImVec2(-1, 0)))
-            reload();
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("%s", filepath_.c_str());
+        // An operation may have changed the mesh since the last frame (see
+        // mesh_changed()): the Info panel and the border controls below would
+        // otherwise show what the mesh was before it.
+        update_mesh_caches();
+
+        ImGui::BeginDisabled(filepath_.empty());
+        {
+            if (ImGui::Button("Reload", ImVec2(-1, 0)))
+                reload();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", filepath_.c_str());
+        }
+        ImGui::EndDisabled();
+
+        if (!data_valid_) {
+            // The mesh was kept as it is (the validity dialog was answered with
+            // "skip"), so it is not drawn. Checking again re-opens the dialog,
+            // where it can be repaired.
+            ImGui::TextDisabled("Not displayed: invalid data.");
+            if (ImGui::Button("Check validity", ImVec2(-1, 0)))
+                check_validity();
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Run the validity check again, and offer to repair the "
+                    "mesh.");
+            }
+        }
 
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Info")) {
             /* == Element count ==================================================================================== */
+            // One row per element kind (vertices, edges, facets, cells), with
+            // the kinds the mesh does not contain left out, and indented rows
+            // breaking a kind down: the dimension of the vertices, the arity
+            // of the facets, the type of the cells. A breakdown row whose
+            // count is zero is left out too, so the table only ever shows
+            // what the mesh actually has.
+            const auto format_count = [](const GEO::index_t count) {
+                // Thousands separators: a multi-million element mesh stays
+                // readable, and the counts remain comparable column-wise.
+                const std::string digits =
+                    std::to_string(static_cast<unsigned long long>(count));
+                std::string formatted;
+                formatted.reserve(digits.size() + digits.size() / 3);
+                for (std::size_t i = 0; i < digits.size(); ++i) {
+                    if (i != 0 && (digits.size() - i) % 3 == 0)
+                        formatted.push_back(',');
+                    formatted.push_back(digits[i]);
+                }
+                return formatted;
+            };
+
             if (ImGui::BeginTable(
                 "##InfoTable", 2,
-                ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchSame)
+                ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerV |
+                ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)
                 ) {
-                ImGui::TableSetupColumn("Element");
-                ImGui::TableSetupColumn("Count");
-                ImGui::TableHeadersRow();
+                ImGui::TableSetupColumn(
+                    "Element", ImGuiTableColumnFlags_WidthStretch, 0.66f);
+                ImGui::TableSetupColumn(
+                    "Count", ImGuiTableColumnFlags_WidthStretch, 0.34f);
 
-                // Clicking a count copies its value to the clipboard.
-                const auto count_cell = [](const char* element, const GEO::index_t count) {
-                    const std::string text =
-                        std::to_string(static_cast<unsigned int>(count));
+                // Moves the cursor so that the text drawn next ends flush with
+                // the right edge of the cell: the counts are numbers, and they
+                // read better lined up on their last digit.
+                const auto right_aligned = [](const char* text) {
+                    ImGui::SetCursorPosX(
+                        ImGui::GetCursorPosX() +
+                        std::max(
+                            0.0f,
+                            ImGui::GetContentRegionAvail().x -
+                            ImGui::CalcTextSize(text).x));
+                };
+
+                // Header row. Drawn by hand rather than with TableHeadersRow()
+                // so that the title of the count column is right-aligned over
+                // the values, like they are.
+                ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted("Element");
+                ImGui::TableSetColumnIndex(1);
+                right_aligned("Count");
+                ImGui::TextUnformatted("Count");
+
+                // The count of the current row, right-aligned in the second
+                // column. Clicking it copies the bare value to the clipboard.
+                const auto count_cell = [&format_count, &right_aligned](
+                    const char* id, const GEO::index_t count) {
+                    const std::string text = format_count(count);
                     // The element name disambiguates the ImGui ID in case two
                     // counts happen to be equal.
-                    const std::string label = text + "##" + element;
-                    if (ImGui::Selectable(label.c_str(), false))
+                    const std::string label = text + "##" + id;
+                    const float label_width =
+                        ImGui::CalcTextSize(text.c_str()).x;
+                    ImGui::TableSetColumnIndex(1);
+                    right_aligned(text.c_str());
+                    if (ImGui::Selectable(
+                        label.c_str(), false, 0, ImVec2(label_width, 0.0f)))
                         ImGui::SetClipboardText(text.c_str());
-                    // if (ImGui::IsItemHovered())
-                    //     ImGui::SetTooltip("Click to copy");
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Click to copy");
+                };
+
+                // Horizontal offset at which a tree node draws its label: the
+                // arrow, plus the padding on both sides of it (see
+                // ImGui::TreeNodeBehavior()). The kind rows without a
+                // breakdown indent their name by the same amount, so that all
+                // the kinds line up whether they have an arrow or not.
+                const float label_offset =
+                    ImGui::GetFontSize() +
+                    2.0f * ImGui::GetStyle().FramePadding.x;
+
+                // A row naming an element kind that has nothing to break down
+                // (edges), drawn on the table's header colour so that the
+                // kinds stand out from their breakdown.
+                const auto element_row = [&count_cell, label_offset](
+                    const char* name, const GEO::index_t count) {
+                    ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::SetCursorPosX(
+                        ImGui::GetCursorPosX() + label_offset);
+                    ImGui::TextUnformatted(name);
+                    count_cell(name, count);
+                };
+
+                // A row naming an element kind that has a breakdown. The
+                // arrow opens and closes the breakdown rows below it; like
+                // any tree node it starts collapsed, and remembers its state.
+                // @return true when the breakdown is open and must be drawn.
+                const auto kind_row = [&count_cell](
+                    const char* name, const GEO::index_t count) {
+                    ImGui::TableNextRow();
+                    // Same background as the plain kind rows, so that all the
+                    // kinds read as a group whether they expand or not.
+                    ImGui::TableSetBgColor(
+                        ImGuiTableBgTarget_RowBg0,
+                        ImGui::GetColorU32(ImGuiCol_TableHeaderBg));
+                    ImGui::TableSetColumnIndex(0);
+                    const bool open = ImGui::TreeNodeEx(
+                        name, ImGuiTreeNodeFlags_None, "%s", name);
+                    count_cell(name, count);
+                    return open;
+                };
+
+                // A breakdown row of the element kind above it. Left out when
+                // the mesh has none of it. The row inherits the indentation of
+                // the tree node its kind row pushed, so no explicit indentation
+                // is needed here.
+                const auto detail_row = [&count_cell](
+                    const char* name, const GEO::index_t count) {
+                    if (count == 0)
+                        return;
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(name);
+                    count_cell(name, count);
                 };
 
                 if (mesh_.vertices.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("vertices");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("vertices", mesh_.vertices.nb());
+                    if (kind_row("Vertices", mesh_.vertices.nb())) {
+                        detail_row("dimension", mesh_.vertices.dimension());
+                        ImGui::TreePop();
+                    }
                 }
-                if (mesh_.edges.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("edges");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("edges", mesh_.edges.nb());
-                }
+                if (mesh_.edges.nb() > 0)
+                    element_row("Edges", mesh_.edges.nb());
                 if (mesh_.facets.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("facets");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("facets", mesh_.facets.nb());
+                    if (kind_row("Facets", mesh_.facets.nb())) {
+                        detail_row("tris", element_counts_.triangles);
+                        detail_row("quads", element_counts_.quads);
+                        detail_row("polygons", element_counts_.polygons);
+                        ImGui::TreePop();
+                    }
                 }
                 if (mesh_.cells.nb() > 0) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("cells");
-                    ImGui::TableSetColumnIndex(1);
-                    count_cell("cells", mesh_.cells.nb());
+                    if (kind_row("Cells", mesh_.cells.nb())) {
+                        // GeoGram's cell types, in the enum's order: these are
+                        // also the names the enum values are usually called by.
+                        static const char* CELL_TYPE_NAMES[] = {
+                            "tets", "hexes", "prisms", "pyramids", "connectors"
+                        };
+                        static_assert(
+                            std::size(CELL_TYPE_NAMES) ==
+                            GEO::MESH_NB_CELL_TYPES,
+                            "one name per GeoGram cell type");
+                        for (int type = 0;
+                             type < GEO::MESH_NB_CELL_TYPES; ++type)
+                            detail_row(
+                                CELL_TYPE_NAMES[type],
+                                element_counts_.cells[type]);
+                        ImGui::TreePop();
+                    }
                 }
 
                 ImGui::EndTable();
@@ -432,9 +576,13 @@ namespace geolio::geobox
                     ImGui::OpenPopup("##Colormap");
                 }
                 if (ImGui::BeginPopup("##Colormap")) {
-                    for (GEO::index_t i = 0; i < colormaps_.size(); ++i) {
+                    const std::vector<ColormapInfo>& available_colormaps =
+                        colormaps();
+                    for (GEO::index_t i = 0;
+                         i < available_colormaps.size();
+                         ++i) {
                         if (ImGui::ImageButton(
-                            colormaps_[i].name.c_str(),
+                            available_colormaps[i].name.c_str(),
 			                static_cast<ImTextureID>(colormap_texture(i)),
                             ImVec2(100.0f*s, 8.0f*s))
                             ) {
@@ -767,6 +915,17 @@ namespace geolio::geobox
         if (mesh_gfx_.mesh() == nullptr)
             return;
 
+        // Invalid data would make the drawing passes read outside the mesh (see
+        // check_validity()): the object stays out of the scene until it is
+        // repaired. The application skips it too (see
+        // GeoBoxApplication::draw_scene()).
+        if (!data_valid_)
+            return;
+
+        // An operation may have changed the mesh since the last frame (see
+        // mesh_changed()).
+        update_mesh_caches();
+
         mesh_gfx_.set_lighting(lighting);
 
         // Choose how the elements are colored, as Graphite's painting mode
@@ -848,24 +1007,17 @@ namespace geolio::geobox
         if (GEO::Mesh mesh;
             mesh.load(filepath_)) {
             mesh_.copy(mesh);
-            bbox_diag_ = -1.0f; // invalidate the cached bounding-box diagonal
-            // The new mesh has its own connectivity: whether it has borders to
-            // draw may have changed too (see draw_object_properties()).
-            surface_has_borders_ = compute_surface_has_borders();
-            // The new mesh has its own attributes: the display copy of the
-            // displayed one has to be rebuilt on next draw (see
-            // update_display_attribute()). The displayed attribute itself may be
-            // gone from the file, which the drawing tests for before sampling it
-            // (see displayed_attribute_is_defined()).
-            display_attribute_ = DisplayAttribute();
-            // Same for the scaled texture coordinates: the reloaded mesh has
-            // its own store and attributes (see update_display_tex_coords()).
-            display_tex_coords_ = DisplayTexCoords();
-            // MeshGfx caches the geometry and the attributes it draws in buffer
-            // objects, which it only re-uploads once it is told the mesh changed:
-            // without this, the object would keep displaying the mesh the file
-            // held before the reload.
-            mesh_gfx_.set_mesh(&mesh_);
+
+            // The new mesh has its own connectivity, attributes and element
+            // counts, so everything the object derived from the previous one is
+            // stale: mesh_changed() invalidates it (the displayed attribute may
+            // also be gone from the file, which the drawing tests for before
+            // sampling it, see displayed_attribute_is_defined()). The reload is
+            // an explicit, rare operation, so the caches are refreshed right
+            // away instead of on the next draw, leaving the object consistent
+            // as soon as reload() returns.
+            mesh_changed();
+            update_mesh_caches();
         }
     }
 
@@ -905,6 +1057,218 @@ namespace geolio::geobox
             bbox_diag_ = static_cast<float>(std::sqrt(d2));
         }
         return bbox_diag_;
+    }
+
+    bool MeshObject::check_validity(
+        ) {
+        const GEO::index_t VERTICES_NB = mesh_.vertices.nb();
+        const GEO::index_t DIM = mesh_.vertices.dimension();
+
+        // The elements to remove are recorded while the mesh is scanned: the
+        // dialog lets the user decide later (see draw_validity_dialog()), and
+        // repairing then only applies the vectors below.
+        invalid_counts_ = InvalidElementCounts();
+        vertices_to_delete_.assign(mesh_.vertices.nb(), 0);
+        edges_to_delete_.assign(mesh_.edges.nb(), 0);
+        facets_to_delete_.assign(mesh_.facets.nb(), 0);
+        cells_to_delete_.assign(mesh_.cells.nb(), 0);
+
+        // Vertices whose coordinates are not finite: they poison every
+        // computation that reads them (bounding box, normals, ...).
+        for (const auto& v : mesh_.vertices) {
+            const auto p = mesh_.vertices.point_ptr(v);
+            for (GEO::index_t d = 0; d < DIM; ++d) {
+                if (std::isnan(p[d]) || std::isinf(p[d])) {
+                    ++invalid_counts_.vertices;
+                    vertices_to_delete_[v] = 1;
+                    break;
+                }
+            }
+        }
+
+        // Elements that reference a vertex the mesh does not have: the drawing
+        // passes would read outside the vertex array.
+        for (const auto& e : mesh_.edges) {
+            if (mesh_.edges.vertex(e, 0) >= VERTICES_NB ||
+                mesh_.edges.vertex(e, 1) >= VERTICES_NB
+                ) {
+                ++invalid_counts_.edges;
+                edges_to_delete_[e] = 1;
+            }
+        }
+
+        for (const auto& f : mesh_.facets) {
+            for (GEO::index_t lv = 0, lv_end = mesh_.facets.nb_vertices(f);
+                 lv < lv_end; ++lv) {
+                if (mesh_.facets.vertex(f, lv) >= VERTICES_NB) {
+                    ++invalid_counts_.facets;
+                    facets_to_delete_[f] = 1;
+                    break;
+                }
+            }
+        }
+
+        for (const auto& c : mesh_.cells) {
+            for (GEO::index_t lv = 0, lv_end = mesh_.cells.nb_vertices(c);
+                 lv < lv_end; ++lv) {
+                if (mesh_.cells.vertex(c, lv) >= VERTICES_NB) {
+                    ++invalid_counts_.cells;
+                    cells_to_delete_[c] = 1;
+                    break;
+                }
+            }
+        }
+
+        // Invalid data cannot be handed to the drawing passes at all: they
+        // would read outside the mesh (which crashes the application), so the
+        // object stops being drawn until the mesh is repaired (see
+        // renderable() and draw_scene()).
+        data_valid_ = !invalid_counts_.any();
+
+        // The warning is due for as long as the invalid data is there: it can
+        // only be dismissed by keeping the mesh as it is or by repairing it
+        // (see draw_validity_dialog()).
+        validity_dialog_pending_ = !data_valid_;
+
+        if (validity_dialog_pending_) {
+            LOG::WARN(
+                "Mesh `{}` is invalid: {} invalid vertices, {} edges, "
+                "{} facets, {} cells.",
+                name_,
+                invalid_counts_.vertices,
+                invalid_counts_.edges,
+                invalid_counts_.facets,
+                invalid_counts_.cells);
+        }
+
+        return !validity_dialog_pending_;
+    }
+
+    void MeshObject::draw_validity_dialog(
+        ) {
+        if (!validity_dialog_pending_)
+            return;
+
+        // The popup is opened again on every frame while the invalid data was
+        // not dealt with: it has no close button, and the Escape key would
+        // otherwise dismiss it, which must not be possible -- the user has to
+        // choose between keeping the mesh as it is and repairing it. Its name
+        // carries the object id, so that two invalid objects do not share one.
+        const std::string popup_name = "Invalid mesh##" + unique_id_;
+        ImGui::OpenPopup(popup_name.c_str());
+        if (!ImGui::BeginPopupModal(
+                popup_name.c_str(), nullptr,
+                ImGuiWindowFlags_AlwaysAutoResize |
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoMove)) {
+            return;
+        }
+
+        ImGui::PushStyleColor(
+            ImGuiCol_Text,
+            ImVec4(
+                title_color_.x, title_color_.y, title_color_.z, title_color_.w));
+        ImGui::Text("The mesh of \"%s\"", name_.c_str());
+        ImGui::PopStyleColor();
+        ImGui::TextUnformatted("cannot be rendered as it is:");
+
+        ImGui::Spacing();
+        // One entry per kind of invalid element, in the plural of its actual
+        // count; the kinds the mesh has none of are left out.
+        const auto invalid_kind = [](
+            const GEO::index_t count,
+            const char* singular,
+            const char* plural,
+            const char* reason
+            ) {
+            ImGui::BulletText(
+                "%u invalid %s (%s)",
+                static_cast<unsigned>(count), count == 1 ? singular : plural, reason);
+        };
+        if (invalid_counts_.vertices != 0) {
+            invalid_kind(
+                invalid_counts_.vertices, "vertex", "vertices",
+                "NaN/non-finite coordinates");
+        }
+        if (invalid_counts_.edges != 0) {
+            invalid_kind(
+                invalid_counts_.edges, "edge", "edges", "missing vertices");
+        }
+        if (invalid_counts_.facets != 0) {
+            invalid_kind(
+                invalid_counts_.facets, "facet", "facets", "missing vertices");
+        }
+        if (invalid_counts_.cells != 0) {
+            invalid_kind(
+                invalid_counts_.cells, "cell", "cells", "missing vertices");
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+
+        // What the repair removes (see
+        // repair_invalid_vertices_and_elements()). They only apply when the mesh
+        // is repaired: skipping it keeps the mesh as it was loaded.
+        ImGui::Checkbox("remove invalid vertices", &remove_invalid_vertices_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Remove the vertices whose coordinates are NaN/not finite.\n"
+                "Used when the mesh is repaired.");
+        }
+        ImGui::Checkbox("remove invalid elements", &remove_invalid_elements_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Remove the edges, facets and cells that reference\n"
+                "missing vertices. Used when the mesh is repaired.");
+        }
+
+        ImGui::Separator();
+
+        // The button says what closing the dialog does: repairing the mesh
+        // removes what the checkboxes ask for, skipping it keeps the mesh as it
+        // is.
+        const char* const action = remove_invalid_elements_
+            ? "Repair this mesh"
+            : "Skip this mesh";
+        if (ImGui::Button(action, ImVec2(-1.0f, 0.0f))) {
+            if (remove_invalid_elements_)
+                repair_invalid_vertices_and_elements();
+            validity_dialog_pending_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                remove_invalid_elements_
+                    ? "Remove the invalid elements (and the invalid vertices if\n"
+                      "selected), then display the mesh."
+                    : "Keep the mesh as it was loaded, and leave it out of the\n"
+                      "3D view. Check \"remove invalid elements\" to repair it\n"
+                      "instead.");
+        }
+
+        ImGui::EndPopup();
+    }
+
+    void MeshObject::repair_invalid_vertices_and_elements(
+        ) {
+        // Elements first: deleting vertices re-indexes the elements that
+        // reference them (see GEO::MeshVertices::delete_elements()).
+        if (remove_invalid_elements_) {
+            if (invalid_counts_.edges != 0)
+                mesh_.edges.delete_elements(edges_to_delete_, false);
+            if (invalid_counts_.facets != 0)
+                mesh_.facets.delete_elements(facets_to_delete_, false);
+            if (invalid_counts_.cells != 0)
+                mesh_.cells.delete_elements(cells_to_delete_, false);
+        }
+        if (remove_invalid_vertices_ && invalid_counts_.vertices != 0)
+            mesh_.vertices.delete_elements(vertices_to_delete_, false);
+
+        // Removing a vertex leaves NO_VERTEX in the elements that referenced it,
+        // so the mesh may still be invalid: the check tells, and keeps the
+        // dialog (with the new counts) open if it is.
+        mesh_changed();
+        check_validity();
     }
 
     void MeshObject::draw_points(
@@ -1095,6 +1459,74 @@ namespace geolio::geobox
             }
         }
         return false;
+    }
+
+    void MeshObject::mesh_changed(
+        ) {
+        // What the object caches about the mesh is stale from now on; the parts
+        // that scan it are recomputed lazily (see update_mesh_caches()).
+        mesh_caches_dirty_ = true;
+        bbox_diag_ = -1.0f;
+
+        // The display copies are built on the attribute stores of the mesh,
+        // which the operation may have replaced (see update_display_attribute()
+        // and update_display_tex_coords()).
+        display_attribute_ = DisplayAttribute();
+        display_tex_coords_ = DisplayTexCoords();
+
+        // MeshGfx caches the geometry and the attributes it draws in buffer
+        // objects, which it only re-uploads once it is told the mesh changed:
+        // without this, the object would keep drawing the mesh as it was
+        // before the operation.
+        mesh_gfx_.set_mesh(&mesh_);
+    }
+
+    void MeshObject::update_mesh_caches(
+        ) {
+        if (!mesh_caches_dirty_)
+            return;
+        mesh_caches_dirty_ = false;
+
+        // Both walk the whole mesh, which is why they are not done in
+        // mesh_changed() but here, when the caches are actually read.
+        surface_has_borders_ = compute_surface_has_borders();
+        element_counts_ = count_elements();
+    }
+
+    MeshObject::ElementCounts MeshObject::count_elements(
+        ) const {
+        ElementCounts counts;
+
+        // Facets are classified by arity: GeoGram stores triangles/quads
+        // compactly but does not record the type, the number of vertices of
+        // the facet is what tells them apart. Facets with more than 4
+        // vertices (and the degenerate ones with fewer than 3, which a valid
+        // mesh should not have) are reported as polygons.
+        for (const GEO::index_t f : mesh_.facets) {
+            switch (mesh_.facets.nb_vertices(f)) {
+            case 3:
+                ++counts.triangles;
+                break;
+            case 4:
+                ++counts.quads;
+                break;
+            default:
+                ++counts.polygons;
+                break;
+            }
+        }
+
+        // Cells are classified by their GeoGram type (tets, hexes, prisms,
+        // pyramids, connectors). MeshCells::type() resolves the simplicial
+        // storage case to MESH_TET, so it yields the right type for every
+        // cell whatever the storage.
+        for (const GEO::index_t c : mesh_.cells) {
+            const GEO::MeshCellType type = mesh_.cells.type(c);
+            if (type < GEO::MESH_NB_CELL_TYPES)
+                ++counts.cells[type];
+        }
+
+        return counts;
     }
 
     void MeshObject::draw_surface(
@@ -1833,6 +2265,106 @@ namespace geolio::geobox
             result += attribute;
         }
         return result;
+    }
+
+    std::vector<MeshObject::AttributeInfo> MeshObject::attribute_infos(
+        ) const {
+        // Every store of the mesh that can carry attributes, in the order the
+        // applications see them in their selectors.
+        static const GEO::MeshElementsFlags SUBELEMENTS[] = {
+            GEO::MESH_VERTICES,
+            GEO::MESH_EDGES,
+            GEO::MESH_FACETS,
+            GEO::MESH_FACET_CORNERS,
+            GEO::MESH_CELLS,
+            GEO::MESH_CELL_CORNERS,
+            GEO::MESH_CELL_FACETS
+        };
+
+        // The coordinates of the vertices are stored as an attribute of the
+        // vertices store ("point", or "point_fp32" with single precision
+        // vertices, see MeshVertices::single_precision()): they are the
+        // geometry of the mesh, not data attached to it, so they are not
+        // offered as an attribute an application can pick.
+        const std::string coordinates_name =
+            mesh_.vertices.single_precision() ? "point_fp32" : "point";
+
+        std::vector<AttributeInfo> result;
+        for (const GEO::MeshElementsFlags subelements : SUBELEMENTS) {
+            const GEO::MeshSubElementsStore& store =
+                mesh_.get_subelements_by_type(subelements);
+            GEO::vector<std::string> names;
+            store.attributes().list_attribute_names(names);
+            for (const std::string& name : names) {
+                if (subelements == GEO::MESH_VERTICES &&
+                    name == coordinates_name)
+                    continue;
+                // The display copies are built by this object for the
+                // renderer, not written by the user's data (see
+                // DISPLAY_ATTRIBUTE_NAME and DISPLAY_TEX_COORD_NAME).
+                if (name == DISPLAY_ATTRIBUTE_NAME ||
+                    name == DISPLAY_TEX_COORD_NAME)
+                    continue;
+                const GEO::AttributeStore* attribute =
+                    store.attributes().find_attribute_store(name);
+                if (attribute == nullptr)
+                    continue;
+
+                AttributeInfo info;
+                info.subelements = subelements;
+                info.name = name;
+                info.element_type = attribute->element_typeid_name();
+                info.dimension = attribute->dimension();
+                info.nb_elements = store.nb();
+                result.push_back(std::move(info));
+            }
+        }
+        return result;
+    }
+
+    bool MeshObject::save(
+        const std::string& filename
+        ) {
+        // The data an application computed lives in the attributes of the mesh
+        // (e.g. the "weight" of a sizing field): unlike the default flags, which
+        // save none, all of them are written.
+        GEO::MeshIOFlags flags;
+        flags.set_attributes(GEO::MESH_ALL_ATTRIBUTES);
+
+        // A .geogram file stores double precision coordinates: promote them
+        // first, as GeoGram's mesh applications do, so that a mesh loaded in
+        // single precision is written faithfully.
+        if (GEO::FileSystem::extension(filename) == "geogram")
+            mesh_.vertices.set_double_precision();
+
+        return GEO::mesh_save(mesh_, filename, flags);
+    }
+
+    bool MeshObject::display_attribute(
+        const std::string& attribute
+        ) {
+        // The name comes in the "subelements.name" form (see attribute_names()).
+        std::string subelements_name;
+        std::string name;
+        GEO::String::split_string(attribute, '.', subelements_name, name);
+        const GEO::MeshElementsFlags subelements =
+            GEO::Mesh::name_to_subelements_type(subelements_name);
+        if (subelements == GEO::MESH_NONE || name.empty())
+            return false;
+
+        // Asking for an attribute the mesh does not have would leave the
+        // colormap sampling nothing: the request is refused, and what the object
+        // displays stays as it is.
+        if (!mesh_.get_subelements_by_type(subelements).attributes().
+                is_defined(name))
+            return false;
+
+        set_attribute(attribute);
+        painting_mode_ = PaintingMode::ATTRIBUTE;
+
+        autorange();
+
+        return true;
     }
 
     void MeshObject::set_attribute(
