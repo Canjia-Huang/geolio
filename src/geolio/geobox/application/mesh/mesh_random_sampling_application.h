@@ -19,33 +19,14 @@ namespace geolio::geobox
             menu_tooltip_ = "Random sampling on mesh.";
         }
 
-        /**
-         * @brief Tests whether an attribute can weight the sampling.
-         * @details The sampler reads the weight of the vertices of a triangle
-         *          from a GEO::Attribute<double> (see perform()), so only the
-         *          per-vertex attributes holding exactly one double per vertex
-         *          can be bound to it: an integer attribute cannot, a vector
-         *          one holds several components per vertex, and an attribute on
-         *          another sub-element has one value per facet or per cell
-         *          instead of one per vertex.
-         * @param[in] attribute Attribute of the selected mesh.
-         * @return true if @p attribute can weight the sampling.
-         */
-        static bool is_weight_attribute(
-            const MeshObject::AttributeInfo& attribute
-            ) {
-            return attribute.subelements == GEO::MESH_VERTICES &&
-                   attribute.holds<double>() &&
-                   attribute.dimension == 1;
-        }
-
     protected:
         void draw_window_contents() override {
             // The mesh picker, offering the meshes this application accepts.
             const bool selection_changed = draw_mesh_selector(
                 selected_mesh_object_,
                 [](const GEO::Mesh& mesh) {
-                    return mesh.facets.nb() > 0 || mesh.cells.nb() > 0;
+                    return (mesh.facets.nb() > 0 && mesh.facets.are_simplices()) ||
+                           (mesh.cells.nb() > 0 && mesh.cells.are_simplices());
                 });
 
             ImGui::Separator();
@@ -96,7 +77,11 @@ namespace geolio::geobox
                         draw_attribute_selector(
                             weight_attribute_,
                             *mesh_object,
-                            &MeshRandomSamplingApplication::is_weight_attribute);
+                            [](const MeshObject::AttributeInfo& attribute) {
+                                return attribute.subelements == GEO::MESH_VERTICES &&
+                                       attribute.holds<double>() &&
+                                       attribute.dimension == 1;}
+                                       );
                 }
 
                 ImGui::Separator();
@@ -119,11 +104,9 @@ namespace geolio::geobox
             // bind_if_is_compatible() leaves the attribute unbound when the
             // name no longer matches a per-vertex double attribute, in which
             // case the sampling is area-proportional, as GeoGram does.
-            if (mesh_v_weight_.is_bound())
-                mesh_v_weight_.unbind();
+            GEO::Attribute<double> mesh_v_weight;
             if (vertex_weighted_ && !weight_attribute_.name.empty())
-                mesh_v_weight_.bind_if_is_compatible(
-                    mesh.vertices.attributes(), weight_attribute_.name);
+                mesh_v_weight.bind_if_is_compatible(mesh.vertices.attributes(), weight_attribute_.name);
 
             /* Sampling */
             std::vector<double> sample_points;
@@ -133,21 +116,21 @@ namespace geolio::geobox
                     mesh,
                     sample_points.data(),
                     samples_nb,
-                    mesh_v_weight_);
+                    mesh_v_weight);
             else {
                 if (volumetric_) {
                     GEO::mesh_generate_random_samples_in_volume<3>(
                         mesh,
                         sample_points.data(),
                         samples_nb,
-                        mesh_v_weight_);
+                        mesh_v_weight);
                 }
                 else {
                     GEO::mesh_generate_random_samples_on_surface<3>(
                         mesh,
                         sample_points.data(),
                         samples_nb,
-                        mesh_v_weight_);
+                        mesh_v_weight);
                 }
             }
 
@@ -175,8 +158,6 @@ namespace geolio::geobox
          *  draw_attribute_selector(); its default value (GEO::MESH_NONE
          *  sub-elements, empty name) means "not weighted". */
         MeshObject::AttributeInfo weight_attribute_;
-
-        GEO::Attribute<double> mesh_v_weight_;
     };
 }
 

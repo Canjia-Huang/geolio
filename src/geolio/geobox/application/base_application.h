@@ -275,7 +275,7 @@ namespace geolio::geobox
             }
 
             if (mesh_objects.empty()) {
-                ImGui::TextDisabled("No mesh object available.");
+                ImGui::TextDisabled(("No `"+std::string(label)+"` object available.").c_str());
                 return changed;
             }
 
@@ -358,7 +358,7 @@ namespace geolio::geobox
             }
 
             if (attributes.empty()) {
-                ImGui::TextDisabled("No matching attribute.");
+                ImGui::TextDisabled(("No matching `"+std::string(label)+"`.").c_str());
                 if (selection.subelements != GEO::MESH_NONE) {
                     selection = MeshObject::AttributeInfo();
                     changed = true;
