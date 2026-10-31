@@ -2,17 +2,17 @@
 // Created by huangcanjia <huangcanjia0214@gmail.com> on 2026/10/30.
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
-#ifndef GEOLIO_CVT_APPLICATION_H
-#define GEOLIO_CVT_APPLICATION_H
+#ifndef GEOLIO_CENTROIDAL_VORONOI_TESSELATION_APPLICATION_H
+#define GEOLIO_CENTROIDAL_VORONOI_TESSELATION_APPLICATION_H
 #include <geogram/voronoi/CVT.h>
 #include <geolio/geobox/application/base_application.h>
 #include <geolio/common/log.h>
 
 namespace geolio::geobox
 {
-    class CVTApplication : public BaseApplication {
+    class CentroidalVoronoiTesselationApplication : public BaseApplication {
     public:
-        explicit CVTApplication(ApplicationObjects& objects)
+        explicit CentroidalVoronoiTesselationApplication(ApplicationObjects& objects)
             : BaseApplication("centroidal Voronoi tesselation", objects)
         {
             menu_tooltip_ = "GEO::CentroidalVoronoiTesselation";
@@ -153,10 +153,7 @@ namespace geolio::geobox
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
 
-        /** The mesh the CVT is computed on. */
         std::weak_ptr<MeshObject> base_surface_object_;
-
-        /** The mesh holding the samples. */
         std::weak_ptr<MeshObject> samples_object_;
 
         MeshObject::AttributeInfo weight_attribute_;
@@ -168,4 +165,4 @@ namespace geolio::geobox
     };
 }
 
-#endif //GEOLIO_CVT_APPLICATION_H
+#endif //GEOLIO_CENTROIDAL_VORONOI_TESSELATION_APPLICATION_H

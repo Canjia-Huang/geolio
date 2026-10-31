@@ -11,8 +11,9 @@
 #include "mesh/mesh_repair_colocate_application.h"
 #include "mesh/mesh_repair_triangulate_application.h"
 #include "mesh/mesh_compute_border_application.h"
-#include "points/CVT_application.h"
+#include "points/centroidal_voronoi_tesselation_application.h"
 #include "attributes/local_feature_size_application.h"
+#include "points/restricted_voronoi_diagram_application.h"
 
 namespace geolio::geobox
 {
@@ -43,7 +44,8 @@ namespace geolio::geobox
      */
     inline void register_additional_Applications() {
         geolio_register_BaseApplication_creator(LocalFeatureSizeApplication, "attributes");
-        geolio_register_BaseApplication_creator(CVTApplication, "points");
+        geolio_register_BaseApplication_creator(CentroidalVoronoiTesselationApplication, "points");
+        geolio_register_BaseApplication_creator(RestrictedVoronoiDiagramApplication, "points");
         geolio_register_BaseApplication_creator(MeshComputeBorderApplication, "mesh");
         geolio_register_BaseApplication_creator(MeshConnectApplication, "mesh");
         geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "mesh", "optimization");

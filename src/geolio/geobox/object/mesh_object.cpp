@@ -2338,6 +2338,9 @@ namespace geolio::geobox
 
         set_attribute(attribute);
         painting_mode_ = PaintingMode::ATTRIBUTE;
+
+        autorange();
+
         return true;
     }
 

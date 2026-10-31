@@ -69,9 +69,7 @@ namespace geolio::geobox
                     // operation is what the user sees.
                     mesh_object->mesh_changed();
                     if (!mesh_object->display_attribute(kWeightAttribute))
-                        LOG::WARN(
-                            "The mesh has no `{}` attribute to display.",
-                            kWeightAttribute);
+                        LOG::WARN("The mesh has no `{}` attribute to display.", kWeightAttribute);
                 }
             }
             ImGui::EndDisabled();
