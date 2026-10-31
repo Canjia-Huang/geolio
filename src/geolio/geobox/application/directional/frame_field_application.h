@@ -26,8 +26,7 @@ namespace geolio::geobox
             const bool selection_changed = draw_mesh_selector(
                 selected_mesh_object_,
                 [](const GEO::Mesh& mesh) {
-                    return (mesh.facets.nb() > 0 && mesh.facets.are_simplices()) ||
-                           (mesh.cells.nb() > 0 && mesh.cells.are_simplices());
+                    return (mesh.facets.nb() > 0 && mesh.facets.are_simplices());
                 });
 
             ImGui::Separator();
@@ -42,13 +41,15 @@ namespace geolio::geobox
                 const auto& mesh = mesh_object->mesh();
 
                 {
-                    const bool has_facets = mesh.facets.nb() > 0;
-                    if (!has_facets)
-                        volumetric_ = true;
-                    const bool has_cells = mesh.cells.nb() > 0;
-                    if (!has_cells)
+                    // A volumetric field is extrapolated to the cells of the
+                    // mesh, which GeoGram reads as tetrahedra. A surface field is
+                    // computed on the facets of the mesh, which are the border of
+                    // a tetrahedral mesh that has none (see perform()).
+                    const bool has_tets =
+                        mesh.cells.nb() > 0 && mesh.cells.are_simplices();
+                    if (!has_tets)
                         volumetric_ = false;
-                    ImGui::BeginDisabled(!has_cells || !has_facets);
+                    ImGui::BeginDisabled(!has_tets);
                     {
                         ImGui::Checkbox("Volumetric", &volumetric_);
                     }
@@ -94,23 +95,68 @@ namespace geolio::geobox
         void perform(const GEO::Mesh& mesh) const {
             LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
+            // GeoGram computes the field from the facets of the mesh, and its
+            // solver works on their adjacency. The facets of a tetrahedral mesh
+            // whose border was never computed are built here, on a copy: the mesh
+            // of the object is const, and a copy is only made when there is
+            // something to complete.
+            GEO::Mesh completed;
+            const GEO::Mesh* surface = &mesh;
+            if (mesh.facets.nb() == 0 && mesh.cells.nb() != 0) {
+                completed.copy(mesh);
+                completed.cells.connect();
+                completed.cells.compute_borders();
+                completed.facets.connect();
+                surface = &completed;
+            }
+
+            // Without facets, the linear system of GeoGram's solver is empty and
+            // its solver aborts.
+            if (surface->facets.nb() == 0) {
+                LOG::ERROR(
+                    "The frame field is computed from the surface of the mesh, "
+                    "but this one has no facet.");
+                return;
+            }
+            if (volumetric_ &&
+                (surface->cells.nb() == 0 || !surface->cells.are_simplices())) {
+                LOG::ERROR(
+                    "A volumetric frame field is extrapolated to the cells of "
+                    "the mesh, but they are not all tetrahedra.");
+                return;
+            }
+
             FrameField frame_field;
             if (curvature_weighted_)
-                frame_field.create_curvature_directions(mesh, volumetric_, sharp_angle_threshold_, autoscale_);
+                frame_field.create_curvature_directions(*surface, volumetric_, sharp_angle_threshold_, autoscale_);
             else
-                frame_field.create_from_surface_mesh(mesh, volumetric_, sharp_angle_threshold_);
+                frame_field.create_from_surface_mesh(*surface, volumetric_, sharp_angle_threshold_);
 
             /* Build directional object */
 
             // A frame field holds three orthogonal directions per element.
             constexpr GEO::index_t NB_VECTORS_PER_ELEMENT = 3;
             const std::vector<double> vectors(frame_field.frames().begin(), frame_field.frames().end());
-            assert(vectors.size() == 3 * NB_VECTORS_PER_ELEMENT * (volumetric_ ? mesh.cells.nb() : mesh.facets.nb()));
+
+            // One frame per element: anything else would make the object read
+            // the vectors of another element, or past the end of the array.
+            const GEO::index_t nb_elements =
+                volumetric_ ? surface->cells.nb() : surface->facets.nb();
+            if (vectors.size() != 3 * NB_VECTORS_PER_ELEMENT * nb_elements) {
+                LOG::ERROR(
+                    "The computed field holds {} values, expected {} for {} "
+                    "elements of {} vectors.",
+                    vectors.size(),
+                    3 * NB_VECTORS_PER_ELEMENT * nb_elements,
+                    nb_elements,
+                    NB_VECTORS_PER_ELEMENT);
+                return;
+            }
 
             objects_.push_back(std::make_shared<DirectionalObject>(
                 "frame field",
                 "",
-                mesh,
+                *surface,
                 NB_VECTORS_PER_ELEMENT,
                 vectors,
                 volumetric_ ? GEO::MESH_CELLS : GEO::MESH_FACETS));
