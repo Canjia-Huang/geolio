@@ -16,7 +16,7 @@ namespace geolio::geobox
         explicit RestrictedVoronoiDiagramApplication(ApplicationObjects& objects)
             : BaseApplication("restricted Voronoi diagram", objects)
         {
-            menu_tooltip_ = "GEO::CentroidalVoronoiTesselation";
+            menu_tooltip_ = "GEO::RestrictedVoronoiDiagram";
         }
 
     protected:
@@ -49,6 +49,16 @@ namespace geolio::geobox
             if (base_surface_object != nullptr &&
                 samples_object != nullptr
                 ) {
+                {
+                    ImGui::Checkbox("Voronoi", &voronoi_or_delaunay_);
+                    ImGui::SameLine();
+                    bool Delaunay = !voronoi_or_delaunay_;
+                    if (ImGui::Checkbox("Delaunay", &Delaunay))
+                        voronoi_or_delaunay_ = !Delaunay;
+                }
+
+                ImGui::Separator();
+
                 auto& base_surface = base_surface_object->mesh();
                 const auto& samples = samples_object->mesh();
 
@@ -64,15 +74,15 @@ namespace geolio::geobox
                         ImGui::Checkbox("Volumetric", &volumetric_);
                     }
                     ImGui::EndDisabled();
-                }
 
-                if (volumetric_) {
-                    ImGui::Indent();
+                    if (volumetric_) {
+                        ImGui::Indent();
 
-                    ImGui::Checkbox("Cell border only", &cell_border_only_);
-                    ImGui::SetItemTooltip("in volumetric mode, computes only the surfacic borders of the volumetric cells (for visualization purpose)");
+                        ImGui::Checkbox("Cell border only", &cell_border_only_);
+                        ImGui::SetItemTooltip("in volumetric mode, computes only the surfacic borders of the volumetric cells (for visualization purpose)");
 
-                    ImGui::Unindent();
+                        ImGui::Unindent();
+                    }
                 }
 
                 ImGui::Separator();
@@ -101,14 +111,24 @@ namespace geolio::geobox
             delaunay->set_vertices(samples.vertices.nb(), samples.vertices.point_ptr(0));
             delaunay->compute();
 
-            GEO::Mesh mesh_out;
-            RVD->compute_RVD(mesh_out, 0, cell_border_only_);
+            if (voronoi_or_delaunay_) {
+                GEO::Mesh mesh_out;
+                RVD->compute_RVD(mesh_out, 0, cell_border_only_);
 
-            const auto RVD_object = std::make_shared<MeshObject>("RVD", "", mesh_out);
-            if (!RVD_object->display_attribute((volumetric_ && !cell_border_only_) ? kCellRegionAttribute : kFacetRegionAttribute))
-                LOG::WARN("The result RVD mesh has no `{}` attribute to display (something may wrong?).",
-                    (volumetric_ && !cell_border_only_) ? kCellRegionAttribute : kFacetRegionAttribute);
-            objects_.push_back(RVD_object);
+                const auto RVD_object = std::make_shared<MeshObject>("RVD", "", mesh_out);
+                if (!RVD_object->display_attribute((volumetric_ && !cell_border_only_) ? kCellRegionAttribute : kFacetRegionAttribute))
+                    LOG::WARN("The result RVD mesh has no `{}` attribute to display (something may wrong?).",
+                        (volumetric_ && !cell_border_only_) ? kCellRegionAttribute : kFacetRegionAttribute);
+                objects_.push_back(RVD_object);
+            }
+            else {
+                GEO::Mesh mesh_out;
+                RVD->compute_RDT(mesh_out);
+
+                const auto RDT_object = std::make_shared<MeshObject>("RDT", "", mesh_out);
+                objects_.push_back(RDT_object);
+            }
+
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
@@ -118,6 +138,8 @@ namespace geolio::geobox
 
         std::weak_ptr<MeshObject> base_surface_object_;
         std::weak_ptr<MeshObject> samples_object_;
+
+        bool voronoi_or_delaunay_ = true;
 
         bool volumetric_ = false;
         bool cell_border_only_ = false;
