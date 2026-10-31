@@ -18,6 +18,7 @@
 // which the cell-facet passes below reproduce (see GeoGram PR #386).
 #include <geogram_gfx/GLUP/GLUP_private.h>
 #include <geogram_gfx/basic/GL.h>
+#include <geolio/geobox/file_dialog.h>
 
 #include "geolio/common/log.h"
 
@@ -659,7 +660,7 @@ namespace geolio::geobox
                 }
 
                 char selected_filename[GEO::geo_imgui_string_length];
-                if (ImGui::FileDialog(
+                if (draw_file_dialog(
                         dialog_label.c_str(), selected_filename,
                         sizeof(selected_filename))) {
                     // Selecting a file again reloads it, so that an image

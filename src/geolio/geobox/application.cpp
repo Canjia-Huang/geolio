@@ -9,7 +9,7 @@
 #include "application.h"
 #include <algorithm>
 #include <cstring>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/file_system.h>
@@ -19,6 +19,7 @@
 #include "imoguizmo.hpp"
 #include "geolio/common/log.h"
 #include "geolio/common/parse_filepath.h"
+#include "file_dialog.h"
 #include "object/mesh_object.h"
 #include "colormap.h"
 #include <geolio/geobox/application/register_applications.h>
@@ -29,49 +30,55 @@ namespace geolio::geobox
 {
     namespace
     {
+        /** @brief Whether @p window is one of GeoGram's file dialogs. */
+        bool is_file_dialog(const ImGuiWindow* window) {
+            if (window == nullptr || window->Name == nullptr)
+                return false;
+            // The directory and file lists of the dialog are child windows
+            // named "<dialog name>/...": they are skipped below.
+            return std::strncmp(window->Name, "Load...##", 9) == 0 ||
+                   std::strncmp(window->Name, "Save as...##", 12) == 0;
+        }
+
         /**
-         * @brief Enlarges the file dialogs drawn during the current frame.
-         * @details GeoGram's FileDialog asks for a 400x415 window (times the UI
-         *          scaling), which is small on high-DPI screens. The size is
-         *          hard-coded in the GeoGram version GeoBox builds against, so
-         *          the windows are resized after they were drawn instead: a
-         *          dialog is enlarged only the first time it appears, and a
-         *          size the user chose afterwards is kept.
+         * @brief Sizes the file dialogs drawn during the current frame.
+         * @details GeoGram asks for a 400x415 window for them, times its layout
+         *          scaling (see draw_file_dialog()). They are given a size that
+         *          is comfortable for their two file lists, and the same on every
+         *          display -- shrunk only when the window of the application
+         *          cannot hold it. A dialog is sized during the first frames it
+         *          is shown, and not afterwards: GeoGram applies its own size on
+         *          the first one, and a size the user chose must be kept.
          */
-        void enlarge_file_dialogs() {
-            static std::unordered_set<ImGuiID> enlarged;
+        void resize_file_dialogs() {
+            // Frames a dialog is still being sized for, per dialog.
+            static std::unordered_map<ImGuiID, int> frames_left;
+            constexpr int FRAMES_TO_SIZE = 2;
+
+            constexpr float DIALOG_WIDTH = 640.0f;
+            constexpr float DIALOG_HEIGHT = 600.0f;
+            constexpr float DISPLAY_MARGIN = 80.0f;
+
             ImGuiContext& context = *ImGui::GetCurrentContext();
             const ImVec2 display = context.IO.DisplaySize;
-            // About 55% of the width and 65% of the height, with sensible
-            // bounds and always within the viewport.
-            const float desired_width = std::min(
-                std::clamp(0.55f * display.x, 640.0f, 900.0f),
-                std::max(320.0f, display.x - 40.0f));
-            const float desired_height = std::min(
-                std::clamp(0.65f * display.y, 500.0f, 750.0f),
-                std::max(240.0f, display.y - 60.0f));
+            const ImVec2 wanted(
+                std::min(DIALOG_WIDTH, display.x - DISPLAY_MARGIN),
+                std::min(DIALOG_HEIGHT, display.y - DISPLAY_MARGIN));
+
             for (ImGuiWindow* window : context.Windows) {
                 if (window == nullptr ||
-                    window->LastFrameActive != context.FrameCount) {
+                    window->LastFrameActive != context.FrameCount ||
+                    (window->Flags & ImGuiWindowFlags_ChildWindow) ||
+                    !is_file_dialog(window)) {
                     continue;
                 }
-                // The directory and file lists of the dialog are child windows
-                // named "<dialog name>/...": only resize the dialog itself.
-                if (window->Flags & ImGuiWindowFlags_ChildWindow)
+                auto it = frames_left.find(window->ID);
+                if (it == frames_left.end())
+                    it = frames_left.emplace(window->ID, FRAMES_TO_SIZE).first;
+                if (it->second <= 0)
                     continue;
-                if (window->Name == nullptr ||
-                    (std::strncmp(window->Name, "Load...##", 9) != 0 &&
-                     std::strncmp(window->Name, "Save as...##", 12) != 0)) {
-                    continue;
-                }
-                if (!enlarged.insert(window->ID).second)
-                    continue;
-                ImGui::SetWindowSize(
-                    window,
-                    ImVec2(
-                        std::max(window->SizeFull.x, desired_width),
-                        std::max(window->SizeFull.y, desired_height)),
-                    ImGuiCond_Always);
+                --it->second;
+                ImGui::SetWindowSize(window, wanted, ImGuiCond_Always);
             }
         }
     }
@@ -316,12 +323,13 @@ namespace geolio::geobox
 
         if (text_editor_visible_)
             text_editor_.draw();
-        if (ImGui::FileDialog("##load_dlg", filename_, GEO::geo_imgui_string_length))
+        if (draw_file_dialog(
+                "##load_dlg", filename_, GEO::geo_imgui_string_length))
             load(filename_);
 
         // The "Save as..." of an object (see draw_objects_properties()): the
         // dialog was opened on the object whose row was right-clicked.
-        if (ImGui::FileDialog(
+        if (draw_file_dialog(
                 "##object_save_dlg", filename_, GEO::geo_imgui_string_length)) {
             if (const auto object = object_to_save_.lock()) {
                 if (object->save(filename_))
@@ -360,9 +368,10 @@ namespace geolio::geobox
             object->draw_validity_dialog();
 
         // All the file dialogs of the frame (Load/Save menu entries, texture
-        // image pickers, ...) have been drawn at this point: give the ones
-        // that just appeared a comfortable size.
-        enlarge_file_dialogs();
+        // image pickers, ...) have been drawn at this point: give the ones that
+        // just appeared the size the other dialogs have (see
+        // resize_file_dialogs()).
+        resize_file_dialogs();
 
         // Redraw-on-demand: any real widget interaction (click, slider drag,
         // text edit) may have changed the render state, so schedule a full
