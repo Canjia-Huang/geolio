@@ -5,6 +5,7 @@
 #ifndef GEOLIO_FRAME_FIELD_APPLICATION_H
 #define GEOLIO_FRAME_FIELD_APPLICATION_H
 #include <geolio/geobox/application/base_application.h>
+#include <geolio/geobox/object/directional_object.h>
 #include <geolio/geobox/object/mesh_object.h>
 #include <geolio/common/log.h>
 #include <geolio/directional/frame_field.h>
@@ -75,13 +76,30 @@ namespace geolio::geobox
 
                 ImGui::Separator();
 
-                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)))
-                    perform(mesh);
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
+                    if (const auto object = perform(mesh); object != nullptr) {
+                        // A new field replaces the one of the previous run, so
+                        // that the fields do not pile up in the scene.
+                        if (const auto previous = object_.lock())
+                            std::erase(objects_, previous);
+                        objects_.push_back(object);
+                        object_ = object;
+                    }
+                }
                 }
             ImGui::EndDisabled();
         }
 
-        void perform(const GEO::Mesh& mesh) const {
+        /**
+         * @brief Computes the frame field of @p mesh and shows it as an object.
+         * @details The field is displayed by a DirectionalObject, which draws its
+         *          three vectors per element as edges starting at the center of
+         *          that element (see DirectionalObject).
+         * @param[in] mesh Mesh to compute the field on.
+         * @return The object that displays the field, or nullptr when the field
+         *         could not be computed.
+         */
+        std::shared_ptr<DirectionalObject> perform(const GEO::Mesh& mesh) {
             LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
             FrameField frame_field;
@@ -90,9 +108,25 @@ namespace geolio::geobox
             else
                 frame_field.create_from_surface_mesh(mesh, volumetric_, sharp_angle_threshold_);
 
-            // TODO: add object
+            // A frame field holds three orthogonal directions per element.
+            constexpr GEO::index_t NB_VECTORS_PER_ELEMENT = 3;
+            const std::vector<double> vectors(
+                frame_field.frames().begin(), frame_field.frames().end());
+            if (vectors.size() != 3 * NB_VECTORS_PER_ELEMENT *
+                                       (volumetric_ ? mesh.cells.nb() : mesh.facets.nb())) {
+                LOG::ERROR(
+                    "The computed field does not have one frame per element.");
+                return nullptr;
+            }
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
+            return std::make_shared<DirectionalObject>(
+                "frame field",
+                "",
+                mesh,
+                NB_VECTORS_PER_ELEMENT,
+                vectors,
+                volumetric_ ? GEO::MESH_CELLS : GEO::MESH_FACETS);
         }
 
         bool volumetric_ = false;
@@ -102,6 +136,10 @@ namespace geolio::geobox
 
         /** The mesh object picked with draw_mesh_selector(). */
         std::weak_ptr<MeshObject> selected_mesh_object_;
+
+        /** The object that displays the field of the last run, so that a new run
+         *  replaces it instead of piling the fields up in the scene. */
+        std::weak_ptr<DirectionalObject> object_;
     };
 }
 
