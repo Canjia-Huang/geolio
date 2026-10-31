@@ -287,10 +287,14 @@ namespace geolio::geobox
         // otherwise show what the mesh was before it.
         update_mesh_caches();
 
-        if (ImGui::Button("Reload", ImVec2(-1, 0)))
-            reload();
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("%s", filepath_.c_str());
+        ImGui::BeginDisabled(filepath_.empty());
+        {
+            if (ImGui::Button("Reload", ImVec2(-1, 0)))
+                reload();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", filepath_.c_str());
+        }
+        ImGui::EndDisabled();
 
         if (!data_valid_) {
             // The mesh was kept as it is (the validity dialog was answered with
