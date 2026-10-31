@@ -76,17 +76,9 @@ namespace geolio::geobox
 
                 ImGui::Separator();
 
-                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
-                    if (const auto object = perform(mesh); object != nullptr) {
-                        // A new field replaces the one of the previous run, so
-                        // that the fields do not pile up in the scene.
-                        if (const auto previous = object_.lock())
-                            std::erase(objects_, previous);
-                        objects_.push_back(object);
-                        object_ = object;
-                    }
-                }
-                }
+                if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)))
+                    perform(mesh);
+            }
             ImGui::EndDisabled();
         }
 
@@ -99,7 +91,7 @@ namespace geolio::geobox
          * @return The object that displays the field, or nullptr when the field
          *         could not be computed.
          */
-        std::shared_ptr<DirectionalObject> perform(const GEO::Mesh& mesh) {
+        void perform(const GEO::Mesh& mesh) const {
             LOG::TRACE("{}({})", application_name_, __FUNCTION__);
 
             FrameField frame_field;
@@ -108,25 +100,22 @@ namespace geolio::geobox
             else
                 frame_field.create_from_surface_mesh(mesh, volumetric_, sharp_angle_threshold_);
 
+            /* Build directional object */
+
             // A frame field holds three orthogonal directions per element.
             constexpr GEO::index_t NB_VECTORS_PER_ELEMENT = 3;
-            const std::vector<double> vectors(
-                frame_field.frames().begin(), frame_field.frames().end());
-            if (vectors.size() != 3 * NB_VECTORS_PER_ELEMENT *
-                                       (volumetric_ ? mesh.cells.nb() : mesh.facets.nb())) {
-                LOG::ERROR(
-                    "The computed field does not have one frame per element.");
-                return nullptr;
-            }
+            const std::vector<double> vectors(frame_field.frames().begin(), frame_field.frames().end());
+            assert(vectors.size() == 3 * NB_VECTORS_PER_ELEMENT * (volumetric_ ? mesh.cells.nb() : mesh.facets.nb()));
 
-            LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
-            return std::make_shared<DirectionalObject>(
+            objects_.push_back(std::make_shared<DirectionalObject>(
                 "frame field",
                 "",
                 mesh,
                 NB_VECTORS_PER_ELEMENT,
                 vectors,
-                volumetric_ ? GEO::MESH_CELLS : GEO::MESH_FACETS);
+                volumetric_ ? GEO::MESH_CELLS : GEO::MESH_FACETS));
+
+            LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
 
         bool volumetric_ = false;

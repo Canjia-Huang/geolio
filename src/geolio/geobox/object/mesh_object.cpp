@@ -925,40 +925,40 @@ namespace geolio::geobox
         // does: a solid color, a scalar attribute through a colormap, or an
         // image through texture coordinates (see PaintingMode).
         switch (painting_mode_) {
-        case PaintingMode::SOLID_COLOR:
-            mesh_gfx_.unset_scalar_attribute();
-            break;
-
-        case PaintingMode::ATTRIBUTE:
-            mesh_gfx_.set_scalar_attribute(
-                attribute_subelements_,
-                colormap_attribute_name(),
-                colormap_mapping_min(),
-                colormap_mapping_max(),
-                colormap_texture(),
-                1);
-            break;
-
-        case PaintingMode::TEXTURE: {
-            // A texture image is sampled through a 2D texture-coordinate
-            // attribute (e.g. "facet_corners.tex_coord" loaded from an OBJ
-            // file), exactly as Graphite's TEXTURE painting mode does.
-            const GLuint image_texture = texture();
-            const bool ready =
-                image_texture != 0 &&
-                tex_coord_subelements_ != GEO::MESH_NONE &&
-                attribute_dimension(
-                    tex_coord_subelements_, tex_coord_attribute_name_) == 2;
-            if (ready) {
-                mesh_gfx_.set_texturing(
-                    tex_coord_subelements_,
-                    tex_coord_attribute_name_for_drawing(),
-                    image_texture, 2, texture_repeat());
-            }
-            else
+            case PaintingMode::SOLID_COLOR:
                 mesh_gfx_.unset_scalar_attribute();
-            break;
-        }
+                break;
+
+            case PaintingMode::ATTRIBUTE:
+                mesh_gfx_.set_scalar_attribute(
+                    attribute_subelements_,
+                    colormap_attribute_name(),
+                    colormap_mapping_min(),
+                    colormap_mapping_max(),
+                    colormap_texture(),
+                    1);
+                break;
+
+            case PaintingMode::TEXTURE: {
+                // A texture image is sampled through a 2D texture-coordinate
+                // attribute (e.g. "facet_corners.tex_coord" loaded from an OBJ
+                // file), exactly as Graphite's TEXTURE painting mode does.
+                const GLuint image_texture = texture();
+                const bool ready =
+                    image_texture != 0 &&
+                    tex_coord_subelements_ != GEO::MESH_NONE &&
+                    attribute_dimension(
+                        tex_coord_subelements_, tex_coord_attribute_name_) == 2;
+                if (ready) {
+                    mesh_gfx_.set_texturing(
+                        tex_coord_subelements_,
+                        tex_coord_attribute_name_for_drawing(),
+                        image_texture, 2, texture_repeat());
+                }
+                else
+                    mesh_gfx_.unset_scalar_attribute();
+                break;
+            }
         }
 
         // Transparent texels are discarded instead of being drawn black: the

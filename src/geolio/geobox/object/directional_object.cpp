@@ -52,12 +52,24 @@ namespace geolio::geobox
                            : GEO::Geom::mesh_facet_center(mesh, e));
         }
 
-        // Size of the elements, to interpret the length of the vectors (see
-        // AxisStyle::length).
+        // The size of the mesh, to interpret the length of the vectors (see
+        // length()): it has to be measured before the visualization mesh is
+        // built, and on the mesh the field is defined on -- the visualization
+        // mesh is empty at this point, and only holds unit-long edges anyway.
         {
             double xyzmin[3] = {0.0, 0.0, 0.0};
             double xyzmax[3] = {0.0, 0.0, 0.0};
-            get_bbox(xyzmin, xyzmax);
+            bool first = true;
+            for (GEO::index_t v = 0; v < mesh.vertices.nb(); ++v) {
+                const double* p = mesh.vertices.point_ptr(v);
+                for (GEO::coord_index_t c = 0; c < 3; ++c) {
+                    if (first || p[c] < xyzmin[c])
+                        xyzmin[c] = p[c];
+                    if (first || p[c] > xyzmax[c])
+                        xyzmax[c] = p[c];
+                }
+                first = false;
+            }
             double d2 = 0.0;
             for (GEO::coord_index_t c = 0; c < 3; ++c) {
                 const double d = xyzmax[c] - xyzmin[c];
@@ -69,12 +81,8 @@ namespace geolio::geobox
 
         // One style per axis, the axes being told apart by their color.
         axis_styles_.resize(vectors_nb_per_element_);
-        for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
-            AxisStyle& style = axis_styles_[axis];
-            style.color = AXIS_COLORS[axis % NB_AXIS_COLORS];
-            style.length = 0.03f;
-            style.width = 0.3f;
-        }
+        for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis)
+            axis_styles_[axis].color = AXIS_COLORS[axis % NB_AXIS_COLORS];
 
         if (vectors_.size() != 3 * vectors_nb_per_element_ * nb) {
             LOG::ERROR(
@@ -107,12 +115,16 @@ namespace geolio::geobox
         // One edge per vector: from the center of the element, along the unit
         // direction of the vector. The length is applied while drawing (see
         // draw_scene()), so that it can be changed without touching the mesh.
+        // The vectors are stored element by element -- the N vectors of an
+        // element are 3*N consecutive coordinates -- while the edges are stored
+        // axis by axis, so that drawing an axis reads a contiguous range.
         const GEO::index_t nb_edges = nb * vectors_nb_per_element_;
         mesh_.vertices.create_vertices(2 * nb_edges);
         mesh_.edges.create_edges(nb_edges);
         for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
             for (GEO::index_t e = 0; e < nb; ++e) {
-                const double* v = &vectors_[3 * (axis * nb + e)];
+                const double* v =
+                    &vectors_[3 * (e * vectors_nb_per_element_ + axis)];
                 const double norm =
                     std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
                 const double inv_norm = norm > 0.0 ? 1.0 / norm : 0.0;
@@ -132,47 +144,71 @@ namespace geolio::geobox
         }
     }
 
+    double DirectionalObject::length_in_model_units(
+        ) const {
+        return static_cast<double>(length_) * elements_bbox_diagonal_;
+    }
+
     void DirectionalObject::draw_object_properties(
         ) {
+        ImGui::PushID(this);
+
         // The file the vectors were read from, if any (see
         // BaseObject::draw_object_properties()).
         BaseObject::draw_object_properties();
 
-        ImGui::PushID(this);
-
         ImGui::Text(
             "%u vectors per %s, %u %s",
-            unsigned(vectors_nb_per_element_),
+            static_cast<unsigned>(vectors_nb_per_element_),
             subelements_ == GEO::MESH_CELLS ? "cell" : "facet",
-            unsigned(nb_elements()),
+            static_cast<unsigned>(nb_elements()),
             subelements_ == GEO::MESH_CELLS ? "cells" : "facets");
 
-        // One block per axis: its color, the length of its vectors and the width
-        // of the lines they are drawn with.
+        ImGui::Separator();
+
+        // Whether the vectors are drawn in both directions: a, -a, b, -b, ...
+        // With it, the axes of a frame are lines through the center of their
+        // element instead of being oriented.
+        ImGui::Checkbox("draw opposite", &draw_opposite_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Draw each vector in both directions: a and -a, b and -b, ...");
+        }
+
+        // The length and the width are the same for all the axes.
+        ImGui::DragFloat("len.", &length_, 0.001f, 0.0f, 1e8, "%.3f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Length of the vectors, as a fraction of the diagonal of the mesh the field is defined on (%.3f).",
+                elements_bbox_diagonal_);
+        }
+
+        ImGui::DragFloat("wid.", &width_, 0.01f, 0.0f, 1e8, "%.2f");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Width of the lines the vectors are drawn with.");
+        }
+
+        ImGui::Separator();
+
+        // One row per axis: whether it is drawn, and its color.
         for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
-            ImGui::PushID(int(axis));
-            ImGui::Separator();
-            ImGui::Text("Axis %u", unsigned(axis));
+            ImGui::PushID(static_cast<int>(axis));
 
             AxisStyle& style = axis_styles_[axis];
-            ImGui::ColorEdit3WithPalette("color", style.color.data());
+            ImGui::Checkbox("##visible", &style.visible);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Show the vectors of this axis.");
+
+            ImGui::SameLine();
+
+            ImGui::ColorEdit3WithPalette("#color", style.color.data());
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Color of the vectors of this axis.");
 
-            ImGui::SetNextItemWidth(-10.0f);
-            ImGui::SliderFloat(
-                "length", &style.length, 0.0f, 0.5f, "%.3f");
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
-                    "Length of the vectors, as a fraction of the diagonal of the\n"
-                    "bounding box of the field (%.3f).",
-                    elements_bbox_diagonal_);
-            }
+            ImGui::SameLine();
 
-            ImGui::SetNextItemWidth(-10.0f);
-            ImGui::SliderFloat("width", &style.width, 0.1f, 2.0f, "%.1f");
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Width of the lines the vectors are drawn with.");
+            ImGui::Text("Axis %u", static_cast<unsigned>(axis));
 
             ImGui::PopID();
         }
@@ -195,13 +231,20 @@ namespace geolio::geobox
         glupDisable(GLUP_LIGHTING);
         glupEnable(GLUP_DRAW_MESH);
 
+        const double length = length_in_model_units();
+
         for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
             const AxisStyle& style = axis_styles_[axis];
-            const double length =
-                static_cast<double>(style.length) * elements_bbox_diagonal_;
+            if (!style.visible)
+                continue;
 
-            glupSetColor3fv(GLUP_FRONT_COLOR, style.color.data());
-            glupSetMeshWidth(static_cast<GEO::index_t>(style.width * 10.0f));
+            // The width of the lines comes from the mesh width, which GLUP only
+            // applies while drawing the mesh: the lines are then painted with the
+            // *mesh* color, so both colors are set -- setting the front color
+            // only left the axes in the color of whatever was drawn before.
+            glupSetColor4fv(GLUP_FRONT_COLOR, style.color.data());
+            glupSetColor4fv(GLUP_MESH_COLOR, style.color.data());
+            glupSetMeshWidth(static_cast<GEO::index_t>(width_ * 10.0f));
 
             glupBegin(GLUP_LINES);
             for (GEO::index_t e = 0; e < nb; ++e) {
@@ -219,6 +262,17 @@ namespace geolio::geobox
                 };
                 glupVertex3dv(start);
                 glupVertex3dv(end);
+                if (draw_opposite_) {
+                    // The same vector, from the center the other way: the line
+                    // drawn for one axis goes through the center.
+                    const double opposite[3] = {
+                        2.0 * start[0] - end[0],
+                        2.0 * start[1] - end[1],
+                        2.0 * start[2] - end[2]
+                    };
+                    glupVertex3dv(start);
+                    glupVertex3dv(opposite);
+                }
             }
             glupEnd();
         }
@@ -237,33 +291,38 @@ namespace geolio::geobox
         if (mesh_.vertices.nb() == 0)
             return;
 
-        // The extent of the vectors, with the length they are displayed with.
-        double longest = 0.0;
-        for (const AxisStyle& style : axis_styles_)
-            longest = std::max(longest, double(style.length));
-        longest *= elements_bbox_diagonal_;
+        // The extent of the vectors that are displayed, with the length they are
+        // displayed with. With draw_opposite() they also extend on the other
+        // side of the center of their element.
+        const double length = length_in_model_units();
+        const int nb_sides = draw_opposite_ ? 2 : 1;
 
         bool first = true;
         const GEO::index_t nb = nb_elements();
         for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
+            if (!axis_styles_[axis].visible)
+                continue;
             for (GEO::index_t e = 0; e < nb; ++e) {
                 const GEO::index_t edge = axis * nb + e;
                 const double* start = mesh_.vertices.point_ptr(
                     mesh_.edges.vertex(edge, 0));
                 const double* direction = mesh_.vertices.point_ptr(
                     mesh_.edges.vertex(edge, 1));
-                const double end[3] = {
-                    start[0] + longest * (direction[0] - start[0]),
-                    start[1] + longest * (direction[1] - start[1]),
-                    start[2] + longest * (direction[2] - start[2])
-                };
-                for (GEO::coord_index_t c = 0; c < 3; ++c) {
-                    const double lo = std::min(start[c], end[c]);
-                    const double hi = std::max(start[c], end[c]);
-                    if (first || lo < xyzmin[c])
-                        xyzmin[c] = lo;
-                    if (first || hi > xyzmax[c])
-                        xyzmax[c] = hi;
+                for (int side = 0; side < nb_sides; ++side) {
+                    const double sign = side == 0 ? 1.0 : -1.0;
+                    const double end[3] = {
+                        start[0] + sign * length * (direction[0] - start[0]),
+                        start[1] + sign * length * (direction[1] - start[1]),
+                        start[2] + sign * length * (direction[2] - start[2])
+                    };
+                    for (GEO::coord_index_t c = 0; c < 3; ++c) {
+                        const double lo = std::min(start[c], end[c]);
+                        const double hi = std::max(start[c], end[c]);
+                        if (first || lo < xyzmin[c])
+                            xyzmin[c] = lo;
+                        if (first || hi > xyzmax[c])
+                            xyzmax[c] = hi;
+                    }
                 }
                 first = false;
             }

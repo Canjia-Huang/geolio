@@ -22,10 +22,12 @@ namespace geolio::geobox
      *          @c 3*N*e, i.e. N consecutive vectors.
      *          The object keeps a mesh of its own for the visualization, whose
      *          edges are the vectors: one edge per vector, from the center of its
-     *          element along the direction of the vector, unit long. The length
-     *          and the width of the edges, and their color, are per axis of the
-     *          field (see AxisStyle), so that the three vectors of a frame can be
-     *          told apart.
+     *          element along the direction of the vector, unit long. All the axes
+     *          are drawn with the same length and the same width (see length() and
+     *          width()); each of them has its own color and can be hidden (see
+     *          AxisStyle), so that the three vectors of a frame can be told
+     *          apart. draw_opposite() draws every vector in both directions, as a
+     *          line through the center of its element.
      *          The vectors are read from, and written to, a .fra file: the
      *          format only stores the vectors, so reload() keeps the geometry the
      *          object was created with.
@@ -36,18 +38,15 @@ namespace geolio::geobox
          * @brief How one axis of the field is drawn.
          * @details An axis is one of the @c vectors_nb_per_element vectors every
          *          element carries, i.e. one of the directions of the frames.
+         *          The length and the width of the lines are the same for all
+         *          the axes (see length() and width()).
          */
         struct AxisStyle {
+            /** Whether the axis is drawn at all. */
+            bool visible = true;
+
             /** Color of the axis. */
             GEO::vec4f color = GEO::vec4f(1.0f, 0.0f, 0.0f, 1.0f);
-
-            /** Length of the vectors, as a fraction of the diagonal of the
-             *  bounding box of the field (1 would make them as long as it). */
-            float length = 0.03f;
-
-            /** Width of the lines the vectors are drawn with, like the sliders
-             *  of the mesh wireframes (0.1 .. 2). */
-            float width = 0.3f;
         };
 
         /**
@@ -128,16 +127,51 @@ namespace geolio::geobox
             return axis_styles_[axis];
         }
 
+        /** @brief Length of the vectors, as a fraction of the diagonal of the
+         *  bounding box of the mesh the field is defined on (1 would make them
+         *  as long as it). */
+        [[nodiscard]] float length() const { return length_; }
+
+        /** @brief Diagonal of the bounding box of the mesh the field is defined
+         *  on, i.e. what length() is a fraction of. */
+        [[nodiscard]] float bbox_diagonal() const {
+            return elements_bbox_diagonal_;
+        }
+
+        /** @brief Length of the vectors (see length()). */
+        void set_length(const float length) { length_ = length; }
+
+        /** @brief Width of the lines the vectors are drawn with, like the
+         *  sliders of the mesh wireframes (0.1 .. 2). */
+        [[nodiscard]] float width() const { return width_; }
+
+        /** @brief Width of the lines the vectors are drawn with (see width()). */
+        void set_width(const float width) { width_ = width; }
+
+        /** @brief Whether the opposite of every vector is drawn too, i.e. the
+         *  axes are drawn as lines through the center rather than as arrows. */
+        [[nodiscard]] bool draw_opposite() const { return draw_opposite_; }
+
+        /** @brief Whether the opposite of every vector is drawn (see
+         *  draw_opposite()). */
+        void set_draw_opposite(const bool draw_opposite) {
+            draw_opposite_ = draw_opposite;
+        }
+
     protected:
         /**
          * @brief Rebuilds the visualization mesh from the centers and the
          *        vectors.
          * @details One edge per vector: from the center of its element to that
-         *          center plus the unit direction of the vector. The axis length
-         *          is applied while drawing, so that the length can be changed
-         *          without rebuilding the mesh.
+         *          center plus the unit direction of the vector. The length is
+         *          applied while drawing, so that it can be changed without
+         *          rebuilding the mesh.
          */
         void build_visualization_mesh();
+
+        /** @brief Length of the vectors in model coordinates, i.e. length()
+         *  times the diagonal of the mesh they are defined on. */
+        [[nodiscard]] double length_in_model_units() const;
 
         /** Centers of the elements the field is defined on. */
         std::vector<GEO::vec3> centers_;
@@ -157,9 +191,18 @@ namespace geolio::geobox
         /** The visualization mesh: one edge per vector. */
         GEO::Mesh mesh_;
 
-        /** Diagonal of the bounding box of the elements the field is defined on,
-         *  used to interpret the axis lengths (see AxisStyle::length). */
+        /** Diagonal of the bounding box of the mesh the field is defined on,
+         *  used to interpret the length of the vectors (see length()). */
         float elements_bbox_diagonal_ = 1.0f;
+
+        /** Length of the vectors, as a fraction of elements_bbox_diagonal_. */
+        float length_ = 0.03f;
+
+        /** Width of the lines the vectors are drawn with. */
+        float width_ = 0.3f;
+
+        /** Whether the opposite of every vector is drawn as well. */
+        bool draw_opposite_ = true;
     };
 }
 

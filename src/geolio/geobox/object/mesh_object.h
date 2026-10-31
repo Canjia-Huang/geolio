@@ -73,7 +73,7 @@ namespace geolio::geobox
         /**
          * @brief Reloads the mesh object from its source representation.
          */
-        void reload();
+        void reload() override;
 
         /**
          * @brief Returns the bounding box of the mesh in world coordinates.
