@@ -304,7 +304,7 @@ namespace geolio::geobox
             }
         }
 
-        if (ImGui::CollapsingHeader("Info")) {
+        if (ImGui::CollapsingHeader("Info", ImGuiTreeNodeFlags_DefaultOpen)) {
             /* == Element count ==================================================================================== */
             // One row per element kind (vertices, edges, facets, cells), with
             // the kinds the mesh does not contain left out, and indented rows

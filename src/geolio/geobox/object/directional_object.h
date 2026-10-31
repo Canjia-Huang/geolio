@@ -127,6 +127,16 @@ namespace geolio::geobox
             return mesh_object_;
         }
 
+        /**
+         * @brief Whether the field is attached to a mesh it can be drawn on.
+         * @details False while no mesh object was picked, and after the one it
+         *          was attached to was removed from the scene: the scene owns the
+         *          objects, so an attachment never keeps a mesh alive. A field
+         *          that is not attached is not drawn, and is not part of the
+         *          bounding box of the scene either.
+         */
+        [[nodiscard]] bool attached() const;
+
         /** @brief The elements of the mesh the frames are attached to: one of
          *  GEO::MESH_VERTICES, GEO::MESH_FACETS and GEO::MESH_CELLS, or
          *  GEO::MESH_NONE while the field is not attached. */

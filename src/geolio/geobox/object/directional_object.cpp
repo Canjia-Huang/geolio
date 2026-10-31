@@ -91,6 +91,13 @@ namespace geolio::geobox
         return kinds;
     }
 
+    bool DirectionalObject::attached(
+        ) const {
+        return subelements_ != GEO::MESH_NONE &&
+               !centers_.empty() &&
+               !mesh_object_.expired();
+    }
+
     bool DirectionalObject::attach_to(
         const std::shared_ptr<MeshObject>& mesh_object,
         const GEO::MeshElementsFlags subelements
@@ -250,6 +257,9 @@ namespace geolio::geobox
         // BaseObject::draw_object_properties()).
         BaseObject::draw_object_properties();
 
+        // The mesh object pickers are the way to give the field something to be
+        // drawn on: they are open by default while nothing is attached, and
+        // folded away once the field is drawn.
         if (ImGui::CollapsingHeader("Info", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text(
                 "%u vectors per element, %u frames",
@@ -263,7 +273,10 @@ namespace geolio::geobox
             draw_attachment_pickers();
         }
 
-        if (ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // Nothing is drawn while the field is not attached, so there is nothing
+        // to style either.
+        if (attached() &&
+            ImGui::CollapsingHeader("Render", ImGuiTreeNodeFlags_DefaultOpen)) {
             // Whether the vectors are drawn in both directions: a, -a, b, -b, ...
             // With it, the axes of a frame are lines through the center of their
             // element instead of being oriented.
@@ -417,7 +430,9 @@ namespace geolio::geobox
         ) {
         (void)lighting; // the vectors are lines: they are not lit, as the
                         // wireframes of the mesh objects
-        if (!renderable() || mesh_.edges.nb() == 0)
+        // The frames sit on the elements of a mesh object: without one (or once
+        // it was removed from the scene) there is nowhere to draw them.
+        if (!attached() || !renderable() || mesh_.edges.nb() == 0)
             return;
 
         const GEO::index_t nb = nb_elements();
@@ -484,7 +499,7 @@ namespace geolio::geobox
             xyzmin[c] = 0.0;
             xyzmax[c] = 0.0;
         }
-        if (mesh_.vertices.nb() == 0)
+        if (!attached() || mesh_.vertices.nb() == 0)
             return;
 
         // The extent of the vectors that are displayed, with the length they are
