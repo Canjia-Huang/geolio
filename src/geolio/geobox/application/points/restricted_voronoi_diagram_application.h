@@ -52,6 +52,31 @@ namespace geolio::geobox
                 auto& base_surface = base_surface_object->mesh();
                 const auto& samples = samples_object->mesh();
 
+                {
+                    const bool has_facets = base_surface.facets.nb() > 0;
+                    if (!has_facets)
+                        volumetric_ = true;
+                    const bool has_cells = base_surface.cells.nb() > 0;
+                    if (!has_cells)
+                        volumetric_ = false;
+                    ImGui::BeginDisabled(!has_cells || !has_facets);
+                    {
+                        ImGui::Checkbox("Volumetric", &volumetric_);
+                    }
+                    ImGui::EndDisabled();
+                }
+
+                if (volumetric_) {
+                    ImGui::Indent();
+
+                    ImGui::Checkbox("Cell border only", &cell_border_only_);
+                    ImGui::SetItemTooltip("in volumetric mode, computes only the surfacic borders of the volumetric cells (for visualization purpose)");
+
+                    ImGui::Unindent();
+                }
+
+                ImGui::Separator();
+
                 if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f))) {
                     perform(base_surface, samples);
 
@@ -70,25 +95,32 @@ namespace geolio::geobox
             const GEO::SmartPointer delaunay = new GEO::PeriodicDelaunay3d(false);
             const auto& RVD = GEO::RestrictedVoronoiDiagram::create(delaunay, &base_surface);
 
+            RVD->set_volumetric(volumetric_);
+
             delaunay->set_keeps_infinite(false);
             delaunay->set_vertices(samples.vertices.nb(), samples.vertices.point_ptr(0));
             delaunay->compute();
 
             GEO::Mesh mesh_out;
-            RVD->compute_RVD(mesh_out, 0);
+            RVD->compute_RVD(mesh_out, 0, cell_border_only_);
 
             const auto RVD_object = std::make_shared<MeshObject>("RVD", "", mesh_out);
-            if (!RVD_object->display_attribute(kRegionAttribute))
-                LOG::WARN("The result RVD mesh has no `{}` attribute to display (something may wrong?).", kRegionAttribute);
+            if (!RVD_object->display_attribute((volumetric_ && !cell_border_only_) ? kCellRegionAttribute : kFacetRegionAttribute))
+                LOG::WARN("The result RVD mesh has no `{}` attribute to display (something may wrong?).",
+                    (volumetric_ && !cell_border_only_) ? kCellRegionAttribute : kFacetRegionAttribute);
             objects_.push_back(RVD_object);
 
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
 
-        static constexpr auto kRegionAttribute = "facets.region";
+        static constexpr auto kFacetRegionAttribute = "facets.region";
+        static constexpr auto kCellRegionAttribute = "cells.region";
 
         std::weak_ptr<MeshObject> base_surface_object_;
         std::weak_ptr<MeshObject> samples_object_;
+
+        bool volumetric_ = false;
+        bool cell_border_only_ = false;
     };
 }
 
