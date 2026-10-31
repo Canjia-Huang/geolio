@@ -52,17 +52,40 @@ namespace geolio::geobox
 
             const auto directional_object = selected_directional_object_.lock();
             const auto samples_object = selected_samples_object_.lock();
-            const bool ready =
-                directional_object != nullptr && samples_object != nullptr;
+            const bool ready = directional_object != nullptr && samples_object != nullptr;
 
             // Without a field and its seeds there is nothing to trace: the
             // parameters and the button are non-interactive.
             ImGui::BeginDisabled(!ready);
             {
-                ImGui::SetNextItemWidth(slider_width_);
-                ImGui::DragInt("iterations", &iterations_nb_, 1.0f, 0, 1000000);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Number of tracing steps of each seed.");
+                {
+                    ImGui::SetNextItemWidth(slider_width_);
+                    ImGui::DragInt("Iterations", &iterations_nb_, 1.0f, 0, 1000000);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Number of tracing steps of each seed.");
+                }
+
+                ImGui::Separator();
+
+                {
+                    ImGui::Checkbox("Smooth", &enable_smooth_);
+                    if (enable_smooth_) {
+                        ImGui::PushID("smooth");
+                        ImGui::Indent();
+
+                        ImGui::SetNextItemWidth(slider_width_);
+                        ImGui::DragInt("Iterations", &smooth_iterations_nb_, 1.0f, 1, 1e8);
+
+                        ImGui::SetNextItemWidth(slider_width_);
+                        ImGui::DragFloat("Damping", &smooth_damping_, 0.01f, 0, 1, "%.2f");
+
+                        if (directional_object->subelements() == GEO::MESH_FACETS)
+                            ImGui::Checkbox("Constraint on surf.", &smooth_constraint_on_surface_);
+
+                        ImGui::Unindent();
+                        ImGui::PopID();
+                    }
+                }
 
                 if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)) && ready)
                     perform(*directional_object, samples_object->mesh());
@@ -115,7 +138,7 @@ namespace geolio::geobox
             // traces on; a field attached to the vertices is not something it
             // can follow yet (see
             // StreamlineTracer::set_per_vertex_directions()).
-            std::unique_ptr<StreamlineTracer> tracer;
+            std::shared_ptr<StreamlineTracer> tracer;
             if (subelements == GEO::MESH_CELLS) {
                 if (!base_surface.cells.are_simplices()) {
                     LOG::ERROR(
@@ -124,7 +147,7 @@ namespace geolio::geobox
                         mesh_object->name());
                     return;
                 }
-                auto volumetric_tracer = std::make_unique<StreamlineVolumetricTracer>(base_surface);
+                auto volumetric_tracer = std::make_shared<StreamlineVolumetricTracer>(base_surface);
                 volumetric_tracer->set_per_cell_directions(vectors_nb_per_element, directional.vectors().data());
                 tracer = std::move(volumetric_tracer);
             }
@@ -136,7 +159,7 @@ namespace geolio::geobox
                         mesh_object->name());
                     return;
                 }
-                auto surficial_tracer = std::make_unique<StreamlineSurficialTracer>(base_surface);
+                auto surficial_tracer = std::make_shared<StreamlineSurficialTracer>(base_surface);
                 surficial_tracer->set_per_facet_directions(vectors_nb_per_element, directional.vectors().data());
                 tracer = std::move(surficial_tracer);
             }
@@ -153,6 +176,17 @@ namespace geolio::geobox
             tracer->set_initial_points(
                 samples.vertices.nb(), samples.vertices.point_ptr(0));
             tracer->trace(static_cast<GEO::index_t>(iterations_nb_));
+
+            if (enable_smooth_) {
+                auto surficial_tracer = std::dynamic_pointer_cast<StreamlineSurficialTracer>(tracer);
+                if (surficial_tracer != nullptr)
+                    surficial_tracer->smooth(smooth_iterations_nb_, smooth_damping_, smooth_constraint_on_surface_);
+                else {
+                    auto volumetric_tracer = std::dynamic_pointer_cast<StreamlineVolumetricTracer>(tracer);
+                    assert(volumetric_tracer != nullptr);
+                    volumetric_tracer->smooth(smooth_iterations_nb_, smooth_damping_);
+                }
+            }
 
             // The traced lines: a mesh whose edges are the segments of the
             // streamlines, with the tracing step of their endpoints and the
@@ -182,8 +216,12 @@ namespace geolio::geobox
         /// The mesh whose vertices are the seeds (see draw_mesh_selector()).
         std::weak_ptr<MeshObject> selected_samples_object_;
 
-        /// Number of tracing steps of each seed.
         int iterations_nb_ = 100;
+
+        bool enable_smooth_ = false;
+        int smooth_iterations_nb_ = 3;
+        float smooth_damping_ = 0.5;
+        bool smooth_constraint_on_surface_ = true;
     };
 }
 
