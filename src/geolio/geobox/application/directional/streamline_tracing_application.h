@@ -52,12 +52,7 @@ namespace geolio::geobox
 
             const auto directional_object = selected_directional_object_.lock();
             const auto samples_object = selected_samples_object_.lock();
-            const bool ready = directional_object != nullptr && samples_object != nullptr;
-
-            // Without a field and its seeds there is nothing to trace: the
-            // parameters and the button are non-interactive.
-            ImGui::BeginDisabled(!ready);
-            {
+            if (const bool ready = directional_object != nullptr && samples_object != nullptr) {
                 {
                     ImGui::SetNextItemWidth(slider_width_);
                     ImGui::DragInt("Iterations", &iterations_nb_, 1.0f, 0, 1000000);
@@ -87,11 +82,11 @@ namespace geolio::geobox
                     }
                 }
 
+                ImGui::Separator();
+
                 if (ImGui::Button("Perform", ImVec2(-1.0f, 0.0f)) && ready)
                     perform(*directional_object, samples_object->mesh());
             }
-            ImGui::EndDisabled();
-
         }
 
         /**
