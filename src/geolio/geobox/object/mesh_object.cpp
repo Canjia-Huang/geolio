@@ -287,14 +287,14 @@ namespace geolio::geobox
         // otherwise show what the mesh was before it.
         update_mesh_caches();
 
-        ImGui::BeginDisabled(filepath_.empty());
-        {
+        if (std::filesystem::exists(filepath_)) {
             if (ImGui::Button("Reload", ImVec2(-1, 0)))
                 reload();
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("%s", filepath_.c_str());
+
+            ImGui::Separator();
         }
-        ImGui::EndDisabled();
 
         if (!data_valid_) {
             // The mesh was kept as it is (the validity dialog was answered with
@@ -310,7 +310,6 @@ namespace geolio::geobox
             }
         }
 
-        ImGui::Separator();
         if (ImGui::CollapsingHeader("Info")) {
             /* == Element count ==================================================================================== */
             // One row per element kind (vertices, edges, facets, cells), with
