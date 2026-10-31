@@ -30,7 +30,7 @@ namespace geolio::geobox
             // One picker per mesh this application works on: each keeps its own
             // selection (and its own label, which also names the ImGui item).
             draw_mesh_selector(
-                base_surface_object_,
+                selected_base_surface_object_,
                 [](const GEO::Mesh& mesh) {
                     return (mesh.facets.nb() > 0 && mesh.facets.are_simplices()) ||
                            (mesh.cells.nb() > 0 && mesh.cells.are_simplices());
@@ -38,7 +38,7 @@ namespace geolio::geobox
                 "Base surface");
 
             draw_mesh_selector(
-                samples_object_,
+                selected_samples_object_,
                 [](const GEO::Mesh& mesh) {
                     return mesh.vertices.nb() > 0;
                 },
@@ -49,13 +49,13 @@ namespace geolio::geobox
             // When no mesh object is selected, everything below the picker
             // (the parameters and the button that runs the operation) is
             // non-interactive.
-            ImGui::BeginDisabled(base_surface_object_.expired() || samples_object_.expired());
-            const auto base_surface_object = base_surface_object_.lock();
-            const auto samples_object = samples_object_.lock();
+            ImGui::BeginDisabled(selected_base_surface_object_.expired() || selected_samples_object_.expired());
+            const auto base_surface_object = selected_base_surface_object_.lock();
+            const auto samples_object = selected_samples_object_.lock();
             if (base_surface_object != nullptr &&
                 samples_object != nullptr
                 ) {
-                if (same_owner(base_surface_object_, samples_object_)) {
+                if (same_owner(selected_base_surface_object_, selected_samples_object_)) {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.2f, 1.0f));
                     ImGui::TextWrapped("Warning: The configured base surface and samples are the same object; unexpected behavior may occur!");
                     ImGui::PopStyleColor();
@@ -180,8 +180,8 @@ namespace geolio::geobox
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
 
-        std::weak_ptr<MeshObject> base_surface_object_;
-        std::weak_ptr<MeshObject> samples_object_;
+        std::weak_ptr<MeshObject> selected_base_surface_object_;
+        std::weak_ptr<MeshObject> selected_samples_object_;
 
         MeshObject::AttributeInfo weight_attribute_;
 
