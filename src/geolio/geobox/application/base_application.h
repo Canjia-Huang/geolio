@@ -323,6 +323,11 @@ namespace geolio::geobox
                 for (std::size_t i = 0; i < mesh_objects.size(); ++i) {
                     const bool is_selected =
                         (current_index == static_cast<int>(i));
+                    // The name is the label of the item, and two objects can
+                    // share it: the item is identified by the unique id of the
+                    // object, or the items could not be told apart (see
+                    // BaseObject::unique_id()).
+                    ImGui::PushID(mesh_objects[i]->unique_id().c_str());
                     if (ImGui::Selectable(
                             mesh_objects[i]->name().c_str(), is_selected)) {
                         selection = mesh_objects[i];
@@ -330,6 +335,7 @@ namespace geolio::geobox
                     }
                     if (is_selected)
                         ImGui::SetItemDefaultFocus();
+                    ImGui::PopID();
                 }
                 ImGui::EndCombo();
             }
@@ -428,13 +434,18 @@ namespace geolio::geobox
                 for (std::size_t i = 0; i < directional_objects.size(); ++i) {
                     const bool is_selected =
                         (current_index == static_cast<int>(i));
+                    // The name is the label, the unique id is the identity (see
+                    // BaseObject::unique_id()): two fields can share the name.
+                    ImGui::PushID(directional_objects[i]->unique_id().c_str());
                     if (ImGui::Selectable(
-                            directional_objects[i]->name().c_str(), is_selected)) {
+                            directional_objects[i]->name().c_str(),
+                            is_selected)) {
                         selection = directional_objects[i];
                         changed = true;
                     }
                     if (is_selected)
                         ImGui::SetItemDefaultFocus();
+                    ImGui::PopID();
                 }
                 ImGui::EndCombo();
             }

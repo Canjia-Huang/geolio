@@ -45,6 +45,19 @@ namespace geolio::geobox
         [[nodiscard]] const std::string& name() const { return name_; }
 
         /**
+         * @brief Returns the unique identifier of the object.
+         * @details Generated when the object is constructed, so two objects can
+         *          never share it, even when they have the same name -- which
+         *          happens as soon as an operation is run twice, or the same file
+         *          is loaded twice. It is what the GUI uses to identify an object
+         *          (see BaseApplication::draw_mesh_selector() and
+         *          GeoBoxApplication::draw_objects(): ImGui items labelled with
+         *          the name alone could not be told apart).
+         * @return Reference to the identifier, a 22 character random string.
+         */
+        [[nodiscard]] const std::string& unique_id() const { return unique_id_; }
+
+        /**
          * @brief Returns the path of the file the object was read from.
          * @return The path, or an empty string when the object was not read
          *         from a file (e.g. the result of an operation).

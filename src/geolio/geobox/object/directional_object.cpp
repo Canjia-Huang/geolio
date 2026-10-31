@@ -388,7 +388,15 @@ namespace geolio::geobox
         if (ImGui::BeginCombo("##attach_mesh", preview.c_str())) {
             for (const auto& candidate : candidates) {
                 const bool is_selected = candidate == selected;
-                if (ImGui::Selectable(candidate->name().c_str(), is_selected)) {
+                // Two mesh objects can share their name: the item is identified
+                // by the unique id of the object (see BaseObject::unique_id()).
+                ImGui::PushID(candidate->unique_id().c_str());
+                const bool picked =
+                    ImGui::Selectable(candidate->name().c_str(), is_selected);
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+                ImGui::PopID();
+                if (picked) {
                     // Keep the kind of element of the previous mesh when it
                     // still works, so switching between two meshes of the same
                     // kind does not lose the choice.
@@ -399,8 +407,6 @@ namespace geolio::geobox
                         current != kinds.end() ? subelements_ : kinds.front());
                     selected = candidate;
                 }
-                if (is_selected)
-                    ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
         }
