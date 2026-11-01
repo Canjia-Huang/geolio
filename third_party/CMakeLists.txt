@@ -96,6 +96,31 @@ target_include_directories(${CURRENT_LIB_NAME} INTERFACE
         "${GEOGRAM_INCLUDE_DIR}/geogram_gfx/third_party/imgui"
 )
 
+# Pin the configuration of geogram's bundled Dear ImGui to the one geogram_gfx
+# itself is built with. geogram_gfx/basic/common.h defines
+# IMGUI_DISABLE_OBSOLETE_FUNCTIONS and is included by every geogram_gfx header,
+# so geogram's imgui is always compiled with the pre-1.92 compatibility
+# declarations removed. geolio, however, includes <imgui.h> directly in its own
+# public headers (geobox/object/base_object.h,
+# geobox/application/base_application.h, ...). In a translation unit that
+# includes one of them before any geogram header, imgui.h is parsed while the
+# macro is still undefined, so it emits its obsolete inline shim
+#     inline void PushFont(ImFont* font) { PushFont(font, font->LegacySize); }
+# and the later <geogram_gfx/imgui_ext/imgui_ext.h> declares the very same
+#     void GEOGRAM_GFX_API PushFont(ImFont* font);
+# On Windows GEOGRAM_GFX_API expands to __declspec(dllimport/dllexport), and
+# MSVC rejects applying a DLL linkage attribute to an already-defined inline
+# function with
+#     error C2375: 'ImGui::PushFont': redefinition; different linkage
+# Clang only attaches a visibility attribute there and accepts the
+# redeclaration, which is why the mismatch only breaks the Windows build.
+# Defining the macro next to the include directory that exposes <imgui.h> keeps
+# every geolio target (and every consumer linking geolio::third_party) on the
+# same imgui configuration as geogram_gfx, whatever the include order is.
+# IMGUI_DISABLE_OBSOLETE_KEYIO is not added: the obsolete key I/O API was
+# removed from imgui and that macro no longer exists in the bundled version.
+target_compile_definitions(${CURRENT_LIB_NAME} INTERFACE IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+
 target_link_libraries(${CURRENT_LIB_NAME} INTERFACE
         Geogram::geogram
         Geogram::geogram_gfx
