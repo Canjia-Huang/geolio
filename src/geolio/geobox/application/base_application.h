@@ -13,6 +13,7 @@
 #include <geogram_gfx/third_party/imgui/imgui.h>
 #include <geolio/common/utils.h>
 #include <geolio/geobox/object/base_object.h>
+#include <geolio/geobox/object/directional_object.h>
 #include <geolio/geobox/object/mesh_object.h>
 
 namespace geolio::geobox
@@ -22,10 +23,6 @@ namespace geolio::geobox
      *        not specify any menu path (i.e. do not say where they belong).
      */
     inline constexpr auto UNGROUPED_APPLICATIONS_MENU_NAME = "ungrouped";
-
-    /** Objects container shared by the main application and its
-     *  sub-applications. */
-    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
 
     /**
      * @brief Base class for plugin-style sub-applications (e.g. mesh apps)
@@ -158,7 +155,7 @@ namespace geolio::geobox
                 ImGuiCond_FirstUseEver,
                 ImVec2(0.5f, 0.5f)
             );
-            ImGui::SetNextWindowBgAlpha(0.6f);
+            ImGui::SetNextWindowBgAlpha(0.9f);
             if (ImGui::Begin(application_name_.c_str(), &window_visible_)) {
                 // Width shared by the numeric sliders/drags of the
                 // applications: 75% of the default item width. It is computed
@@ -207,6 +204,24 @@ namespace geolio::geobox
          */
         using AttributeFilter =
             std::function<bool(const MeshObject::AttributeInfo&)>;
+
+        /**
+         * @brief Predicate deciding which directional fields an application can
+         *        work on.
+         * @details Called with every DirectionalObject of the scene;
+         *          draw_directional_selector() only offers the ones it accepts.
+         *          It is given the object rather than its vectors, since what
+         *          an application needs to know is where the field is
+         *          attached and how many frames it has, e.g.
+         *          @code
+         *          [&mesh](const DirectionalObject& field) {
+         *              return field.attached() &&
+         *                     field.nb_frames() == mesh.cells.nb();
+         *          }
+         *          @endcode
+         */
+        using DirectionalFilter =
+            std::function<bool(const DirectionalObject&)>;
 
         /**
          * @brief Draws a mesh object picker, i.e. lets the user pick one of
@@ -308,6 +323,11 @@ namespace geolio::geobox
                 for (std::size_t i = 0; i < mesh_objects.size(); ++i) {
                     const bool is_selected =
                         (current_index == static_cast<int>(i));
+                    // The name is the label of the item, and two objects can
+                    // share it: the item is identified by the unique id of the
+                    // object, or the items could not be told apart (see
+                    // BaseObject::unique_id()).
+                    ImGui::PushID(mesh_objects[i]->unique_id().c_str());
                     if (ImGui::Selectable(
                             mesh_objects[i]->name().c_str(), is_selected)) {
                         selection = mesh_objects[i];
@@ -315,6 +335,117 @@ namespace geolio::geobox
                     }
                     if (is_selected)
                         ImGui::SetItemDefaultFocus();
+                    ImGui::PopID();
+                }
+                ImGui::EndCombo();
+            }
+            return changed;
+        }
+
+        /**
+         * @brief Draws a directional field picker, i.e. lets the user pick one
+         *        of the fields of the scene.
+         * @details Offers every DirectionalObject of the scene that matches
+         *          @p filter, and stores what the user picks in @p selection.
+         *          A single candidate is selected automatically, so that an
+         *          application whose scene holds one field is usable right
+         *          away, and a selection whose field no longer matches
+         *          @p filter (or left the scene) is cleared.
+         *          The candidates are listed by name; the one that is selected
+         *          keeps it, like the one of draw_mesh_selector().
+         * @param[in,out] selection The selected field: set when the user picks
+         *            one, cleared when the field it names cannot be
+         *            picked any more. Lock it to use it: the scene owns the
+         *            objects, so a weak pointer never keeps a field the scene
+         *            dropped alive.
+         * @param[in] filter Which fields can be picked; all of them when empty.
+         * @param[in] label Text shown on the left of the combo box. It also
+         *            names the ImGui item, so it must differ from the label of
+         *            another picker drawn in the same window.
+         * @return true when the selection changed, i.e. when the application
+         *         has to refresh what it derived from the selected field.
+         */
+        bool draw_directional_selector(
+            std::weak_ptr<DirectionalObject>& selection,
+            const DirectionalFilter& filter = {},
+            const char* label = "Field"
+            ) {
+            bool changed = false;
+
+            // The fields the application can work on: its filter decides.
+            std::vector<std::shared_ptr<DirectionalObject>> directional_objects;
+            for (const auto& object : objects_) {
+                const auto directional_object =
+                    std::dynamic_pointer_cast<DirectionalObject>(object);
+                if (directional_object == nullptr)
+                    continue;
+                if (filter && !filter(*directional_object))
+                    continue;
+                directional_objects.push_back(directional_object);
+            }
+
+            // A single candidate is picked automatically.
+            if (directional_objects.size() == 1 && selection.expired()) {
+                selection = directional_objects[0];
+                changed = true;
+            }
+
+            // The selected field may have stopped matching the filter, or left
+            // the scene: drop the selection, which also disables the parameters
+            // of the application until another field is picked.
+            if (const auto selected = selection.lock();
+                selected != nullptr &&
+                std::ranges::find(directional_objects, selected) ==
+                    directional_objects.end()) {
+                selection.reset();
+                changed = true;
+            }
+
+            if (directional_objects.empty()) {
+                const std::string no_object =
+                    std::string("No `") + label + "` object available.";
+                ImGui::TextDisabled("%s", no_object.c_str());
+                return changed;
+            }
+
+            // Index of the currently selected field, -1 when none.
+            const auto selected = selection.lock();
+            int current_index = -1;
+            for (std::size_t i = 0; i < directional_objects.size(); ++i) {
+                if (directional_objects[i] == selected) {
+                    current_index = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            std::string preview = "Select a directional field";
+            if (current_index >= 0) {
+                preview = directional_objects[static_cast<std::size_t>(current_index)]
+                              ->name();
+            }
+
+            // The label on the left, the combo box on its right, on the same
+            // line (see draw_mesh_selector()).
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+            ImGui::SameLine();
+            const std::string combo_id = std::string("##") + label;
+            if (ImGui::BeginCombo(combo_id.c_str(), preview.c_str())) {
+                for (std::size_t i = 0; i < directional_objects.size(); ++i) {
+                    const bool is_selected =
+                        (current_index == static_cast<int>(i));
+                    // The name is the label, the unique id is the identity (see
+                    // BaseObject::unique_id()): two fields can share the name.
+                    ImGui::PushID(directional_objects[i]->unique_id().c_str());
+                    if (ImGui::Selectable(
+                            directional_objects[i]->name().c_str(),
+                            is_selected)) {
+                        selection = directional_objects[i];
+                        changed = true;
+                    }
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                    ImGui::PopID();
                 }
                 ImGui::EndCombo();
             }

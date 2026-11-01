@@ -15,6 +15,20 @@
 #include "mesh/mesh_repair_triangulate_application.h"
 #include "points/centroidal_voronoi_tesselation_application.h"
 #include "points/restricted_voronoi_diagram_application.h"
+#include "directional/frame_field_application.h"
+#include "directional/streamline_tracing_application.h"
+
+// The MIQ sub-application belongs to the optional MIQ pipeline (see the
+// GEOLIO_ENABLE_MIQ option in the top-level CMakeLists.txt). Unlike its
+// neighbours it is not header-self-contained: it draws its parameters through
+// <geolio/MIQ/miq_interface.h>, which includes <igl/...> headers that only exist
+// when libigl is resolved, and libigl is only looked up when the option is ON.
+// Including it unconditionally therefore breaks every default build with
+//     fatal error: 'igl/igl_inline.h' file not found
+// as soon as this file is pulled in (e.g. by geobox/application.cpp).
+#ifdef GEOLIO_ENABLE_MIQ
+#include "mesh/mixed_integer_quadrangulation_application.h"
+#endif
 
 namespace geolio::geobox
 {
@@ -44,16 +58,21 @@ namespace geolio::geobox
      *          only walks the resulting tree, so it never needs to change.
      */
     inline void register_additional_Applications() {
-        geolio_register_BaseApplication_creator(LocalFeatureSizeApplication, "attributes");
+        geolio_register_BaseApplication_creator(LocalFeatureSizeApplication,             "attributes");
+        geolio_register_BaseApplication_creator(FrameFieldApplication,                   "directional");
+        geolio_register_BaseApplication_creator(StreamlineTracingApplication,            "directional");
         geolio_register_BaseApplication_creator(CentroidalVoronoiTesselationApplication, "points");
-        geolio_register_BaseApplication_creator(RestrictedVoronoiDiagramApplication, "points");
-        geolio_register_BaseApplication_creator(MeshCleanApplication, "mesh");
-        geolio_register_BaseApplication_creator(MeshComputeBorderApplication, "mesh");
-        geolio_register_BaseApplication_creator(MeshConnectApplication, "mesh");
-        geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "mesh", "optimization");
-        geolio_register_BaseApplication_creator(MeshRepairColocateApplication, "mesh", "repair");
-        geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication, "mesh", "repair");
-        geolio_register_BaseApplication_creator(MeshRandomSamplingApplication, "mesh");
+        geolio_register_BaseApplication_creator(RestrictedVoronoiDiagramApplication,     "points");
+        geolio_register_BaseApplication_creator(MeshCleanApplication,                    "mesh");
+        geolio_register_BaseApplication_creator(MeshComputeBorderApplication,            "mesh");
+        geolio_register_BaseApplication_creator(MeshConnectApplication,                  "mesh");
+#ifdef GEOLIO_ENABLE_MIQ
+        geolio_register_BaseApplication_creator(MixedIntegerQuadratulationApplication,   "mesh");
+#endif
+        geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication,   "mesh", "optimization");
+        geolio_register_BaseApplication_creator(MeshRepairColocateApplication,           "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication,        "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRandomSamplingApplication,           "mesh");
     }
 }
 

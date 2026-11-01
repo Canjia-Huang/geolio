@@ -8,6 +8,7 @@
 #include <geolio/geobox/application/base_application.h>
 #include <geolio/common/log.h>
 
+#include "geolio/directional/frame_field.h"
 #include "geolio/LpCVT/lp_cvt.h"
 
 namespace geolio::geobox
@@ -30,7 +31,7 @@ namespace geolio::geobox
             // One picker per mesh this application works on: each keeps its own
             // selection (and its own label, which also names the ImGui item).
             draw_mesh_selector(
-                base_surface_object_,
+                selected_base_surface_object_,
                 [](const GEO::Mesh& mesh) {
                     return (mesh.facets.nb() > 0 && mesh.facets.are_simplices()) ||
                            (mesh.cells.nb() > 0 && mesh.cells.are_simplices());
@@ -38,7 +39,7 @@ namespace geolio::geobox
                 "Base surface");
 
             draw_mesh_selector(
-                samples_object_,
+                selected_samples_object_,
                 [](const GEO::Mesh& mesh) {
                     return mesh.vertices.nb() > 0;
                 },
@@ -49,13 +50,13 @@ namespace geolio::geobox
             // When no mesh object is selected, everything below the picker
             // (the parameters and the button that runs the operation) is
             // non-interactive.
-            ImGui::BeginDisabled(base_surface_object_.expired() || samples_object_.expired());
-            const auto base_surface_object = base_surface_object_.lock();
-            const auto samples_object = samples_object_.lock();
+            ImGui::BeginDisabled(selected_base_surface_object_.expired() || selected_samples_object_.expired());
+            const auto base_surface_object = selected_base_surface_object_.lock();
+            const auto samples_object = selected_samples_object_.lock();
             if (base_surface_object != nullptr &&
                 samples_object != nullptr
                 ) {
-                if (same_owner(base_surface_object_, samples_object_)) {
+                if (same_owner(selected_base_surface_object_, selected_samples_object_)) {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.2f, 1.0f));
                     ImGui::TextWrapped("Warning: The configured base surface and samples are the same object; unexpected behavior may occur!");
                     ImGui::PopStyleColor();
@@ -63,22 +64,44 @@ namespace geolio::geobox
                     ImGui::Separator();
                 }
 
+                auto& base_surface = base_surface_object->mesh();
+                auto& samples = samples_object->mesh();
+
                 {
                     ImGui::Checkbox("LpCVT", &use_LpCVT_);
                     if (use_LpCVT_) {
+                        ImGui::Indent();
+
                         ImGui::SetNextItemWidth(slider_width_);
                         if (ImGui::SliderInt("p", &p_, 4, 16, "%d", ImGuiSliderFlags_AlwaysClamp)) {
                             if (p_ % 2 != 0)
                                 --p_;
                             assert(LpCentroidalVoronoiTesselation::is_supported_norm_exponent(p_));
                         }
+
+                        ImGui::Checkbox("Frame field aligned", &frame_field_aligned_);
+                        if (frame_field_aligned_) {
+                            draw_directional_selector(
+                                selected_directional_object_,
+                                [this, &base_surface](const DirectionalObject& directional) {
+                                    return directional.attached() &&
+                                           directional.vectors_nb_per_element() == 3 &&
+                                           (volumetric_ ?
+                                           (directional.subelements() == GEO::MESH_CELLS &&
+                                            directional.nb_elements() == base_surface.cells.nb()) :
+                                           (directional.subelements() == GEO::MESH_FACETS &&
+                                            directional.nb_elements() == base_surface.facets.nb())
+                                            );
+                                });
+
+                            ImGui::DragFloat("max aspect", &max_aspect_, 0.001, 1, 1e8, "%.3f");
+                        }
+
+                        ImGui::Unindent();
                     }
                 }
 
                 ImGui::Separator();
-
-                auto& base_surface = base_surface_object->mesh();
-                auto& samples = samples_object->mesh();
 
                 {
                     const bool has_facets = base_surface.facets.nb() > 0;
@@ -161,8 +184,50 @@ namespace geolio::geobox
             const GEO::index_t DIM = base_surface.vertices.dimension();
 
             std::shared_ptr<GEO::CentroidalVoronoiTesselation> CVT_ptr;
-            if (use_LpCVT_)
-                CVT_ptr = std::make_shared<LpCentroidalVoronoiTesselation>(&base_surface, p_, volumetric_);
+            if (use_LpCVT_) {
+                const auto LpCVT_ptr = std::make_shared<LpCentroidalVoronoiTesselation>(&base_surface, p_, volumetric_);
+                if (frame_field_aligned_) {
+                    const auto directional_object = selected_directional_object_.lock();
+
+                    // The matrices are laid out from the mesh, so the field has to hold
+                    // exactly one frame per element of the mode being meshed. The picker
+                    // above chooses the field against the facets, so the check is
+                    // repeated here rather than assumed: a volumetric run reads the same
+                    // frames as if they were one per cell.
+                    const GEO::index_t nb_elements = volumetric_
+                        ? base_surface.cells.nb()
+                        : base_surface.facets.nb();
+                    if (directional_object != nullptr &&
+                        directional_object->vectors_nb_per_element() == 3 &&
+                        directional_object->nb_frames() == nb_elements) {
+                        // The field comes from a .fra file rather than from a
+                        // FrameField, so it carries no curvature certainty: the
+                        // anisotropy is then read from the lengths of the frame
+                        // vectors, which is what the file stores.
+                        const FrameField frame_field;
+                        std::vector<double> matrices;
+                        frame_field.compute_anisotropy_matrices(
+                            base_surface,
+                            volumetric_,
+                            directional_object->frames(),
+                            max_aspect_,
+                            matrices);
+                        LpCVT_ptr->set_matrices(matrices);
+                    }
+                    else {
+                        LOG::ERROR(
+                            "The frame field does not carry one frame per {} of the "
+                            "base surface ({} frames, {} needed): the anisotropic "
+                            "metric is left out and the LpCVT runs isotropic.",
+                            volumetric_ ? "cell" : "facet",
+                            directional_object != nullptr
+                                ? directional_object->nb_frames()
+                                : GEO::index_t(0),
+                            nb_elements);
+                    }
+                }
+                CVT_ptr = LpCVT_ptr;
+            }
             else {
                 CVT_ptr = std::make_shared<GEO::CentroidalVoronoiTesselation>(&base_surface);
                 CVT_ptr->set_volumetric(volumetric_);
@@ -180,13 +245,16 @@ namespace geolio::geobox
             LOG::INFO("Done {}({})!", application_name_, __FUNCTION__);
         }
 
-        std::weak_ptr<MeshObject> base_surface_object_;
-        std::weak_ptr<MeshObject> samples_object_;
+        std::weak_ptr<MeshObject> selected_base_surface_object_;
+        std::weak_ptr<MeshObject> selected_samples_object_;
 
         MeshObject::AttributeInfo weight_attribute_;
 
         bool use_LpCVT_ = false;
         int p_ = 4;
+        bool frame_field_aligned_ = false;
+        std::weak_ptr<DirectionalObject> selected_directional_object_;
+        float max_aspect_ = 3;
 
         bool volumetric_ = false;
         bool Lloyd_iterations_ = true; // false -> Newton iterations

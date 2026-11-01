@@ -62,7 +62,7 @@ namespace geolio::geobox
         /**
          * @brief Draws the object-specific property widgets.
          */
-        void draw_object_properties() override;
+        void draw_object_properties(ApplicationObjects& objects) override;
 
         /**
          * @brief Renders the mesh object in the scene.
@@ -73,7 +73,7 @@ namespace geolio::geobox
         /**
          * @brief Reloads the mesh object from its source representation.
          */
-        void reload();
+        void reload() override;
 
         /**
          * @brief Returns the bounding box of the mesh in world coordinates.
@@ -108,6 +108,14 @@ namespace geolio::geobox
         auto& mesh() { return mesh_; }
 
         /**
+         * @brief The mesh of this object, read only.
+         * @details Used by the objects that draw something about a mesh without
+         *          modifying it (see DirectionalObject, which attaches its frames
+         *          to the elements of a mesh object).
+         */
+        [[nodiscard]] const auto& mesh() const { return mesh_; }
+
+        /**
          * @brief Tells this object that its mesh was modified in place.
          * @details To be called after an operation changed the mesh behind the
          *          object's back (see mesh()). What the object derived from the
@@ -133,6 +141,19 @@ namespace geolio::geobox
          * @return true when the file was written.
          */
         bool save(const std::string& filename) override;
+
+        /**
+         * @brief Whether the mesh can be written in a file format.
+         * @details A mesh is written by the mesh IO handler registered for the
+         *          extension. The handlers GeoLio adds for the formats of other
+         *          tools only read them (see
+         *          geolio::register_additional_MeshIOHandlers()), so those
+         *          extensions are refused: choosing one in the save dialog could
+         *          only fail.
+         */
+        [[nodiscard]] bool can_write_extension(
+            const std::string& extension
+            ) const override;
 
         // ---------------------------------------------------------------------
         // Display, for the applications that compute what should be shown

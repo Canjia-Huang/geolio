@@ -18,6 +18,7 @@
 // which the cell-facet passes below reproduce (see GeoGram PR #386).
 #include <geogram_gfx/GLUP/GLUP_private.h>
 #include <geogram_gfx/basic/GL.h>
+#include <geolio/geobox/file_dialog.h>
 
 #include "geolio/common/log.h"
 
@@ -279,22 +280,20 @@ namespace geolio::geobox
     }
 
     void MeshObject::draw_object_properties(
+        ApplicationObjects& objects
         ) {
+        // A mesh does not depend on another object of the scene: it takes the
+        // scene because the properties hook is shared (see
+        // BaseObject::draw_object_properties()).
+        static_cast<void>(objects);
         ImGui::PushID(this);
+
+        BaseObject::draw_object_properties(objects);
 
         // An operation may have changed the mesh since the last frame (see
         // mesh_changed()): the Info panel and the border controls below would
         // otherwise show what the mesh was before it.
         update_mesh_caches();
-
-        ImGui::BeginDisabled(filepath_.empty());
-        {
-            if (ImGui::Button("Reload", ImVec2(-1, 0)))
-                reload();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", filepath_.c_str());
-        }
-        ImGui::EndDisabled();
 
         if (!data_valid_) {
             // The mesh was kept as it is (the validity dialog was answered with
@@ -310,8 +309,7 @@ namespace geolio::geobox
             }
         }
 
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Info")) {
+        if (ImGui::CollapsingHeader("Info", ImGuiTreeNodeFlags_DefaultOpen)) {
             /* == Element count ==================================================================================== */
             // One row per element kind (vertices, edges, facets, cells), with
             // the kinds the mesh does not contain left out, and indented rows
@@ -660,7 +658,7 @@ namespace geolio::geobox
                 }
 
                 char selected_filename[GEO::geo_imgui_string_length];
-                if (ImGui::FileDialog(
+                if (draw_file_dialog(
                         dialog_label.c_str(), selected_filename,
                         sizeof(selected_filename))) {
                     // Selecting a file again reloads it, so that an image
@@ -932,40 +930,40 @@ namespace geolio::geobox
         // does: a solid color, a scalar attribute through a colormap, or an
         // image through texture coordinates (see PaintingMode).
         switch (painting_mode_) {
-        case PaintingMode::SOLID_COLOR:
-            mesh_gfx_.unset_scalar_attribute();
-            break;
-
-        case PaintingMode::ATTRIBUTE:
-            mesh_gfx_.set_scalar_attribute(
-                attribute_subelements_,
-                colormap_attribute_name(),
-                colormap_mapping_min(),
-                colormap_mapping_max(),
-                colormap_texture(),
-                1);
-            break;
-
-        case PaintingMode::TEXTURE: {
-            // A texture image is sampled through a 2D texture-coordinate
-            // attribute (e.g. "facet_corners.tex_coord" loaded from an OBJ
-            // file), exactly as Graphite's TEXTURE painting mode does.
-            const GLuint image_texture = texture();
-            const bool ready =
-                image_texture != 0 &&
-                tex_coord_subelements_ != GEO::MESH_NONE &&
-                attribute_dimension(
-                    tex_coord_subelements_, tex_coord_attribute_name_) == 2;
-            if (ready) {
-                mesh_gfx_.set_texturing(
-                    tex_coord_subelements_,
-                    tex_coord_attribute_name_for_drawing(),
-                    image_texture, 2, texture_repeat());
-            }
-            else
+            case PaintingMode::SOLID_COLOR:
                 mesh_gfx_.unset_scalar_attribute();
-            break;
-        }
+                break;
+
+            case PaintingMode::ATTRIBUTE:
+                mesh_gfx_.set_scalar_attribute(
+                    attribute_subelements_,
+                    colormap_attribute_name(),
+                    colormap_mapping_min(),
+                    colormap_mapping_max(),
+                    colormap_texture(),
+                    1);
+                break;
+
+            case PaintingMode::TEXTURE: {
+                // A texture image is sampled through a 2D texture-coordinate
+                // attribute (e.g. "facet_corners.tex_coord" loaded from an OBJ
+                // file), exactly as Graphite's TEXTURE painting mode does.
+                const GLuint image_texture = texture();
+                const bool ready =
+                    image_texture != 0 &&
+                    tex_coord_subelements_ != GEO::MESH_NONE &&
+                    attribute_dimension(
+                        tex_coord_subelements_, tex_coord_attribute_name_) == 2;
+                if (ready) {
+                    mesh_gfx_.set_texturing(
+                        tex_coord_subelements_,
+                        tex_coord_attribute_name_for_drawing(),
+                        image_texture, 2, texture_repeat());
+                }
+                else
+                    mesh_gfx_.unset_scalar_attribute();
+                break;
+            }
         }
 
         // Transparent texels are discarded instead of being drawn black: the
@@ -1302,7 +1300,15 @@ namespace geolio::geobox
 
         // Vertices sit exactly on the surface, so the default GL_LESS depth
         // test would cull them at equal depth; use an inclusive test so the
-        // markers stay visible on top of the model.
+        // markers stay visible on top of the model. The previous function is
+        // saved rather than assumed to be GL_LESS: the scene draws with
+        // GL_LEQUAL (see SimpleApplication::draw_scene_begin()), and restoring
+        // that hardcoded value would leave every object drawn after a point
+        // cloud -- e.g. a directional field, whose axes start exactly on that
+        // surface -- with the stricter test, which culls the fragments that sit
+        // at the depth of the surface they belong to.
+        GLint depth_func = GL_LESS;
+        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
         glDepthFunc(GL_LEQUAL);
 
         const double radius = 0.5 * static_cast<double>(vertices_size_);
@@ -1439,7 +1445,7 @@ namespace geolio::geobox
         if (lighting)
             glupEnable(GLUP_LIGHTING);
 
-        glDepthFunc(GL_LESS);
+        glDepthFunc(GLenum(depth_func));
 
         if (blended) {
             glDisable(GL_BLEND);
@@ -2320,6 +2326,17 @@ namespace geolio::geobox
             }
         }
         return result;
+    }
+
+    bool MeshObject::can_write_extension(
+        const std::string& extension
+        ) const {
+        // The formats GeoLio registers to read the files of other tools have no
+        // save() (see geolio/io/io.h): they are read-only, whatever the mesh.
+        static const char* const CAN_WRITE_EXTENSIONS[] = {
+            "geogram", "mesh", "msh", "obj", "off", "pts", "stl"
+        };
+        return std::ranges::find(CAN_WRITE_EXTENSIONS, extension) != std::end(CAN_WRITE_EXTENSIONS);
     }
 
     bool MeshObject::save(

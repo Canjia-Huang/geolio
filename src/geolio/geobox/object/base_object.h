@@ -5,6 +5,10 @@
 #ifndef GEOLIO_BASE_OBJECT_H
 #define GEOLIO_BASE_OBJECT_H
 
+#include <memory>
+#include <string>
+#include <vector>
+#include <imgui.h>
 #include <geolio/common/utils.h>
 #include <geolio/common/parse_filepath.h>
 #include <geogram/basic/geometry.h>
@@ -13,6 +17,16 @@
 
 namespace geolio::geobox
 {
+    class BaseObject;
+
+    /** Objects container shared by the main application and its
+     *  sub-applications, in display order. The scene is handed to the objects
+     *  when it has to be read rather than kept by them: an object that depends on
+     *  another one of the scene (e.g. a field attached to a mesh) offers the
+     *  objects it can depend on from its properties (see
+     *  draw_object_properties()). */
+    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
+
     /**
      * @brief Base class for all renderable GeoBox objects.
      */
@@ -41,6 +55,19 @@ namespace geolio::geobox
         [[nodiscard]] const std::string& name() const { return name_; }
 
         /**
+         * @brief Returns the unique identifier of the object.
+         * @details Generated when the object is constructed, so two objects can
+         *          never share it, even when they have the same name -- which
+         *          happens as soon as an operation is run twice, or the same file
+         *          is loaded twice. It is what the GUI uses to identify an object
+         *          (see BaseApplication::draw_mesh_selector() and
+         *          GeoBoxApplication::draw_objects(): ImGui items labelled with
+         *          the name alone could not be told apart).
+         * @return Reference to the identifier, a 22 character random string.
+         */
+        [[nodiscard]] const std::string& unique_id() const { return unique_id_; }
+
+        /**
          * @brief Returns the path of the file the object was read from.
          * @return The path, or an empty string when the object was not read
          *         from a file (e.g. the result of an operation).
@@ -61,14 +88,48 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the object-specific property widgets in the GUI.
+         * @param[in] objects Objects of the scene, which an object that depends
+         *            on another one reads to offer what it can depend on; it is
+         *            passed at drawing time rather than kept, so that it is
+         *            always the current scene that is read.
          */
-        virtual void draw_object_properties() = 0;
+        virtual void draw_object_properties(ApplicationObjects& objects) {
+            static_cast<void>(objects);
+            if (std::filesystem::exists(filepath_)) {
+                if (ImGui::Button("Reload", ImVec2(-1, 0)))
+                    reload();
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", filepath_.c_str());
+
+                ImGui::Separator();
+            }
+        }
 
         /**
          * @brief Renders the object in the scene.
          * @param[in] lighting Whether scene lighting should be enabled.
          */
         virtual void draw_scene(bool lighting) = 0;
+
+        virtual void reload() {}
+
+        /**
+         * @brief Whether the object can be written in a file format.
+         * @details The save dialog only offers the formats the object accepts,
+         *          so what a kind of object can store is decided here, by the
+         *          object type -- e.g. MeshObject keeps out the mesh formats
+         *          that can only be read. Extensions for which no IO handler is
+         *          registered are never offered, whatever this returns.
+         * @param[in] extension Extension of the format, without the dot (e.g.
+         *            "obj", "geogram").
+         * @return true when the object can be saved in that format.
+         */
+        [[nodiscard]] virtual bool can_write_extension(
+            const std::string& extension
+            ) const {
+            static_cast<void>(extension);
+            return false;
+        }
 
         /**
          * @brief Saves the data of the object to @p filename.
@@ -141,6 +202,7 @@ namespace geolio::geobox
          */
         GEO::vec4f title_color_ = GEO::vec4f(0.05f, 0.18f, 0.50f, 1.0f);
     };
+
 }
 
 #endif //GEOLIO_BASE_OBJECT_H

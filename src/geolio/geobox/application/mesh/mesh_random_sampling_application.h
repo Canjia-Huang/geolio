@@ -134,7 +134,6 @@ namespace geolio::geobox
                 }
             }
 
-
             /* Build samples object */
             GEO::Mesh samples_mesh(DIM);
             samples_mesh.vertices.assign_points(sample_points.data(), DIM, samples_nb);

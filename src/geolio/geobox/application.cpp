@@ -9,7 +9,7 @@
 #include "application.h"
 #include <algorithm>
 #include <cstring>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <geogram/basic/command_line.h>
 #include <geogram/basic/file_system.h>
@@ -19,6 +19,8 @@
 #include "imoguizmo.hpp"
 #include "geolio/common/log.h"
 #include "geolio/common/parse_filepath.h"
+#include "geolio/io/fra_io.h"
+#include "file_dialog.h"
 #include "object/mesh_object.h"
 #include "colormap.h"
 #include <geolio/geobox/application/register_applications.h>
@@ -29,49 +31,55 @@ namespace geolio::geobox
 {
     namespace
     {
+        /** @brief Whether @p window is one of GeoGram's file dialogs. */
+        bool is_file_dialog(const ImGuiWindow* window) {
+            if (window == nullptr || window->Name == nullptr)
+                return false;
+            // The directory and file lists of the dialog are child windows
+            // named "<dialog name>/...": they are skipped below.
+            return std::strncmp(window->Name, "Load...##", 9) == 0 ||
+                   std::strncmp(window->Name, "Save as...##", 12) == 0;
+        }
+
         /**
-         * @brief Enlarges the file dialogs drawn during the current frame.
-         * @details GeoGram's FileDialog asks for a 400x415 window (times the UI
-         *          scaling), which is small on high-DPI screens. The size is
-         *          hard-coded in the GeoGram version GeoBox builds against, so
-         *          the windows are resized after they were drawn instead: a
-         *          dialog is enlarged only the first time it appears, and a
-         *          size the user chose afterwards is kept.
+         * @brief Sizes the file dialogs drawn during the current frame.
+         * @details GeoGram asks for a 400x415 window for them, times its layout
+         *          scaling (see draw_file_dialog()). They are given a size that
+         *          is comfortable for their two file lists, and the same on every
+         *          display -- shrunk only when the window of the application
+         *          cannot hold it. A dialog is sized during the first frames it
+         *          is shown, and not afterwards: GeoGram applies its own size on
+         *          the first one, and a size the user chose must be kept.
          */
-        void enlarge_file_dialogs() {
-            static std::unordered_set<ImGuiID> enlarged;
+        void resize_file_dialogs() {
+            // Frames a dialog is still being sized for, per dialog.
+            static std::unordered_map<ImGuiID, int> frames_left;
+            constexpr int FRAMES_TO_SIZE = 2;
+
+            constexpr float DIALOG_WIDTH = 640.0f;
+            constexpr float DIALOG_HEIGHT = 600.0f;
+            constexpr float DISPLAY_MARGIN = 80.0f;
+
             ImGuiContext& context = *ImGui::GetCurrentContext();
             const ImVec2 display = context.IO.DisplaySize;
-            // About 55% of the width and 65% of the height, with sensible
-            // bounds and always within the viewport.
-            const float desired_width = std::min(
-                std::clamp(0.55f * display.x, 640.0f, 900.0f),
-                std::max(320.0f, display.x - 40.0f));
-            const float desired_height = std::min(
-                std::clamp(0.65f * display.y, 500.0f, 750.0f),
-                std::max(240.0f, display.y - 60.0f));
+            const ImVec2 wanted(
+                std::min(DIALOG_WIDTH, display.x - DISPLAY_MARGIN),
+                std::min(DIALOG_HEIGHT, display.y - DISPLAY_MARGIN));
+
             for (ImGuiWindow* window : context.Windows) {
                 if (window == nullptr ||
-                    window->LastFrameActive != context.FrameCount) {
+                    window->LastFrameActive != context.FrameCount ||
+                    (window->Flags & ImGuiWindowFlags_ChildWindow) ||
+                    !is_file_dialog(window)) {
                     continue;
                 }
-                // The directory and file lists of the dialog are child windows
-                // named "<dialog name>/...": only resize the dialog itself.
-                if (window->Flags & ImGuiWindowFlags_ChildWindow)
+                auto it = frames_left.find(window->ID);
+                if (it == frames_left.end())
+                    it = frames_left.emplace(window->ID, FRAMES_TO_SIZE).first;
+                if (it->second <= 0)
                     continue;
-                if (window->Name == nullptr ||
-                    (std::strncmp(window->Name, "Load...##", 9) != 0 &&
-                     std::strncmp(window->Name, "Save as...##", 12) != 0)) {
-                    continue;
-                }
-                if (!enlarged.insert(window->ID).second)
-                    continue;
-                ImGui::SetWindowSize(
-                    window,
-                    ImVec2(
-                        std::max(window->SizeFull.x, desired_width),
-                        std::max(window->SizeFull.y, desired_height)),
-                    ImGuiCond_Always);
+                --it->second;
+                ImGui::SetWindowSize(window, wanted, ImGuiCond_Always);
             }
         }
     }
@@ -316,12 +324,13 @@ namespace geolio::geobox
 
         if (text_editor_visible_)
             text_editor_.draw();
-        if (ImGui::FileDialog("##load_dlg", filename_, GEO::geo_imgui_string_length))
+        if (draw_file_dialog(
+                "##load_dlg", filename_, GEO::geo_imgui_string_length))
             load(filename_);
 
         // The "Save as..." of an object (see draw_objects_properties()): the
         // dialog was opened on the object whose row was right-clicked.
-        if (ImGui::FileDialog(
+        if (draw_file_dialog(
                 "##object_save_dlg", filename_, GEO::geo_imgui_string_length)) {
             if (const auto object = object_to_save_.lock()) {
                 if (object->save(filename_))
@@ -360,9 +369,10 @@ namespace geolio::geobox
             object->draw_validity_dialog();
 
         // All the file dialogs of the frame (Load/Save menu entries, texture
-        // image pickers, ...) have been drawn at this point: give the ones
-        // that just appeared a comfortable size.
-        enlarge_file_dialogs();
+        // image pickers, ...) have been drawn at this point: give the ones that
+        // just appeared the size the other dialogs have (see
+        // resize_file_dialogs()).
+        resize_file_dialogs();
 
         // Redraw-on-demand: any real widget interaction (click, slider drag,
         // text edit) may have changed the render state, so schedule a full
@@ -614,23 +624,71 @@ namespace geolio::geobox
     void GeoBoxApplication::open_object_save_dialog(
         const std::shared_ptr<BaseObject>& object
         ) {
-        const std::string extensions = supported_write_file_extensions();
-        if (extensions.empty())
+        // The formats the dialog offers: the ones the application knows how to
+        // write (the extensions the registered IO handlers answer for) that the
+        // object also accepts -- what a kind of object can store is up to the
+        // object (see BaseObject::can_write_extension()).
+        std::vector<std::string> registered_extensions;
+        GEO::String::split_string(
+            supported_write_file_extensions(), ';', registered_extensions);
+
+        const auto writable = [&](const std::string& extension) {
+            return !extension.empty() &&
+                   std::ranges::find(registered_extensions, extension) !=
+                       registered_extensions.end() &&
+                   object->can_write_extension(extension);
+        };
+
+        // The default format is the one of the file the object was read from.
+        // An object that was not read from a file -- or that cannot be written
+        // in that format -- defaults to the first format it accepts: there is no
+        // format every kind of object can be written in (.geogram for a mesh,
+        // .fra for a directional field, ...).
+        const std::string original_extension =
+            GEO::FileSystem::extension(object->filepath());
+        std::string default_extension = original_extension;
+        if (!writable(default_extension)) {
+            const auto first = std::ranges::find_if(
+                registered_extensions,
+                [&](const std::string& extension) {
+                    return writable(extension);
+                });
+            default_extension =
+                first != registered_extensions.end() ? *first : std::string();
+        }
+
+        // The format list of the dialog starts on its first entry, so the
+        // default format goes first; the other writable formats follow, in the
+        // order the application registered them. The dialog takes its first
+        // entry as the format it saves in, and the file name below is built with
+        // that one -- the two cannot disagree.
+        std::vector<std::string> extensions;
+        if (writable(default_extension))
+            extensions.push_back(default_extension);
+        for (const std::string& extension : registered_extensions) {
+            if (extension == default_extension || !writable(extension))
+                continue;
+            extensions.push_back(extension);
+        }
+        if (extensions.empty()) {
+            LOG::WARN(
+                "`{}` cannot be saved: no file format is available for it.",
+                object->name());
             return;
+        }
 
         // The dialog proposes the name of the file the object was read from --
         // its name only, without the directory: the dialog shows the directory
         // it saves into, and repeating the path in the name box is noise. An
-        // object that was not read from a file is proposed its own name, with
-        // the first extension the application can write.
-        std::string suggested;
+        // object that was not read from a file is proposed its own name. Either
+        // way with the format the dialog starts on, i.e. the first one of the
+        // list.
+        std::string name;
         if (!object->filepath().empty())
-            suggested = GEO::FileSystem::base_name(object->filepath(), false);
-        if (suggested.empty()) {
-            std::vector<std::string> written_extensions;
-            GEO::String::split_string(extensions, ';', written_extensions);
-            suggested = object->name() + "." + written_extensions[0];
-        }
+            name = GEO::FileSystem::base_name(object->filepath(), true);
+        if (name.empty())
+            name = object->name();
+        std::string suggested = name + "." + extensions.front();
         suggested.resize(
             std::min(
                 suggested.size(),
@@ -641,10 +699,9 @@ namespace geolio::geobox
         object_to_save_ = object;
         ImGui::OpenFileDialog(
             "##object_save_dlg",
-            extensions.c_str(),
+            GEO::String::join_strings(extensions, ';').c_str(),
             filename_,
-            ImGuiExtFileDialogFlags_Save
-        );
+            ImGuiExtFileDialogFlags_Save);
     }
 
     void GeoBoxApplication::draw_object_properties_window(
@@ -690,7 +747,7 @@ namespace geolio::geobox
         if (!selected_object->visible())
             return;
 
-        selected_object->draw_object_properties();
+        selected_object->draw_object_properties(objects_);
     }
 
     void GeoBoxApplication::draw_scene(
@@ -962,10 +1019,51 @@ namespace geolio::geobox
         scene_dirty_ = true;
     }
 
+    namespace
+    {
+        /**
+         * @brief Adds the extensions of the directional fields to a list of
+         *        mesh formats.
+         * @details .fra is not a mesh format: GeoLio reads and writes the
+         *          vectors of a field with its own functions (see
+         *          geolio::fra_load()), so GeoGram does not list it, and the
+         *          file dialogs would not offer it.
+         * @param[in] mesh_extensions Extensions of the mesh formats, separated
+         *            by ';' (possibly empty).
+         * @return The same list, followed by .fra.
+         */
+        std::string with_directional_field_extension(
+            const std::string& mesh_extensions
+            ) {
+            std::string extensions = mesh_extensions;
+            if (!extensions.empty())
+                extensions += ';';
+            extensions += "fra";
+            return extensions;
+        }
+    }
+
+    std::string GeoBoxApplication::supported_read_file_extensions(
+        ) {
+        return with_directional_field_extension(
+            SimpleMeshApplication::supported_read_file_extensions());
+    }
+
+    std::string GeoBoxApplication::supported_write_file_extensions(
+        ) {
+        return with_directional_field_extension(
+            SimpleMeshApplication::supported_write_file_extensions());
+    }
+
     bool GeoBoxApplication::load(
         const std::string& filepath
         ) {
         home();
+
+        // The .fra files hold the vectors of a directional field, not a mesh:
+        // they are read by load_directional_field(), not by the mesh loader.
+        if (GEO::FileSystem::extension(filepath) == "fra")
+            return load_directional_field(filepath);
 
         GEO::Mesh mesh;
         if (!mesh.load(filepath)) {
@@ -992,6 +1090,65 @@ namespace geolio::geobox
 
         scene_dirty_ = true;
 
+        return true;
+    }
+
+    bool GeoBoxApplication::load_directional_field(
+        const std::string& filepath
+        ) {
+        GEO::index_t vectors_nb_per_element = GEO::NO_INDEX;
+        std::vector<double> vectors;
+        if (!fra_load(filepath, vectors_nb_per_element, vectors)) {
+            LOG::ERROR("Cannot load a directional field from `{}`!", filepath);
+            return false;
+        }
+
+        const auto object = std::make_shared<DirectionalObject>(
+            get_filename(filepath),
+            filepath,
+            vectors_nb_per_element,
+            vectors);
+
+        // The field draws vectors on the elements of a mesh: when exactly one
+        // mesh object of the scene has as many elements as the field has
+        // frames, it is attached to it, so that the file shows up without
+        // having to pick anything. When several meshes match -- or one matches
+        // in several ways -- the properties of the object offer the choice.
+        {
+            std::shared_ptr<MeshObject> candidate;
+            GEO::MeshElementsFlags candidate_kind = GEO::MESH_NONE;
+            bool ambiguous = false;
+            for (const auto& other : objects_) {
+                const auto mesh_object =
+                    std::dynamic_pointer_cast<MeshObject>(other);
+                if (mesh_object == nullptr)
+                    continue;
+                const auto kinds = object->attachable_subelements(*mesh_object);
+                if (kinds.empty())
+                    continue;
+                ambiguous = ambiguous || candidate != nullptr ||
+                            kinds.size() != 1;
+                candidate = mesh_object;
+                candidate_kind = kinds.front();
+            }
+            if (!ambiguous && candidate != nullptr)
+                object->attach_to(candidate, candidate_kind);
+        }
+
+        objects_.push_back(object);
+        // Without a mesh the object is not drawn, and has no extent to frame
+        // the camera on (see DirectionalObject::attached()).
+        if (object->attached())
+            camera_focus(object);
+        selected_object_ = object;
+
+        scene_dirty_ = true;
+
+        LOG::INFO(
+            "Loaded directional field `{}`: {} frames of {} vectors.",
+            object->name(),
+            object->nb_frames(),
+            object->vectors_nb_per_element());
         return true;
     }
 }
