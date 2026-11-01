@@ -96,7 +96,7 @@ namespace geolio::geobox
          * @details The field is displayed by a DirectionalObject, which draws its
          *          three vectors per element as edges starting at the center of
          *          that element (see DirectionalObject).
-         * @param[in] mesh Mesh to compute the field on.
+         * @param[in] mesh_object MeshObject to compute the field on.
          * @return The object that displays the field, or nullptr when the field
          *         could not be computed.
          */

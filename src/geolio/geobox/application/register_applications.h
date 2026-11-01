@@ -17,6 +17,7 @@
 #include "points/restricted_voronoi_diagram_application.h"
 #include "directional/frame_field_application.h"
 #include "directional/streamline_tracing_application.h"
+#include "mesh/mixed_integer_quadrangulation_application.h"
 
 namespace geolio::geobox
 {
@@ -46,18 +47,19 @@ namespace geolio::geobox
      *          only walks the resulting tree, so it never needs to change.
      */
     inline void register_additional_Applications() {
-        geolio_register_BaseApplication_creator(LocalFeatureSizeApplication, "attributes");
-        geolio_register_BaseApplication_creator(FrameFieldApplication, "directional");
-        geolio_register_BaseApplication_creator(StreamlineTracingApplication, "directional");
+        geolio_register_BaseApplication_creator(LocalFeatureSizeApplication,             "attributes");
+        geolio_register_BaseApplication_creator(FrameFieldApplication,                   "directional");
+        geolio_register_BaseApplication_creator(StreamlineTracingApplication,            "directional");
         geolio_register_BaseApplication_creator(CentroidalVoronoiTesselationApplication, "points");
-        geolio_register_BaseApplication_creator(RestrictedVoronoiDiagramApplication, "points");
-        geolio_register_BaseApplication_creator(MeshCleanApplication, "mesh");
-        geolio_register_BaseApplication_creator(MeshComputeBorderApplication, "mesh");
-        geolio_register_BaseApplication_creator(MeshConnectApplication, "mesh");
-        geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication, "mesh", "optimization");
-        geolio_register_BaseApplication_creator(MeshRepairColocateApplication, "mesh", "repair");
-        geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication, "mesh", "repair");
-        geolio_register_BaseApplication_creator(MeshRandomSamplingApplication, "mesh");
+        geolio_register_BaseApplication_creator(RestrictedVoronoiDiagramApplication,     "points");
+        geolio_register_BaseApplication_creator(MeshCleanApplication,                    "mesh");
+        geolio_register_BaseApplication_creator(MeshComputeBorderApplication,            "mesh");
+        geolio_register_BaseApplication_creator(MeshConnectApplication,                  "mesh");
+        geolio_register_BaseApplication_creator(MixedIntegerQuadratulationApplication,   "mesh");
+        geolio_register_BaseApplication_creator(LocalOperationOptimizationApplication,   "mesh", "optimization");
+        geolio_register_BaseApplication_creator(MeshRepairColocateApplication,           "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRepairTriangulateApplication,        "mesh", "repair");
+        geolio_register_BaseApplication_creator(MeshRandomSamplingApplication,           "mesh");
     }
 }
 
