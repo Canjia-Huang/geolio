@@ -106,6 +106,22 @@ namespace geolio::geobox
             if (params.output_cross) {
                 const auto directional_object = std::make_shared<DirectionalObject>(
                     "cross field", "", objects_, 2, params.out_cross);
+
+                // The cross field lives on the facets it was computed on: an
+                // unattached field has nothing to be drawn on and stays invisible
+                // (see DirectionalObject::draw_scene()), until its properties are
+                // opened -- that panel is the only other place that attaches, so
+                // the field only appeared once the object was picked in the list.
+                // Attach it here, so that it shows up as soon as it is created.
+                const auto mesh_object = selected_mesh_object_.lock();
+                if (mesh_object == nullptr ||
+                    !directional_object->attach_to(mesh_object, GEO::MESH_FACETS)) {
+                    LOG::ERROR(
+                        "The computed cross field does not describe the facets of "
+                        "`{}`: it is left out of the scene.",
+                        mesh_object != nullptr ? mesh_object->name() : "");
+                    return;
+                }
                 objects_.push_back(directional_object);
             }
 
