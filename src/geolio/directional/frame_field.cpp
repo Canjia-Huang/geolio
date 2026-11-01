@@ -589,24 +589,15 @@ namespace geolio
 
     void FrameField::compute_anisotropy_matrices(
         const GEO::Mesh& mesh,
+        const double* frames,
         const double max_aspect,
         std::vector<double>& matrices
         ) const {
         LOG::TRACE("{}({})", __FUNCTION__, max_aspect);
 
-        const auto& frames = this->frames();
-
         // A surface field holds one frame per facet, a volumetric one (built by
         // create_curvature_directions()) one frame per cell.
         const GEO::index_t nb_elements = volumetric_ ? mesh.cells.nb() : mesh.facets.nb();
-
-        if (frames.size() != 9*nb_elements)
-            throw std::logic_error(
-                "The frame field does not match the mesh ("+
-                std::to_string(frames.size())+" values for "+
-                std::to_string(nb_elements)+" "+(volumetric_ ? "cells" : "facets")+
-                ", "+std::to_string(9*nb_elements)+" expected), "
-               "re-compute it with create_curvature_directions()");
 
         // The curvature magnitudes give the anisotropy. When the field does not
         // carry them (a field built by create_from_surface_mesh(), for instance), fall
@@ -693,5 +684,29 @@ namespace geolio
                 }
             }
         }
+    }
+
+    void FrameField::compute_anisotropy_matrices(
+        const GEO::Mesh& mesh,
+        const double max_aspect,
+        std::vector<double>& matrices
+        ) const {
+        LOG::TRACE("{}({})", __FUNCTION__, max_aspect);
+
+        const auto& frames = this->frames();
+
+        // A surface field holds one frame per facet, a volumetric one (built by
+        // create_curvature_directions()) one frame per cell.
+        const GEO::index_t nb_elements = volumetric_ ? mesh.cells.nb() : mesh.facets.nb();
+
+        if (frames.size() != 9*nb_elements)
+            throw std::logic_error(
+                "The frame field does not match the mesh ("+
+                std::to_string(frames.size())+" values for "+
+                std::to_string(nb_elements)+" "+(volumetric_ ? "cells" : "facets")+
+                ", "+std::to_string(9*nb_elements)+" expected), "
+               "re-compute it with create_curvature_directions()");
+
+        compute_anisotropy_matrices(mesh, frames.data(), max_aspect, matrices);
     }
 }

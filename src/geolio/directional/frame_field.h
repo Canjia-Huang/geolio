@@ -45,11 +45,11 @@ namespace geolio
             double autoscale = 0.0);
 
         /**
-         * @brief Computes one anisotropy matrix for each element from the current frame field.
+         * @brief Computes one anisotropy matrix for each element from a given frame array.
          *
          * An element is a facet of a surface field, or a cell of a volumetric one. The
          * matrices are symmetric positive-definite 3x3 metrics. Their principal directions
-         * follow the frame field, while their anisotropy is controlled by the relative
+         * follow @p frames, while their anisotropy is controlled by the relative
          * magnitudes of the two curvature directions. The matrices are written in element
          * order and stored consecutively in row-major order.
          *
@@ -63,22 +63,59 @@ namespace geolio
          * smallest curvature vanishes, i.e. on a developable region. An isotropic element
          * (flat, or umbilic) therefore gets the identity.
          *
-         * @param[in] mesh the mesh whose elements correspond to the current frame field
+         * The curvature magnitudes are read from this field when it carries them, i.e.
+         * when it was built by create_curvature_directions(). Otherwise - for a field
+         * built by ``GEO::FrameField::create_from_surface_mesh()``, say - the lengths of
+         * the two frame vectors are used instead: create_curvature_directions() stores
+         * the certainty values times one common scale, so their ratio is the same
+         * anisotropy, whereas a field of unit vectors yields the identity, which is what
+         * it describes. That fallback is reported with a warning.
+         *
+         * @param[in] mesh the mesh whose elements correspond to @p frames; it supplies the
+         *                 element counts and, for a surface field, the facet normals
+         * @param[in] frames a flat array of ``9 * nb_elements`` doubles, the row-major
+         *                 ``(U, V, N)`` frame of each element, where ``nb_elements`` is
+         *                 ``mesh.facets.nb()`` for a surface field and ``mesh.cells.nb()``
+         *                 for a volumetric one. U is the maximum curvature direction and N
+         *                 the third axis: the facet normal on a surface, or the inherited
+         *                 facet normal on a cell. The array is trusted as given: its size
+         *                 and the orthonormality of the frames are not checked, the stored
+         *                 vectors are merely re-orthonormalized
          * @param[in] max_aspect the maximum ratio of the two in-plane weights, i.e. the
          *                       square of the largest aspect ratio the cells can reach;
          *                       values below 1 are treated as 1
          * @param[out] matrices output vector, replaced with exactly
-         *                       ``9 * nb_elements`` coefficients, where ``nb_elements`` is
-         *                       ``M.facets.nb()`` for a surface field and ``M.cells.nb()``
-         *                       for a volumetric one. The matrix for element @p e starts at
-         *                       ``matrices[9 * e]`` and its coefficient at row @p i and
-         *                       column @p j is stored at ``matrices[9 * e + 3 * i + j]``
-         *
-         * @throws std::logic_error if the current frame field does not contain
-         *         exactly one frame for each element of @p M
+         *                       ``9 * nb_elements`` coefficients. The matrix for element @p e
+         *                       starts at ``matrices[9 * e]`` and its coefficient at row @p i
+         *                       and column @p j is stored at
+         *                       ``matrices[9 * e + 3 * i + j]``
          *
          * @note A volumetric field inherits the frame of the nearest facet, so each cell
          *       gets the anisotropy of that facet.
+         * @warning This overload does not check @p frames against @p mesh; prefer the one
+         *          below, or check the size yourself, before passing an array that may
+         *          come from another field or mesh.
+         */
+        void compute_anisotropy_matrices(const GEO::Mesh& mesh, const double* frames, double max_aspect, std::vector<double>& matrices) const;
+
+        /**
+         * @brief Computes one anisotropy matrix for each element from this field's frames.
+         *
+         * Equivalent to the overload above, with @p frames taken from frames(); see it
+         * for the layout and the meaning of the matrices.
+         *
+         * @param[in] mesh the mesh whose elements correspond to the current frame field;
+         *                 it must have as many facets (surface field) or cells (volumetric
+         *                 field) as the field holds frames
+         * @param[in] max_aspect the maximum ratio of the two in-plane weights; values
+         *                       below 1 are treated as 1
+         * @param[out] matrices output vector, replaced with exactly ``9 * nb_elements``
+         *                       coefficients, in the layout described above; it is left
+         *                       untouched when the call throws
+         *
+         * @throws std::logic_error if the current frame field does not contain exactly one
+         *         frame for each element of @p mesh, i.e. ``9 * nb_elements`` values; the
+         *         message asks to re-compute the field with create_curvature_directions()
          */
         void compute_anisotropy_matrices(const GEO::Mesh& mesh, double max_aspect, std::vector<double>& matrices) const;
 
