@@ -217,6 +217,17 @@ namespace geolio::geobox
             GEO::index_t nb_elements = 0;
 
             /**
+             * @brief Whether the attribute holds the geometry of the mesh.
+             * @details The coordinates of the vertices are stored as an
+             *          attribute of the vertices store (see
+             *          MeshVertices::single_precision()): they are not data
+             *          attached to the mesh but the mesh itself. They are
+             *          therefore listed only on request (see
+             *          attribute_infos()), and neither removed nor resized.
+             */
+            bool geometry = false;
+
+            /**
              * @brief Tests whether one element is of type \p T.
              * @details Compares the GeoGram element type name, so it matches
              *          what the attribute stores were created with:
@@ -248,11 +259,20 @@ namespace geolio::geobox
          *          display-only copies this object builds for the renderer are
          *          left out: they are not attributes of the mesh (see
          *          DISPLAY_ATTRIBUTE_NAME and DISPLAY_TEX_COORD_NAME).
+         *          The coordinates of the vertices are left out too, unless
+         *          @p include_geometry is set: they are the mesh itself rather
+         *          than data attached to it, so an application has nothing to do
+         *          with them -- but they are an attribute of the mesh, which the
+         *          attribute manager shows (see AttributeInfo::geometry).
+         * @param[in] include_geometry Whether to list the coordinates of the
+         *            vertices as well.
          * @return The attributes, grouped by sub-element in the order of
          *         GEO::MESH_VERTICES, GEO::MESH_EDGES, ..., and sorted by name
          *         inside a group.
          */
-        std::vector<AttributeInfo> attribute_infos() const;
+        std::vector<AttributeInfo> attribute_infos(
+            bool include_geometry = false
+            ) const;
 
         bool check_validity() override;
 

@@ -2274,6 +2274,7 @@ namespace geolio::geobox
     }
 
     std::vector<MeshObject::AttributeInfo> MeshObject::attribute_infos(
+        const bool include_geometry
         ) const {
         // Every store of the mesh that can carry attributes, in the order the
         // applications see them in their selectors.
@@ -2291,7 +2292,8 @@ namespace geolio::geobox
         // vertices store ("point", or "point_fp32" with single precision
         // vertices, see MeshVertices::single_precision()): they are the
         // geometry of the mesh, not data attached to it, so they are not
-        // offered as an attribute an application can pick.
+        // offered as an attribute an application can pick -- only listed for the
+        // tools that manage the attributes of the mesh.
         const std::string coordinates_name =
             mesh_.vertices.single_precision() ? "point_fp32" : "point";
 
@@ -2302,8 +2304,10 @@ namespace geolio::geobox
             GEO::vector<std::string> names;
             store.attributes().list_attribute_names(names);
             for (const std::string& name : names) {
-                if (subelements == GEO::MESH_VERTICES &&
-                    name == coordinates_name)
+                const bool is_geometry =
+                    subelements == GEO::MESH_VERTICES &&
+                    name == coordinates_name;
+                if (is_geometry && !include_geometry)
                     continue;
                 // The display copies are built by this object for the
                 // renderer, not written by the user's data (see
@@ -2322,6 +2326,7 @@ namespace geolio::geobox
                 info.element_type = attribute->element_typeid_name();
                 info.dimension = attribute->dimension();
                 info.nb_elements = store.nb();
+                info.geometry = is_geometry;
                 result.push_back(std::move(info));
             }
         }
