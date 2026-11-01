@@ -141,7 +141,9 @@ int main(int argc, char** argv) {
         "-f,--framefield",
         frame_field_anisotropic,
         "Align the anisotropic metric with the principal curvature directions; "
-        "cells are made shorter across ridges and longer along them."
+        "cells are made shorter across ridges and longer along them. One matrix per "
+        "facet, or one per tetrahedron with --volumetric, where each cell follows the "
+        "curvature of the surface facet it inherits its frame from."
         )->default_val(frame_field_anisotropic)->check(CLI::PositiveNumber);
 
     app.add_option(
@@ -264,6 +266,33 @@ int main(int argc, char** argv) {
             }
         }
 
+        /* Anisotropic metric, when requested.
+           It is built before the LpCVT, and even before the input is reported below,
+           because it may add the border facets the curvature estimate needs and because
+           the background mesh must not change once the restricted Voronoi diagram exists
+           (see the note on mesh_repair() above). */
+        std::vector<double> matrices;
+        if (frame_field_anisotropic > 0) {
+            // The curvature is a surface quantity, so even a volumetric field estimates it
+            // on facets and inherits it per cell. A tetrahedralized file usually stores no
+            // facet at all, and the frame field needs the border of the volume to estimate
+            // anything: rebuild it. The LpCVT itself does not need those facets, only the
+            // frame field does.
+            if (volumetric && mesh.facets.nb() == 0) {
+                mesh.cells.connect();
+                mesh.cells.compute_borders();
+            }
+
+            FrameField frame_field;
+            frame_field.create_curvature_directions(mesh, volumetric);
+            const auto& frames = frame_field.frames();
+            assert(frames.size() == 9*(volumetric ? mesh.cells.nb() : mesh.facets.nb()));
+
+            /* One matrix per background element: per facet, or per cell in volume mode */
+            frame_field.compute_anisotropy_matrices(
+                mesh, volumetric, frame_field_anisotropic, matrices);
+        }
+
         mesh.show_stats("LpCVT input");
 
         /* Optimize */
@@ -277,17 +306,8 @@ int main(int argc, char** argv) {
                 return EXIT_FAILURE;
             }
 
-            if (frame_field_anisotropic > 0) {
-                FrameField frame_field;
-                frame_field.create_curvature_directions(mesh);
-                const auto& frames = frame_field.frames();
-                assert(frames.size() == 9*mesh.facets.nb());
-
-                /* Set matrices */
-                std::vector<double> matrices;
-                frame_field.compute_anisotropy_matrices(mesh, frame_field_anisotropic, matrices);
+            if (!matrices.empty())
                 cvt.set_matrices(matrices);
-            }
 
             cvt.Newton_iterations(nb_iterations);
 

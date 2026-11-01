@@ -1443,7 +1443,7 @@ namespace geolio::test
 
         /* Set matrices */
         std::vector<double> matrices;
-        frame_field.compute_anisotropy_matrices(mesh, 3, matrices);
+        frame_field.compute_anisotropy_matrices(mesh, false, 3, matrices);
         LpCVT->set_matrices(matrices);
 
         compute();

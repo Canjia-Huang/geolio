@@ -58,7 +58,7 @@ namespace geolio::geobox
         ) const {
         if (vectors_nb_per_element_ == 0)
             return 0;
-        return GEO::index_t(vectors_.size() / (3 * vectors_nb_per_element_));
+        return static_cast<GEO::index_t>(vectors_.size() / (3 * vectors_nb_per_element_));
     }
 
     std::vector<GEO::MeshElementsFlags> DirectionalObject::attachable_subelements(

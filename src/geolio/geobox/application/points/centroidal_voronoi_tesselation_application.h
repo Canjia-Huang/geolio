@@ -8,6 +8,7 @@
 #include <geolio/geobox/application/base_application.h>
 #include <geolio/common/log.h>
 
+#include "geolio/directional/frame_field.h"
 #include "geolio/LpCVT/lp_cvt.h"
 
 namespace geolio::geobox
@@ -63,22 +64,40 @@ namespace geolio::geobox
                     ImGui::Separator();
                 }
 
+                auto& base_surface = base_surface_object->mesh();
+                auto& samples = samples_object->mesh();
+
                 {
                     ImGui::Checkbox("LpCVT", &use_LpCVT_);
                     if (use_LpCVT_) {
+                        ImGui::Indent();
+
                         ImGui::SetNextItemWidth(slider_width_);
                         if (ImGui::SliderInt("p", &p_, 4, 16, "%d", ImGuiSliderFlags_AlwaysClamp)) {
                             if (p_ % 2 != 0)
                                 --p_;
                             assert(LpCentroidalVoronoiTesselation::is_supported_norm_exponent(p_));
                         }
+
+                        ImGui::Checkbox("Frame field aligned", &frame_field_aligned_);
+                        if (frame_field_aligned_) {
+                            draw_directional_selector(
+                                selected_directional_object_,
+                                [&base_surface](const DirectionalObject& directional) {
+                                    return directional.attached() &&
+                                           directional.vectors_nb_per_element() == 3 &&
+                                           directional.subelements() == GEO::MESH_FACETS &&
+                                           directional.nb_elements() == base_surface.facets.nb();
+                                });
+
+                            ImGui::DragFloat("max aspect", &max_aspect_, 0.001, 1, 1e8, "%.3f");
+                        }
+
+                        ImGui::Unindent();
                     }
                 }
 
                 ImGui::Separator();
-
-                auto& base_surface = base_surface_object->mesh();
-                auto& samples = samples_object->mesh();
 
                 {
                     const bool has_facets = base_surface.facets.nb() > 0;
@@ -161,8 +180,24 @@ namespace geolio::geobox
             const GEO::index_t DIM = base_surface.vertices.dimension();
 
             std::shared_ptr<GEO::CentroidalVoronoiTesselation> CVT_ptr;
-            if (use_LpCVT_)
-                CVT_ptr = std::make_shared<LpCentroidalVoronoiTesselation>(&base_surface, p_, volumetric_);
+            if (use_LpCVT_) {
+                const auto LpCVT_ptr = std::make_shared<LpCentroidalVoronoiTesselation>(&base_surface, p_, volumetric_);
+                if (frame_field_aligned_) {
+                    const auto directional_object = selected_directional_object_.lock();
+                    if (directional_object != nullptr) {
+                        const FrameField frame_field;
+                        std::vector<double> matrices;
+                        frame_field.compute_anisotropy_matrices(
+                            base_surface,
+                            volumetric_,
+                            directional_object->frames(),
+                            max_aspect_,
+                            matrices);
+                        LpCVT_ptr->set_matrices(matrices);
+                    }
+                }
+                CVT_ptr = LpCVT_ptr;
+            }
             else {
                 CVT_ptr = std::make_shared<GEO::CentroidalVoronoiTesselation>(&base_surface);
                 CVT_ptr->set_volumetric(volumetric_);
@@ -187,6 +222,9 @@ namespace geolio::geobox
 
         bool use_LpCVT_ = false;
         int p_ = 4;
+        bool frame_field_aligned_ = false;
+        std::weak_ptr<DirectionalObject> selected_directional_object_;
+        float max_aspect_ = 1;
 
         bool volumetric_ = false;
         bool Lloyd_iterations_ = true; // false -> Newton iterations

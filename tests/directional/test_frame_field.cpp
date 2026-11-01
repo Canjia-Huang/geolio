@@ -787,7 +787,7 @@ namespace geolio::test
 
         // The fallback field is a surface one, so the anisotropy matrices are defined for it.
         std::vector<double> matrices;
-        fallback.compute_anisotropy_matrices(plane, 3.0, matrices);
+        fallback.compute_anisotropy_matrices(plane, false, 3.0, matrices);
         EXPECT_EQ(matrices.size(), 9 * plane.facets.nb());
     }
 
@@ -808,13 +808,13 @@ namespace geolio::test
         FrameField surface;
         surface.create_curvature_directions(cube, false, 45.0, 1.0);
         std::vector<double> facet_matrices;
-        surface.compute_anisotropy_matrices(cube, 3.0, facet_matrices);
+        surface.compute_anisotropy_matrices(cube, false, 3.0, facet_matrices);
         ASSERT_EQ(facet_matrices.size(), 9 * cube.facets.nb());
 
         FrameField volume;
         volume.create_curvature_directions(cube, true, 45.0, 1.0);
         std::vector<double> cell_matrices;
-        volume.compute_anisotropy_matrices(cube, 3.0, cell_matrices);
+        volume.compute_anisotropy_matrices(cube, true, 3.0, cell_matrices);
         ASSERT_EQ(cell_matrices.size(), 9 * cube.cells.nb());
 
         for (const auto& t : cube.cells) {
@@ -862,7 +862,7 @@ namespace geolio::test
         field.create_curvature_directions(cube, true, 45.0, 1.0);
 
         std::vector<double> matrices;
-        field.compute_anisotropy_matrices(cube, 3.0, matrices);
+        field.compute_anisotropy_matrices(cube, true, 3.0, matrices);
         ASSERT_EQ(matrices.size(), 9 * cube.cells.nb());
 
         for (const auto& t : cube.cells) {
@@ -899,7 +899,7 @@ namespace geolio::test
         field.create_curvature_directions(mesh, false, 45.0, 0.0);
 
         std::vector<double> matrices;
-        field.compute_anisotropy_matrices(mesh, 3.0, matrices);
+        field.compute_anisotropy_matrices(mesh, false, 3.0, matrices);
         ASSERT_EQ(matrices.size(), 9 * mesh.facets.nb());
 
         for (const auto& f : mesh.facets) {
@@ -945,7 +945,7 @@ namespace geolio::test
         field.create_curvature_directions(cylinder, false, 45.0, 0.0);
 
         std::vector<double> matrices;
-        field.compute_anisotropy_matrices(cylinder, max_aspect, matrices);
+        field.compute_anisotropy_matrices(cylinder, false, max_aspect, matrices);
         ASSERT_EQ(matrices.size(), 9 * cylinder.facets.nb());
 
         const GEO::vec3 axis(0.0, 0.0, 1.0);
@@ -1003,7 +1003,7 @@ namespace geolio::test
         field.create_curvature_directions(torus, false, 45.0, 0.0);
 
         std::vector<double> matrices;
-        field.compute_anisotropy_matrices(torus, 2.0, matrices);
+        field.compute_anisotropy_matrices(torus, false, 2.0, matrices);
         ASSERT_EQ(matrices.size(), 9 * torus.facets.nb());
 
         for (const auto& f : torus.facets) {
@@ -1038,7 +1038,7 @@ namespace geolio::test
         field.create_curvature_directions(plane, false, 45.0, 0.0);
 
         std::vector<double> matrices;
-        field.compute_anisotropy_matrices(plane, 4.0, matrices);
+        field.compute_anisotropy_matrices(plane, false, 4.0, matrices);
         ASSERT_EQ(matrices.size(), 9 * plane.facets.nb());
         for (const auto& f : plane.facets) {
             expect_identity(matrices, f, 1e-12);
@@ -1062,7 +1062,7 @@ namespace geolio::test
         double previous = 0.0;
         for (const double max_aspect : {1.5, 2.0, 4.0, 8.0}) {
             std::vector<double> matrices;
-            field.compute_anisotropy_matrices(cylinder, max_aspect, matrices);
+            field.compute_anisotropy_matrices(cylinder, false, max_aspect, matrices);
             ASSERT_EQ(matrices.size(), 9 * cylinder.facets.nb());
 
             double smallest = std::numeric_limits<double>::max();
@@ -1081,9 +1081,9 @@ namespace geolio::test
 
         // 1 is the isotropic case, and anything below it is treated as 1.
         std::vector<double> unit;
-        field.compute_anisotropy_matrices(cylinder, 1.0, unit);
+        field.compute_anisotropy_matrices(cylinder, false, 1.0, unit);
         std::vector<double> below;
-        field.compute_anisotropy_matrices(cylinder, 0.25, below);
+        field.compute_anisotropy_matrices(cylinder, false, 0.25, below);
         ASSERT_EQ(unit.size(), below.size());
         for (const auto& f : cylinder.facets) {
             expect_identity(unit, f, 1e-12);
@@ -1105,8 +1105,8 @@ namespace geolio::test
 
         std::vector<double> from_raw;
         std::vector<double> from_scaled;
-        raw.compute_anisotropy_matrices(mesh, 3.0, from_raw);
-        scaled.compute_anisotropy_matrices(mesh, 3.0, from_scaled);
+        raw.compute_anisotropy_matrices(mesh, false, 3.0, from_raw);
+        scaled.compute_anisotropy_matrices(mesh, false, 3.0, from_scaled);
 
         ASSERT_EQ(from_raw.size(), from_scaled.size());
         for (std::size_t c = 0; c < from_raw.size(); ++c) {
@@ -1126,7 +1126,7 @@ namespace geolio::test
         ASSERT_TRUE(all_frames_are_unit(field, mesh));
 
         std::vector<double> matrices;
-        field.compute_anisotropy_matrices(mesh, 4.0, matrices);
+        field.compute_anisotropy_matrices(mesh, false, 4.0, matrices);
         ASSERT_EQ(matrices.size(), 9 * mesh.facets.nb());
         for (const auto& f : mesh.facets) {
             expect_identity(matrices, f, 1e-12);
@@ -1146,11 +1146,11 @@ namespace geolio::test
         field.create_curvature_directions(plane, false, 45.0, 0.0);
 
         std::vector<double> matrices{1.0, 2.0, 3.0};
-        EXPECT_THROW(field.compute_anisotropy_matrices(mesh, 3.0, matrices), std::logic_error);
+        EXPECT_THROW(field.compute_anisotropy_matrices(mesh, false, 3.0, matrices), std::logic_error);
 
         // A field that was never built has no frame either.
         EXPECT_THROW(
-            FrameField().compute_anisotropy_matrices(plane, 3.0, matrices), std::logic_error
+            FrameField().compute_anisotropy_matrices(plane, false, 3.0, matrices), std::logic_error
             );
         EXPECT_EQ(matrices.size(), 3);
     }

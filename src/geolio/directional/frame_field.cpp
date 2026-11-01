@@ -426,7 +426,7 @@ namespace geolio
 {
     void FrameField::create_curvature_directions(
         const GEO::Mesh& mesh,
-        const bool volumetric,
+        bool volumetric,
         const double sharp_angle_threshold,
         const double autoscale
         ) {
@@ -450,13 +450,12 @@ namespace geolio
         // Volumetric frames are attached to the cells, so a mesh that has none cannot hold
         // them. Rather than publish an empty field, fall back to the surface field that the
         // curvature estimate defines directly.
-        volumetric_ = volumetric;
-        if (volumetric_ && mesh.cells.nb() == 0) {
+        if (volumetric && mesh.cells.nb() == 0) {
             LOG::WARN("volumetric was requested but the mesh has no cell: building the "
                       "surface frame field instead.");
-            volumetric_ = false;
+            volumetric = false;
         }
-        if (volumetric_) {
+        if (volumetric) {
             // The base class' volumetric mode puts the points of its search structure at
             // mesh_tet_center() of every cell, which is the centroid of the cell only for a
             // tetrahedron.
@@ -481,7 +480,7 @@ namespace geolio
         // The lookup uses the facet centers, as in the base class' extrapolation; the frames
         // themselves are inherited after they are built, in Step 5.
         std::vector<GEO::index_t> cell_facet;
-        if (volumetric_) {
+        if (volumetric) {
             cell_facet = nearest_facet_per_cell(mesh);
             certainty_max_.resize(mesh.cells.nb());
             certainty_min_.resize(mesh.cells.nb());
@@ -525,7 +524,7 @@ namespace geolio
             "Initializing the frame storage and the spatial search with the base class' "
             "own field, which the curvature directions then replace"
         );
-        GEO::FrameField::create_from_surface_mesh(mesh, volumetric_, sharp_angle_threshold);
+        GEO::FrameField::create_from_surface_mesh(mesh, volumetric, sharp_angle_threshold);
 
         // Step 5: the frames themselves. Writing through frames() needs a const_cast: it
         // is the only accessor Geogram exposes for its private frames_, and it is well
@@ -564,7 +563,7 @@ namespace geolio
             frame[8] = W.z;
         };
 
-        if (!volumetric_) {
+        if (!volumetric) {
             assert(frames.size() == 9 * mesh.facets.nb());
             for (const GEO::index_t f : mesh.facets) {
                 write_facet_frame(f, &frames[9 * f]);
@@ -589,6 +588,7 @@ namespace geolio
 
     void FrameField::compute_anisotropy_matrices(
         const GEO::Mesh& mesh,
+        const bool volumetric,
         const double* frames,
         const double max_aspect,
         std::vector<double>& matrices
@@ -597,7 +597,7 @@ namespace geolio
 
         // A surface field holds one frame per facet, a volumetric one (built by
         // create_curvature_directions()) one frame per cell.
-        const GEO::index_t nb_elements = volumetric_ ? mesh.cells.nb() : mesh.facets.nb();
+        const GEO::index_t nb_elements = volumetric ? mesh.cells.nb() : mesh.facets.nb();
 
         // The curvature magnitudes give the anisotropy. When the field does not
         // carry them (a field built by create_from_surface_mesh(), for instance), fall
@@ -627,7 +627,7 @@ namespace geolio
             // facet N is the facet normal; on a cell, which has no normal of its own,
             // it is the normal of the facet the cell inherits its frame from.
             GEO::vec3 N;
-            if (volumetric_)
+            if (volumetric)
                 N = GEO::vec3(frames[9*e+6], frames[9*e+7], frames[9*e+8]);
             else
                 N = GEO::Geom::mesh_facet_normal(mesh, e);
@@ -641,7 +641,7 @@ namespace geolio
             GEO::vec3 U = stored_U;
             U -= GEO::dot(U, N)*N;  // project into the plane orthogonal to N
             if (GEO::length(U) < 1e-12) {
-                if (volumetric_) {
+                if (volumetric) {
                     // No direction at all: any direction orthogonal to N will do, the
                     // metric is isotropic wherever the curvature says nothing.
                     U = GEO::cross(N, ::fabs(N.x) < 0.9 ? GEO::vec3(1, 0, 0) : GEO::vec3(0, 1, 0));
@@ -688,6 +688,7 @@ namespace geolio
 
     void FrameField::compute_anisotropy_matrices(
         const GEO::Mesh& mesh,
+        const bool volumetric,
         const double max_aspect,
         std::vector<double>& matrices
         ) const {
@@ -697,16 +698,16 @@ namespace geolio
 
         // A surface field holds one frame per facet, a volumetric one (built by
         // create_curvature_directions()) one frame per cell.
-        const GEO::index_t nb_elements = volumetric_ ? mesh.cells.nb() : mesh.facets.nb();
+        const GEO::index_t nb_elements = volumetric ? mesh.cells.nb() : mesh.facets.nb();
 
         if (frames.size() != 9*nb_elements)
             throw std::logic_error(
                 "The frame field does not match the mesh ("+
                 std::to_string(frames.size())+" values for "+
-                std::to_string(nb_elements)+" "+(volumetric_ ? "cells" : "facets")+
+                std::to_string(nb_elements)+" "+(volumetric ? "cells" : "facets")+
                 ", "+std::to_string(9*nb_elements)+" expected), "
                "re-compute it with create_curvature_directions()");
 
-        compute_anisotropy_matrices(mesh, frames.data(), max_aspect, matrices);
+        compute_anisotropy_matrices(mesh, volumetric, frames.data(), max_aspect, matrices);
     }
 }
