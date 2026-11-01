@@ -105,7 +105,7 @@ namespace geolio::geobox
             /* Create directional object */
             if (params.output_cross) {
                 const auto directional_object = std::make_shared<DirectionalObject>(
-                    "cross field", "", objects_, 2, params.out_cross);
+                    "cross field", "", 2, params.out_cross);
 
                 // The cross field lives on the facets it was computed on: an
                 // unattached field has nothing to be drawn on and stays invisible

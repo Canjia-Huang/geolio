@@ -66,14 +66,13 @@ namespace geolio::geobox
          * @brief Constructs an object that displays a directional field.
          * @details The field does not know what it is attached to: the object is
          *          attached to a mesh object with attach_to(), or by picking one
-         *          in its properties. Until then it draws nothing.
+         *          in its properties. Until then it draws nothing. The scene is
+         *          not kept either: the properties read it when they are drawn
+         *          (see draw_object_properties()).
          * @param[in] name Display name of the object.
          * @param[in] filepath Path of the .fra file the vectors were read from; an
          *            empty string when they were computed (reload() then has
          *            nothing to read).
-         * @param[in] objects Objects of the scene; kept by reference, so that the
-         *            properties offer the mesh objects the field can be attached
-         *            to.
          * @param[in] vectors_nb_per_element Number N of vectors each element
          *            carries (3 for a frame field, 2 for a cross field in 2D, ...).
          * @param[in] vectors The vectors, 3 coordinates each, N vectors per
@@ -82,11 +81,17 @@ namespace geolio::geobox
         DirectionalObject(
             std::string name,
             std::string filepath,
-            ApplicationObjects& objects,
             GEO::index_t vectors_nb_per_element,
             const std::vector<double>& vectors);
 
-        void draw_object_properties() override;
+        /**
+         * @brief Draws the property widgets of the field.
+         * @details The mesh object pickers are drawn from @p objects, the current
+         *          scene: they offer the mesh objects the field can be attached
+         *          to (see attachable_subelements()).
+         * @param[in] objects Objects of the scene.
+         */
+        void draw_object_properties(ApplicationObjects& objects) override;
 
         void draw_scene(bool lighting) override;
 
@@ -314,9 +319,11 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the mesh object picker and the element picker.
+         * @param[in] objects Objects of the scene, whose mesh objects are the
+         *            ones the field can be attached to.
          * @return true when the field was attached to something else.
          */
-        bool draw_attachment_pickers();
+        bool draw_attachment_pickers(ApplicationObjects& objects);
 
         /** Centers of the elements the field is defined on. */
         std::vector<GEO::vec3> centers_;
@@ -333,9 +340,6 @@ namespace geolio::geobox
         /** The elements of that mesh the frames sit on (GEO::MESH_NONE while the
          *  field is not attached). */
         GEO::MeshElementsFlags subelements_ = GEO::MESH_NONE;
-
-        /** Objects of the scene, the ones the properties offer to attach to. */
-        ApplicationObjects& objects_;
 
         /** How each axis of the field is drawn. */
         std::vector<AxisStyle> axis_styles_;

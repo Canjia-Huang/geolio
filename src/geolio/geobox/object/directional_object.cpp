@@ -36,13 +36,11 @@ namespace geolio::geobox
     DirectionalObject::DirectionalObject(
         std::string name,
         std::string filepath,
-        ApplicationObjects& objects,
         const GEO::index_t vectors_nb_per_element,
         const std::vector<double>& vectors
         ) : BaseObject(std::move(name), std::move(filepath)),
             vectors_(vectors),
-            vectors_nb_per_element_(vectors_nb_per_element),
-            objects_(objects)
+            vectors_nb_per_element_(vectors_nb_per_element)
     {
         // One style per axis, the axes being told apart by their color.
         axis_styles_.resize(vectors_nb_per_element_);
@@ -281,12 +279,13 @@ namespace geolio::geobox
     }
 
     void DirectionalObject::draw_object_properties(
+        ApplicationObjects& objects
         ) {
         ImGui::PushID(this);
 
         // The file the vectors were read from, if any (see
         // BaseObject::draw_object_properties()).
-        BaseObject::draw_object_properties();
+        BaseObject::draw_object_properties(objects);
 
         // The mesh object pickers are the way to give the field something to be
         // drawn on: they are open by default while nothing is attached, and
@@ -301,7 +300,7 @@ namespace geolio::geobox
 
             // Where the frames come from: the mesh object they are attached to, and
             // which of its elements they sit on (see attach_to()).
-            draw_attachment_pickers();
+            draw_attachment_pickers(objects);
         }
 
         // Nothing is drawn while the field is not attached, so there is nothing
@@ -360,13 +359,14 @@ namespace geolio::geobox
     }
 
     bool DirectionalObject::draw_attachment_pickers(
+        ApplicationObjects& objects
         ) {
         bool attached = false;
 
         // The objects the field can be attached to: those with as many vertices,
         // facets or cells as it has frames.
         std::vector<std::shared_ptr<MeshObject>> candidates;
-        for (const auto& object : objects_) {
+        for (const auto& object : objects) {
             const auto mesh_object = std::dynamic_pointer_cast<MeshObject>(object);
             if (mesh_object == nullptr ||
                 attachable_subelements(*mesh_object).empty()) {

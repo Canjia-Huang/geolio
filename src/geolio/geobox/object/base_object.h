@@ -17,6 +17,16 @@
 
 namespace geolio::geobox
 {
+    class BaseObject;
+
+    /** Objects container shared by the main application and its
+     *  sub-applications, in display order. The scene is handed to the objects
+     *  when it has to be read rather than kept by them: an object that depends on
+     *  another one of the scene (e.g. a field attached to a mesh) offers the
+     *  objects it can depend on from its properties (see
+     *  draw_object_properties()). */
+    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
+
     /**
      * @brief Base class for all renderable GeoBox objects.
      */
@@ -78,8 +88,13 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the object-specific property widgets in the GUI.
+         * @param[in] objects Objects of the scene, which an object that depends
+         *            on another one reads to offer what it can depend on; it is
+         *            passed at drawing time rather than kept, so that it is
+         *            always the current scene that is read.
          */
-        virtual void draw_object_properties() {
+        virtual void draw_object_properties(ApplicationObjects& objects) {
+            static_cast<void>(objects);
             if (std::filesystem::exists(filepath_)) {
                 if (ImGui::Button("Reload", ImVec2(-1, 0)))
                     reload();
@@ -188,11 +203,6 @@ namespace geolio::geobox
         GEO::vec4f title_color_ = GEO::vec4f(0.05f, 0.18f, 0.50f, 1.0f);
     };
 
-    /** Objects container shared by the main application and its
-     *  sub-applications, in display order. Objects that depend on another
-     *  object of the scene (e.g. a field attached to a mesh) keep a reference
-     *  to it to offer the objects they can depend on. */
-    using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
 }
 
 #endif //GEOLIO_BASE_OBJECT_H

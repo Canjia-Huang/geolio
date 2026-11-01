@@ -747,7 +747,7 @@ namespace geolio::geobox
         if (!selected_object->visible())
             return;
 
-        selected_object->draw_object_properties();
+        selected_object->draw_object_properties(objects_);
     }
 
     void GeoBoxApplication::draw_scene(
@@ -1106,7 +1106,6 @@ namespace geolio::geobox
         const auto object = std::make_shared<DirectionalObject>(
             get_filename(filepath),
             filepath,
-            objects_,
             vectors_nb_per_element,
             vectors);
 

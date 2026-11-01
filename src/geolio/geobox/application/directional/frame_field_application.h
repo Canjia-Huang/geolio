@@ -166,7 +166,7 @@ namespace geolio::geobox
             // attached to it, so that it follows the mesh and offers it in its
             // properties (see DirectionalObject::attach_to()).
             const auto object = std::make_shared<DirectionalObject>(
-                "frame field", "", objects_, NB_VECTORS_PER_ELEMENT, vectors);
+                "frame field", "", NB_VECTORS_PER_ELEMENT, vectors);
             if (!object->attach_to(
                     mesh_object,
                     volumetric_ ? GEO::MESH_CELLS : GEO::MESH_FACETS)) {

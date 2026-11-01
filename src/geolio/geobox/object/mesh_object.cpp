@@ -280,10 +280,15 @@ namespace geolio::geobox
     }
 
     void MeshObject::draw_object_properties(
+        ApplicationObjects& objects
         ) {
+        // A mesh does not depend on another object of the scene: it takes the
+        // scene because the properties hook is shared (see
+        // BaseObject::draw_object_properties()).
+        static_cast<void>(objects);
         ImGui::PushID(this);
 
-        BaseObject::draw_object_properties();
+        BaseObject::draw_object_properties(objects);
 
         // An operation may have changed the mesh since the last frame (see
         // mesh_changed()): the Info panel and the border controls below would

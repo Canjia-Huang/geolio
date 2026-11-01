@@ -62,7 +62,7 @@ namespace geolio::geobox
         /**
          * @brief Draws the object-specific property widgets.
          */
-        void draw_object_properties() override;
+        void draw_object_properties(ApplicationObjects& objects) override;
 
         /**
          * @brief Renders the mesh object in the scene.
