@@ -199,6 +199,29 @@ namespace geolio::geobox
             return vectors_;
         }
 
+        /**
+         * @brief The frames of the field, as the flat array the frame field
+         *        algorithms read.
+         * @details The same data as vectors(), handed out as one contiguous
+         *          array for the callers that take a raw pointer, e.g.
+         *          geolio::FrameField::compute_anisotropy_matrices(): 3
+         *          coordinates per vector, vectors_nb_per_element() vectors per
+         *          frame, in element order, i.e. ``3 * N * nb_frames()``
+         *          doubles. The frames of element @c e start at @c 9*e for a
+         *          frame field, where N is 3.
+         *          The caller has to make sure the field describes the elements
+         *          it is used for, and that it is a frame field: nothing here
+         *          checks the number of elements, only the storage is exposed.
+         * @return Pointer to the coefficients, or nullptr when the field holds
+         *         no vector at all. The pointed-to array stays valid until
+         *         reload() replaces the vectors, and until the object is
+         *         destroyed; it is a copy of what the .fra file holds, so it is
+         *         the field itself, not the mesh it is drawn on.
+         */
+        [[nodiscard]] const double* frames() const {
+            return vectors_.empty() ? nullptr : vectors_.data();
+        }
+
         /** @brief The mesh that shows the field: one edge per vector. */
         [[nodiscard]] const GEO::Mesh& mesh() const { return mesh_; }
 

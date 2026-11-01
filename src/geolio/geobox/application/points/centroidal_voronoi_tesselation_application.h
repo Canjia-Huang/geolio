@@ -83,11 +83,15 @@ namespace geolio::geobox
                         if (frame_field_aligned_) {
                             draw_directional_selector(
                                 selected_directional_object_,
-                                [&base_surface](const DirectionalObject& directional) {
+                                [this, &base_surface](const DirectionalObject& directional) {
                                     return directional.attached() &&
                                            directional.vectors_nb_per_element() == 3 &&
-                                           directional.subelements() == GEO::MESH_FACETS &&
-                                           directional.nb_elements() == base_surface.facets.nb();
+                                           (volumetric_ ?
+                                           (directional.subelements() == GEO::MESH_CELLS &&
+                                            directional.nb_elements() == base_surface.cells.nb()) :
+                                           (directional.subelements() == GEO::MESH_FACETS &&
+                                            directional.nb_elements() == base_surface.facets.nb())
+                                            );
                                 });
 
                             ImGui::DragFloat("max aspect", &max_aspect_, 0.001, 1, 1e8, "%.3f");
@@ -184,7 +188,22 @@ namespace geolio::geobox
                 const auto LpCVT_ptr = std::make_shared<LpCentroidalVoronoiTesselation>(&base_surface, p_, volumetric_);
                 if (frame_field_aligned_) {
                     const auto directional_object = selected_directional_object_.lock();
-                    if (directional_object != nullptr) {
+
+                    // The matrices are laid out from the mesh, so the field has to hold
+                    // exactly one frame per element of the mode being meshed. The picker
+                    // above chooses the field against the facets, so the check is
+                    // repeated here rather than assumed: a volumetric run reads the same
+                    // frames as if they were one per cell.
+                    const GEO::index_t nb_elements = volumetric_
+                        ? base_surface.cells.nb()
+                        : base_surface.facets.nb();
+                    if (directional_object != nullptr &&
+                        directional_object->vectors_nb_per_element() == 3 &&
+                        directional_object->nb_frames() == nb_elements) {
+                        // The field comes from a .fra file rather than from a
+                        // FrameField, so it carries no curvature certainty: the
+                        // anisotropy is then read from the lengths of the frame
+                        // vectors, which is what the file stores.
                         const FrameField frame_field;
                         std::vector<double> matrices;
                         frame_field.compute_anisotropy_matrices(
@@ -194,6 +213,17 @@ namespace geolio::geobox
                             max_aspect_,
                             matrices);
                         LpCVT_ptr->set_matrices(matrices);
+                    }
+                    else {
+                        LOG::ERROR(
+                            "The frame field does not carry one frame per {} of the "
+                            "base surface ({} frames, {} needed): the anisotropic "
+                            "metric is left out and the LpCVT runs isotropic.",
+                            volumetric_ ? "cell" : "facet",
+                            directional_object != nullptr
+                                ? directional_object->nb_frames()
+                                : GEO::index_t(0),
+                            nb_elements);
                     }
                 }
                 CVT_ptr = LpCVT_ptr;
@@ -224,7 +254,7 @@ namespace geolio::geobox
         int p_ = 4;
         bool frame_field_aligned_ = false;
         std::weak_ptr<DirectionalObject> selected_directional_object_;
-        float max_aspect_ = 1;
+        float max_aspect_ = 3;
 
         bool volumetric_ = false;
         bool Lloyd_iterations_ = true; // false -> Newton iterations
