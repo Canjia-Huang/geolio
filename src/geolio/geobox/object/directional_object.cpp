@@ -227,22 +227,26 @@ namespace geolio::geobox
             return;
         }
 
-        // One edge per vector: from the center of the element, along the unit
-        // direction of the vector. The length is applied while drawing (see
-        // draw_scene()), so that it can be changed without touching the mesh.
+        // One edge per vector: from the center of the element, along the vector
+        // and as long as it. The overall scale is applied while drawing (see
+        // draw_scene()), so that it can be changed without touching the mesh,
+        // but the *ratio* between the vectors is kept: it is the point of a
+        // curvature-weighted field, where the vectors carry the curvature
+        // magnitudes (the largest one is length() * bbox_diagonal() long).
         // The vectors are stored element by element -- the N vectors of an
         // element are 3*N consecutive coordinates -- while the edges are stored
         // axis by axis, so that drawing an axis reads a contiguous range.
         const GEO::index_t nb_edges = nb * vectors_nb_per_element_;
         mesh_.vertices.create_vertices(2 * nb_edges);
         mesh_.edges.create_edges(nb_edges);
+        max_vector_length_ = 0.0;
         for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
             for (GEO::index_t e = 0; e < nb; ++e) {
                 const double* v =
                     &vectors_[3 * (e * vectors_nb_per_element_ + axis)];
                 const double norm =
                     std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-                const double inv_norm = norm > 0.0 ? 1.0 / norm : 0.0;
+                max_vector_length_ = std::max(max_vector_length_, norm);
 
                 const GEO::index_t edge = axis * nb + e;
                 const GEO::index_t start = 2 * edge;
@@ -252,16 +256,28 @@ namespace geolio::geobox
                 const GEO::vec3& center = centers_[e];
                 mesh_.vertices.point(start) = center;
                 mesh_.vertices.point(start + 1) = GEO::vec3(
-                    center[0] + inv_norm * v[0],
-                    center[1] + inv_norm * v[1],
-                    center[2] + inv_norm * v[2]);
+                    center[0] + v[0],
+                    center[1] + v[1],
+                    center[2] + v[2]);
             }
         }
+        // A field whose vectors are all zero has no ratio to show; the scale
+        // below would then divide by zero.
+        if (max_vector_length_ == 0.0)
+            max_vector_length_ = 1.0;
     }
 
     double DirectionalObject::length_in_model_units(
         ) const {
         return static_cast<double>(length_) * elements_bbox_diagonal_;
+    }
+
+    double DirectionalObject::vector_scale_in_model_units(
+        ) const {
+        // The edges hold the vectors themselves, so drawing has to divide by the
+        // largest one for the longest vector to be length_in_model_units() long
+        // and the others to keep their computed ratio.
+        return length_in_model_units() / max_vector_length_;
     }
 
     void DirectionalObject::draw_object_properties(
@@ -463,12 +479,33 @@ namespace geolio::geobox
 
         const GEO::index_t nb = nb_elements();
 
+        // The state this pass needs is set below rather than inherited from the
+        // objects drawn before it. The axes start at the center of their
+        // element, i.e. exactly on the surface of the mesh they are attached to,
+        // and the two in-plane axes even lie in the plane of their facet: they
+        // are coplanar with geometry that was already drawn, so the depth test
+        // has to be inclusive. The scene draws with GL_LEQUAL (see
+        // SimpleApplication::draw_scene_begin()), but a point cloud -- e.g. the
+        // samples of the random sampling application -- leaves GL_LESS behind
+        // (see MeshObject::draw_points()), which drops exactly the axes that are
+        // coplanar with the surface. The depth function, like the color sources
+        // another object may have left enabled (picking or a scalar attribute,
+        // which override the color set per axis), is therefore pinned here and
+        // restored afterwards.
+        GLint depth_func = GL_LEQUAL;
+        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
+        glDepthFunc(GL_LEQUAL);
+
         // Same GLUP state as the wireframe passes of the mesh objects: thick
         // lines come from the mesh width, with the mesh drawing enabled.
+        const bool vertex_colors = glupIsEnabled(GLUP_VERTEX_COLORS) != GL_FALSE;
+        const bool texturing = glupIsEnabled(GLUP_TEXTURING) != GL_FALSE;
+        glupDisable(GLUP_VERTEX_COLORS);
+        glupDisable(GLUP_TEXTURING);
         glupDisable(GLUP_LIGHTING);
         glupEnable(GLUP_DRAW_MESH);
 
-        const double length = length_in_model_units();
+        const double length = vector_scale_in_model_units();
 
         for (GEO::index_t axis = 0; axis < vectors_nb_per_element_; ++axis) {
             const AxisStyle& style = axis_styles_[axis];
@@ -478,8 +515,12 @@ namespace geolio::geobox
             // The width of the lines comes from the mesh width, which GLUP only
             // applies while drawing the mesh: the lines are then painted with the
             // *mesh* color, so both colors are set -- setting the front color
-            // only left the axes in the color of whatever was drawn before.
+            // only left the axes in the color of whatever was drawn before. The
+            // back color is set too: a line has no back face, but the fragments
+            // of the screen-space quads a thick line is made of are classified
+            // against it, and it holds the color of whatever was drawn before.
             glupSetColor4fv(GLUP_FRONT_COLOR, style.color.data());
+            glupSetColor4fv(GLUP_BACK_COLOR, style.color.data());
             glupSetColor4fv(GLUP_MESH_COLOR, style.color.data());
             glupSetMeshWidth(static_cast<GEO::index_t>(width_ * 10.0f));
 
@@ -515,6 +556,11 @@ namespace geolio::geobox
         }
 
         glupDisable(GLUP_DRAW_MESH);
+        if (vertex_colors)
+            glupEnable(GLUP_VERTEX_COLORS);
+        if (texturing)
+            glupEnable(GLUP_TEXTURING);
+        glDepthFunc(GLenum(depth_func));
     }
 
     void DirectionalObject::get_bbox(
@@ -531,7 +577,7 @@ namespace geolio::geobox
         // The extent of the vectors that are displayed, with the length they are
         // displayed with. With draw_opposite() they also extend on the other
         // side of the center of their element.
-        const double length = length_in_model_units();
+        const double length = vector_scale_in_model_units();
         const int nb_sides = draw_opposite_ ? 2 : 1;
 
         bool first = true;

@@ -541,13 +541,19 @@ namespace geolio
             ) / curvature_symd;
             vec3 U = basis.unproject(vec2(cos(max_angle), sin(max_angle)));
 
-            const double min_angle = atan2(
-                min_sincos_alpha[2 * f + 1],
-                min_sincos_alpha[2 * f]
-            ) / curvature_symd;
-            vec3 V = basis.unproject(vec2(cos(min_angle), sin(min_angle)));
-
             const vec3 W = normalize(Geom::mesh_facet_normal(mesh, f));
+
+            // The second direction of the frame is the one orthogonal to U in the facet
+            // plane, which is the second principal direction by definition. It is not read
+            // from the tensor's second eigenvector: that vector is only tangential when the
+            // two tangential curvatures are well separated from the eigenvalue the normal
+            // cycle gives the facet normal, and on a developable region (a cylinder, say) or
+            // a nearly flat one it *is* the normal. Projecting it into the facet plane, as
+            // the angle above is computed, then leaves a numerically meaningless vector:
+            // every facet of a cylinder ended up with it parallel to U, i.e. with axis 0 and
+            // axis 1 of the frame drawn on top of each other. The min curvature magnitude is
+            // still the tensor's, and it is what the length of V carries.
+            vec3 V = normalize(cross(W, U));
 
             U *= scale * facet_certainty_max[f];
             V *= scale * facet_certainty_min[f];

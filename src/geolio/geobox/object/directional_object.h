@@ -25,12 +25,18 @@ namespace geolio::geobox
      *          @c 3*N*e, i.e. N consecutive vectors.
      *          The object keeps a mesh of its own for the visualization, whose
      *          edges are the vectors: one edge per vector, from the center of its
-     *          element along the direction of the vector, unit long. All the axes
-     *          are drawn with the same length and the same width (see length() and
-     *          width()); each of them has its own color and can be hidden (see
-     *          AxisStyle), so that the three vectors of a frame can be told
-     *          apart. draw_opposite() draws every vector in both directions, as a
-     *          line through the center of its element.
+     *          element along the vector and as long as it. The lengths are
+     *          therefore the ones the vectors carry, scaled so that the longest
+     *          of the field is length() * bbox_diagonal() long (see length()):
+     *          a curvature-weighted frame field shows the curvature magnitudes,
+     *          its axes being as long as the curvature they stand for, while a
+     *          field of unit vectors, a frame field from Geogram's cross field
+     *          for instance, draws all its axes with the same length. All the
+     *          axes share the same width (see width()); each of them has its own
+     *          color and can be hidden (see AxisStyle), so that the three
+     *          vectors of a frame can be told apart. draw_opposite() draws every
+     *          vector in both directions, as a line through the center of its
+     *          element.
      *          The vectors are read from, and written to, a .fra file: the
      *          format only stores the vectors, so the object does not know where
      *          to draw them. It is attached to another object of the scene (see
@@ -235,9 +241,11 @@ namespace geolio::geobox
             return axis_styles_[axis];
         }
 
-        /** @brief Length of the vectors, as a fraction of the diagonal of the
-         *  bounding box of the mesh the field is defined on (1 would make them
-         *  as long as it). */
+        /** @brief Length of the *longest* vector of the field, as a fraction of
+         *  the diagonal of the bounding box of the mesh it is defined on (1
+         *  would make it as long as that diagonal). The other vectors are drawn
+         *  shorter, in proportion to their magnitudes (see
+         *  vector_scale_in_model_units()). */
         [[nodiscard]] float length() const { return length_; }
 
         /** @brief Diagonal of the bounding box of the mesh the field is defined
@@ -280,6 +288,19 @@ namespace geolio::geobox
         /** @brief Length of the vectors in model coordinates, i.e. length()
          *  times the diagonal of the mesh they are defined on. */
         [[nodiscard]] double length_in_model_units() const;
+
+        /**
+         * @brief Factor that turns a stored vector into the model-space length
+         *        it is drawn with.
+         * @details The visualization mesh holds the vectors themselves, not
+         *          their directions, so the drawing scales them all by this
+         *          factor: the longest vector of the field comes out
+         *          length_in_model_units() long and every other one keeps the
+         *          ratio of its own magnitude to that length. This is what makes
+         *          a curvature-weighted field readable, its axes being as long
+         *          as the curvature they stand for.
+         */
+        [[nodiscard]] double vector_scale_in_model_units() const;
 
         /**
          * @brief Reads the centers of the elements the field is attached to, and
@@ -326,7 +347,14 @@ namespace geolio::geobox
          *  used to interpret the length of the vectors (see length()). */
         float elements_bbox_diagonal_ = 1.0f;
 
-        /** Length of the vectors, as a fraction of elements_bbox_diagonal_. */
+        /** Largest magnitude of the vectors of the field, i.e. the length of the
+         *  edge of the visualization mesh that is drawn at length(); the other
+         *  vectors are scaled by their ratio to it (see
+         *  vector_scale_in_model_units()). 1.0 while the field is not drawn. */
+        double max_vector_length_ = 1.0;
+
+        /** Length of the longest vector, as a fraction of
+         *  elements_bbox_diagonal_. */
         float length_ = 0.03f;
 
         /** Width of the lines the vectors are drawn with. */

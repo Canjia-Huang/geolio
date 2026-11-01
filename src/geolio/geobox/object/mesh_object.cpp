@@ -1295,7 +1295,15 @@ namespace geolio::geobox
 
         // Vertices sit exactly on the surface, so the default GL_LESS depth
         // test would cull them at equal depth; use an inclusive test so the
-        // markers stay visible on top of the model.
+        // markers stay visible on top of the model. The previous function is
+        // saved rather than assumed to be GL_LESS: the scene draws with
+        // GL_LEQUAL (see SimpleApplication::draw_scene_begin()), and restoring
+        // that hardcoded value would leave every object drawn after a point
+        // cloud -- e.g. a directional field, whose axes start exactly on that
+        // surface -- with the stricter test, which culls the fragments that sit
+        // at the depth of the surface they belong to.
+        GLint depth_func = GL_LESS;
+        glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
         glDepthFunc(GL_LEQUAL);
 
         const double radius = 0.5 * static_cast<double>(vertices_size_);
@@ -1432,7 +1440,7 @@ namespace geolio::geobox
         if (lighting)
             glupEnable(GLUP_LIGHTING);
 
-        glDepthFunc(GL_LESS);
+        glDepthFunc(GLenum(depth_func));
 
         if (blended) {
             glDisable(GL_BLEND);
