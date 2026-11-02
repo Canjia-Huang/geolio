@@ -12,6 +12,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram_gfx/mesh/mesh_gfx.h>
 #include "geolio/geobox/colormap.h"
+#include "geolio/geobox/object/surface_borders.h"
 
 namespace geolio::geobox
 {
@@ -124,7 +125,9 @@ namespace geolio::geobox
          *          whatever the number of draws before it (see
          *          update_mesh_caches()). The renderer is told right away,
          *          since it only re-uploads the geometry and the attributes it
-         *          draws once it knows the mesh changed.
+         *          draws once it knows the mesh changed. The border edges are
+         *          dropped here as well: the drawing pass enumerates them again
+         *          from the mesh it finds (see surface_borders_).
          */
         void mesh_changed();
 
@@ -321,6 +324,9 @@ namespace geolio::geobox
          *          GEO::NO_FACET as its adjacent facet. A closed surface has no
          *          such edge, so its border controls are hidden (see
          *          draw_object_properties()).
+         *          It stops at the first border edge it finds, which is what the
+         *          properties panel needs; the drawing pass enumerates them all,
+         *          once, through surface_borders_ (see SurfaceBorders).
          * @return true if at least one facet edge is on the border.
          */
         bool compute_surface_has_borders() const;
@@ -950,14 +956,27 @@ namespace geolio::geobox
         GEO::vec4f surface_borders_color_ = GEO::vec4f(0.0f, 0.85f, 0.85f, 1.0f);
 
         /**
-         * @brief Whether the surface has border edges, i.e. whether
-         *        MeshGfx::draw_surface_borders() has anything to draw.
+         * @brief Whether the surface has border edges, i.e. whether there is
+         *        anything for the border pass to draw.
          * @details Cached when the mesh is set (constructor) or reloaded:
          *          scanning every facet corner on each GUI frame would be
          *          wasteful on large meshes. The border controls are hidden
-         *          while it is false (see draw_object_properties()).
+         *          while it is false (see draw_object_properties()). The edges
+         *          themselves are enumerated by surface_borders_, which the
+         *          drawing pass reads.
          */
         bool surface_has_borders_ = false;
+
+        /**
+         * @brief The border edges of the surface, enumerated when the mesh
+         *        changes and drawn from a vertex buffer.
+         * @details The edges are looked for once per change of the mesh rather
+         *          than on every frame, and the frames then only issue one draw
+         *          call on the GLUP profiles that draw lines from arrays (see
+         *          SurfaceBorders). It is invalidated by mesh_changed(), and
+         *          filled by the surface drawing pass.
+         */
+        SurfaceBorders surface_borders_;
 
         bool show_volume_ = true;
         float cells_shrink_ = 0.0f;

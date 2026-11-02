@@ -1458,6 +1458,10 @@ namespace geolio::geobox
         // MeshGfx::draw_surface_borders() emits, for every facet, the edges
         // whose facet corner has no adjacent facet (see its implementation):
         // the same test tells whether that pass would draw anything at all.
+        // Only the answer is needed here, so the scan stops at the first edge
+        // it finds; the edges themselves are enumerated by SurfaceBorders, once
+        // per change of the mesh. Both use the same criterion, so the pass and
+        // the controls of the properties panel agree.
         for (const GEO::index_t f : mesh_.facets) {
             for (const GEO::index_t c : mesh_.facets.corners(f)) {
                 if (mesh_.facet_corners.adjacent_facet(c) == GEO::NO_FACET)
@@ -1473,6 +1477,11 @@ namespace geolio::geobox
         // that scan it are recomputed lazily (see update_mesh_caches()).
         mesh_caches_dirty_ = true;
         bbox_diag_ = -1.0f;
+
+        // The border edges are derived from the connectivity of the facets,
+        // which the operation may have changed: they are enumerated again the
+        // next time the border pass draws them (see SurfaceBorders).
+        surface_borders_.invalidate();
 
         // The display copies are built on the attribute stores of the mesh,
         // which the operation may have replaced (see update_display_attribute()
@@ -1494,7 +1503,9 @@ namespace geolio::geobox
         mesh_caches_dirty_ = false;
 
         // Both walk the whole mesh, which is why they are not done in
-        // mesh_changed() but here, when the caches are actually read.
+        // mesh_changed() but here, when the caches are actually read. The
+        // border edges are left to SurfaceBorders, which only enumerates them
+        // when the border pass draws them.
         surface_has_borders_ = compute_surface_has_borders();
         element_counts_ = count_elements();
     }
@@ -1569,19 +1580,11 @@ namespace geolio::geobox
             // Nothing to draw when the surface is closed (see
             // compute_surface_has_borders()).
             if (show_surface_borders_ && surface_has_borders_) {
-                mesh_gfx_.set_mesh_color(
-                    surface_borders_color_.x,
-                    surface_borders_color_.y,
-                    surface_borders_color_.z);
-                mesh_gfx_.set_mesh_border_width(
-                    static_cast<GEO::index_t>(surface_borders_width_ * 10.0f));
-                mesh_gfx_.draw_surface_borders();
-
-                // The border pass above leaves MeshGfx's mesh color set to the border
-                // color; restore it so later passes (edges, volume wireframe) use the
-                // surface mesh color.
-                mesh_gfx_.set_mesh_color(
-                    surface_mesh_color_.x, surface_mesh_color_.y, surface_mesh_color_.z);
+                // The edges were enumerated when the mesh last changed, and are
+                // drawn from a vertex buffer: the frame does not look for them
+                // again (see SurfaceBorders).
+                surface_borders_.draw(
+                    mesh_, surface_borders_color_, surface_borders_width_);
             }
         }
 
