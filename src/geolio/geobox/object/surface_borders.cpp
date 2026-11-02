@@ -360,12 +360,16 @@ void main() {
 
         GLuint program = 0;
         try {
-            const char* vertex_source[] = {VERTEX_SHADER_SOURCE};
-            const char* fragment_source[] = {FRAGMENT_SHADER_SOURCE};
+            // The sources are given as a zero-terminated list, which is how
+            // GeoGram declares both overloads of compile_shader(): the one that
+            // takes an array of strings and its length is shadowed by the
+            // variadic one in the recent versions of the library, since the
+            // length is then an int where the variadic overload takes a
+            // pointer.
             const GLuint vertex_shader = GEO::GLSL::compile_shader(
-                GL_VERTEX_SHADER, vertex_source, 1);
+                GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE, nullptr);
             const GLuint fragment_shader = GEO::GLSL::compile_shader(
-                GL_FRAGMENT_SHADER, fragment_source, 1);
+                GL_FRAGMENT_SHADER, FRAGMENT_SHADER_SOURCE, nullptr);
             program = GEO::GLSL::create_program_from_shaders_no_link(
                 vertex_shader, fragment_shader, 0);
             glBindAttribLocation(program, EDGE_START_ATTRIBUTE, "edge_start");
