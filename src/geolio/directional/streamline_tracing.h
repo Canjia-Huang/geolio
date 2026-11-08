@@ -69,6 +69,12 @@ namespace geolio
         const auto& traced_points() { return traced_points_; }
 
     protected:
+        struct TracingPoint {
+            GEO::vec3 point;
+            GEO::index_t element = GEO::NO_INDEX; // f / c
+            GEO::index_t local_idx = GEO::NO_INDEX; // lv / lf
+        };
+
         /**
          * @brief Initializes the per-point-to-element association used during tracing.
          */
@@ -80,6 +86,18 @@ namespace geolio
          * @return Direction vector associated with the vertex.
          */
         GEO::vec3 get_point_direction(GEO::index_t v);
+
+        /**
+         * @brief Computes the reference vector the field directions at a traced point are compared to.
+         *
+         * By default this is the chord between the two last traced points, which is what a tracer
+         * stepping in a single ambient space needs.
+         *
+         * @param[in] tp0 Previous traced point, together with the element that holds it.
+         * @param[in] tp1 Current traced point, together with the element that holds it.
+         * @return Reference vector describing the motion that led to @p tp1.
+         */
+        [[nodiscard]] virtual GEO::vec3 get_moving_direction(const TracingPoint& tp0, const TracingPoint& tp1) const;
 
         /**
          * @brief Advances tracing from a current vertex to the next point and element.
@@ -97,11 +115,6 @@ namespace geolio
         GEO::index_t points_nb_ = 0;
         GEO::index_t traced_times_ = 0;
 
-        struct TracingPoint {
-            GEO::vec3 point;
-            GEO::index_t element = GEO::NO_INDEX; // f / c
-            GEO::index_t local_idx = GEO::NO_INDEX; // lv / lf
-        };
         std::vector<TracingPoint> traced_points_; // points_nb * tracing_times
 
         GEO::index_t N_ = 0;
@@ -180,6 +193,20 @@ namespace geolio
          * @param[out] next_local_idx Local index of the point within the target facet.
          */
         void trace_point(GEO::index_t v, GEO::vec3& next_point, GEO::index_t& next_element, GEO::index_t& next_local_idx) override;
+
+        /**
+         * @brief Computes the reference vector by unfolding the previous facet onto the current one.
+         *
+         * The two last traced points both sit in the facet of @p tp0, so their chord lies in the
+         * plane of that facet. Rotating it around the edge shared with the facet of @p tp1 (that is,
+         * folding the previous facet onto the current one) puts it in the plane the step continues
+         * in, where the facet directions are defined.
+         *
+         * @param[in] tp0 Previous traced point, together with its facet.
+         * @param[in] tp1 Current traced point, together with its facet.
+         * @return Reference vector, lying in the plane of the current facet.
+         */
+        [[nodiscard]] GEO::vec3 get_moving_direction(const TracingPoint& tp0, const TracingPoint& tp1) const override;
 
         GEO::MeshFacetsAABB mesh_AABB_;
         GEO::Attribute<GEO::vec3> mesh_f_unit_normal_;

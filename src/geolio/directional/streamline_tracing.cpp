@@ -116,9 +116,7 @@ namespace geolio
 
         /* Find the closet direction */
         const auto& tp0 = traced_points_[points_nb_*(traced_times_-1) + v];
-        const auto& p0 = tp0.point;
-        const auto& p1 = tp1.point;
-        const GEO::vec3 moving_dir = p1-p0;
+        const GEO::vec3 moving_dir = get_moving_direction(tp0, tp1);
         GEO::vec3 closet_dir;
         double closet_angle = M_PI;
         for (GEO::index_t n = 0; n < N_; ++n) {
@@ -141,6 +139,13 @@ namespace geolio
             }
         }
         return closet_dir;
+    }
+
+    GEO::vec3 StreamlineTracer::get_moving_direction(
+        const TracingPoint& tp0,
+        const TracingPoint& tp1
+        ) const {
+        return tp1.point - tp0.point;
     }
 
     /* ============================================================================================================= */
@@ -166,6 +171,43 @@ namespace geolio
             mesh_element_direction_.create_vector_attribute(mesh_.facets.attributes(), attribute_id_+":direction", 3*N_);
 
         std::ranges::copy_n(directions, 3*N_*mesh_.facets.nb(), mesh_element_direction_.data());
+    }
+
+    GEO::vec3 StreamlineSurficialTracer::get_moving_direction(
+        const TracingPoint& tp0,
+        const TracingPoint& tp1
+        ) const {
+        const GEO::vec3 moving_dir = tp1.point - tp0.point;
+
+        const GEO::index_t f_prev = tp0.element;
+        const GEO::index_t f_cur = tp1.element;
+        if (f_prev == GEO::NO_FACET || f_cur == GEO::NO_FACET || f_prev == f_cur)
+            return moving_dir;
+
+        /* Both traced points lie in the facet of tp0: the step of tp0 left that facet through
+         * the edge that now holds tp1.point, so the chord is a direction of the plane of the
+         * previous facet. The directions it is compared to, however, are tangent to the current
+         * facet, and the two planes coincide only if the facets are coplanar. Fold the previous
+         * facet onto the current one (a rotation around their shared edge, which is parallel to
+         * the cross product of the two facet normals) and take the chord in that unfolded plane,
+         * so that a bent surface does not make the chord point away from the direction the
+         * streamline actually follows. */
+        const GEO::vec3 n_prev = mesh_f_unit_normal_[f_prev];
+        const GEO::vec3 n_cur = mesh_f_unit_normal_[f_cur];
+
+        const GEO::vec3 fold_axis = GEO::cross(n_prev, n_cur);
+        const double sin_fold = GEO::length(fold_axis);
+        if (sin_fold < 1e-10) // the two facets are coplanar -> the chord is already in the plane
+            return moving_dir;
+
+        /* Rodrigues' rotation of the chord by the dihedral angle between the two facets, around
+         * their shared edge: the rotation that brings n_prev onto n_cur, hence the plane of the
+         * previous facet onto the plane of the current one. */
+        const double cos_fold = GEO::dot(n_prev, n_cur);
+        const GEO::vec3 axis = fold_axis / sin_fold;
+        return cos_fold*moving_dir
+               + sin_fold*GEO::cross(axis, moving_dir)
+               + (1.0-cos_fold)*GEO::dot(axis, moving_dir)*axis;
     }
 
     void StreamlineSurficialTracer::smooth(
