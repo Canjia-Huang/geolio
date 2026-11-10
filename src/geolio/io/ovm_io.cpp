@@ -450,6 +450,10 @@ namespace geolio
                 if (!parse_property(in, mesh.facets.attributes()))
                     return false;
             }
+            else if (kw == "Cell_Property" || kw == "CProp") {
+                if (!parse_property(in, mesh.cells.attributes()))
+                    return false;
+            }
             else if (kw == "HalfFace_Property") {
                 LOG::WARN("Halfedge data structure and related properties `{}` are not supported; skip it.", kw);
                 for (const auto& f : mesh.facets) {
