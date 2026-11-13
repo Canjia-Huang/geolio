@@ -5,6 +5,8 @@
 #ifndef GEOLIO_APPLICATION_H
 #define GEOLIO_APPLICATION_H
 
+#include <map>
+#include <string>
 #include <geogram_gfx/gui/simple_mesh_application.h>
 #include "application/base_application.h"
 #include "application/application_menu.h"
@@ -65,6 +67,33 @@ namespace geolio::geobox
          *        scene framebuffer, colormap table, image texture cache).
          */
         void GL_terminate() override;
+
+        /**
+         * @brief Saves the state of the ImGui panels before GeoGram destroys it.
+         * @details GeoGram recreates the ImGui context whenever the fonts are
+         *          reloaded, which is what happens when the window is moved to a
+         *          monitor with another pixel ratio (see Application::one_frame()):
+         *          the geometry of the panels and the open/closed state of their
+         *          collapsing headers are kept by ImGui itself, so they would be
+         *          lost and the panels would come back on their defaults. Both are
+         *          saved here and given back to the context that replaces it (see
+         *          restore_ui_state()).
+         */
+        void save_ui_state();
+
+        /**
+         * @brief Gives the state saved by save_ui_state() back to ImGui.
+         * @details Called at the beginning of a frame, before the panels are
+         *          drawn, so that the windows take their geometry from it; the
+         *          open/closed state of their headers is given back at the end of
+         *          that frame, once the windows exist (see draw_gui()).
+         */
+        void restore_ui_state();
+
+        /**
+         * @brief Saves the state of the ImGui panels, then terminates ImGui.
+         */
+        void ImGui_terminate() override;
 
         /**
          * @brief Marks the scene dirty on key events (base class shortcuts
@@ -297,6 +326,20 @@ namespace geolio::geobox
         /** Frames to draw after the most recent input event (replaces the
          *  base class's 100-frame redraw storm). */
         mutable GEO::index_t redraw_budget_ = 0;
+
+        /** Geometry of the ImGui windows, in the format ImGui saves its settings
+         *  in, as it was before the context was recreated (see save_ui_state()). */
+        std::string ui_settings_;
+
+        /** Open/closed state of the collapsing headers of each window, as it was
+         *  before the context was recreated, indexed by window name (see
+         *  save_ui_state()): the settings saved with the geometry do not hold
+         *  it. */
+        std::map<std::string, ImGuiStorage> window_states_;
+
+        /** Whether the state of save_ui_state() still has to be given back to a
+         *  recreated ImGui context (see restore_ui_state()). */
+        bool ui_state_to_restore_ = false;
 
         bool controller_properties_visible_ = true;
         bool arc_ball_visible_ = true;

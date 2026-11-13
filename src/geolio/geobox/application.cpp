@@ -309,6 +309,12 @@ namespace geolio::geobox
 
     void GeoBoxApplication::draw_gui(
         ) {
+        // A recreated ImGui context starts on the defaults of the panels: the
+        // geometry is given back before they are drawn, the open/closed state of
+        // their headers at the end of the frame (see restore_ui_state()).
+        if (ui_state_to_restore_)
+            restore_ui_state();
+
         draw_menu_bar();
         // Draw each sub-application's floating window (visibility is toggled
         // from the corresponding menu entry in the menu bar).
@@ -379,6 +385,21 @@ namespace geolio::geobox
         // resize_file_dialogs()).
         resize_file_dialogs();
 
+        // The panels have been drawn: the windows exist, so the open/closed state
+        // of their headers can be given back to them (see restore_ui_state()).
+        if (ui_state_to_restore_) {
+            for (ImGuiWindow* window : ImGui::GetCurrentContext()->Windows) {
+                if (window->Name == nullptr)
+                    continue;
+                const auto state = window_states_.find(window->Name);
+                if (state != window_states_.end())
+                    window->StateStorage = state->second;
+            }
+            window_states_.clear();
+            ui_settings_.clear();
+            ui_state_to_restore_ = false;
+        }
+
         // Redraw-on-demand: any real widget interaction (click, slider drag,
         // text edit) may have changed the render state, so schedule a full
         // re-render for the next frame. Pure hover / mouse movement over the
@@ -403,6 +424,44 @@ namespace geolio::geobox
         // here, right after the base class set the GL state up (and built its
         // own, larger colormap table).
         ColormapLibrary::instance().initialize();
+    }
+
+    void GeoBoxApplication::ImGui_terminate(
+        ) {
+        save_ui_state();
+        SimpleMeshApplication::ImGui_terminate();
+    }
+
+    void GeoBoxApplication::save_ui_state(
+        ) {
+        // The geometry of the windows, in the format ImGui saves its settings in
+        // (positions, sizes, the collapsed state of whole windows).
+        size_t settings_size = 0;
+        const char* settings = ImGui::SaveIniSettingsToMemory(&settings_size);
+        if (settings != nullptr)
+            ui_settings_.assign(settings, settings_size);
+
+        // The open/closed state of the collapsing headers of each window, which
+        // the settings do not hold: it is kept in the state storage of the window.
+        window_states_.clear();
+        for (const ImGuiWindow* window :
+             ImGui::GetCurrentContext()->Windows) {
+            if (window->Name != nullptr)
+                window_states_[window->Name] = window->StateStorage;
+        }
+
+        ui_state_to_restore_ = true;
+    }
+
+    void GeoBoxApplication::restore_ui_state(
+        ) {
+        // The windows created this frame read their geometry from the settings,
+        // which therefore have to be there before they are drawn.
+        if (!ui_settings_.empty()) {
+            ImGui::LoadIniSettingsFromMemory(
+                ui_settings_.data(), ui_settings_.size());
+        }
+        ui_settings_.clear();
     }
 
     void GeoBoxApplication::ImGui_initialize(
