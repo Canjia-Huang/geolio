@@ -54,6 +54,22 @@ namespace geolio::geobox
     }
 
     /**
+     * @brief Width the combos of the "Shading" group of the scene panel are given.
+     * @details The three combos of that group are drawn by different classes -- the
+     *          application draws the full screen effect, the selected object draws
+     *          its shading modes (see MeshObject::draw_shading_properties()) -- and
+     *          they have to line up. They are therefore all given this one width,
+     *          which leaves room for the longest of their names: the panel is too
+     *          narrow for the width ImGui gives its items by default.
+     * @return The width, from the room left in the panel.
+     */
+    [[nodiscard]] inline float shading_combo_width() {
+        return ImGui::GetContentRegionAvail().x -
+            ImGui::CalcTextSize("transparency").x -
+            ImGui::GetStyle().ItemInnerSpacing.x;
+    }
+
+    /**
      * @brief Base class for all renderable GeoBox objects.
      */
     class BaseObject {
@@ -164,6 +180,18 @@ namespace geolio::geobox
          *          ... -- keep the default, which draws nothing.
          */
         virtual void draw_lighting_properties() {}
+
+        /**
+         * @brief Gives the object back the parameters it gives to the light of the
+         *        scene.
+         * @details What the "reset" button of the light controls puts back on its
+         *          defaults, after the light itself (see
+         *          GeoBoxApplication::draw_light_properties()): a mesh gives the
+         *          light its specular factor (see MeshObject).
+         *          Objects that have nothing to give the light keep the default,
+         *          which does nothing.
+         */
+        virtual void reset_lighting_properties() {}
 
         virtual void reload() {}
 

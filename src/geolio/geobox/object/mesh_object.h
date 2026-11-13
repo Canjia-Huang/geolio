@@ -107,8 +107,8 @@ namespace geolio::geobox
          * @brief Draws the shading controls of the object in the scene panel.
          * @details The shading properties of Graphite's mesh shader that the
          *          properties panel does not offer: culling_mode and transparency
-         *          (see draw_shading_properties()). Drawn at the end of the
-         *          "Viewer" section of the left controller; the specular factor
+         *          (see draw_shading_properties()). Drawn in the "Shading" group
+         *          of the viewer panel of the left controller; the specular factor
          *          is drawn with the controls of the light instead (see
          *          draw_lighting_properties()).
          */
@@ -123,6 +123,14 @@ namespace geolio::geobox
          *          GeoBoxApplication::draw_light_properties()).
          */
         void draw_lighting_properties() override;
+
+        /**
+         * @brief Gives the specular factor back its default (see
+         *        DEFAULT_SPECULAR).
+         */
+        void reset_lighting_properties() override {
+            specular_ = DEFAULT_SPECULAR;
+        }
 
         /**
          * @brief Renders the mesh object in the scene.
@@ -269,9 +277,10 @@ namespace geolio::geobox
          *          0..1 factor it multiplies the specular term with. It has no
          *          upper bound -- a value above 10 saturates the highlight to
          *          white -- and applies to the surface facets and to the
-         *          volumetric cells, as it does in Graphite. The default of 4
-         *          keeps 0.4 for the surface, which is what the objects were
-         *          drawn with before the property existed. Its control is part of
+         *          volumetric cells, as it does in Graphite. The default of
+         *          DEFAULT_SPECULAR keeps 0.4 for the surface, which is what the
+         *          objects were drawn with before the property existed. Its control
+         *          is part of
          *          the light controls of the viewer panel (see
          *          draw_lighting_properties()).
          */
@@ -279,6 +288,15 @@ namespace geolio::geobox
             specular_ = std::max(specular, 0);
         }
         [[nodiscard]] int specular() const { return specular_; }
+
+        /**
+         * @brief Specular factor the objects start on.
+         * @details 4 is the 0.4 the surface pass was drawn with before the factor
+         *          was a property (see set_specular()); it is what the "reset"
+         *          button of the light controls gives the objects back (see
+         *          reset_lighting_properties()).
+         */
+        static constexpr int DEFAULT_SPECULAR = 4;
 
         /**
          * @brief How the transparency of the surface is composited (see
@@ -462,10 +480,10 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the shading controls ported from Graphite's shader.
-         * @details culling_mode and transparency, in the layout Graphite's
-         *          properties editor gives them: the name of the property on its
-         *          own line, then the widget. Drawn by the scene panel of the
-         *          application (see draw_scene_properties()).
+         * @details culling_mode and transparency, as combos labelled like the one
+         *          of the full screen effect of the panel: the widget on its line,
+         *          its name after it. Drawn by the "Shading" group of the scene
+         *          panel (see draw_scene_properties()).
          *          Only what the properties panel does not offer is here: the
          *          two-sided shading keeps its `2sided` control, and the amount
          *          of the transparency its `trsp.` slider, in the surface block
@@ -1159,7 +1177,7 @@ namespace geolio::geobox
         // (see draw_shading_properties()) and the drawing passes apply them
         // (see CullingMode and TransparencyMode).
         CullingMode culling_mode_ = CullingMode::NO_CULL;
-        int specular_ = 4;
+        int specular_ = DEFAULT_SPECULAR;
         TransparencyMode transparency_mode_ = TransparencyMode::TRANSP_BLEND;
 
         // Wireframe of the surface facets ("mesh" lines: the edges of

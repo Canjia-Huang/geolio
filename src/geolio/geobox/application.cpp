@@ -499,56 +499,90 @@ namespace geolio::geobox
 
     void GeoBoxApplication::draw_controller_properties(
         ) {
-        if (ImGui::CollapsingHeader("Viewer")) {
+        if (ImGui::CollapsingHeader("Viewer"))
             draw_viewer_properties();
-
-            // The shading of the scene closes the viewer panel: Graphite's scene
-            // panel exposes the full screen effect and the shading properties of
-            // the current object there, and the viewer is where the panel of the
-            // controller shows how the scene is drawn.
-            draw_shading_properties();
-        }
         if (ImGui::CollapsingHeader("Object", ImGuiTreeNodeFlags_DefaultOpen))
             draw_objects_properties();
     }
 
-    void GeoBoxApplication::draw_viewer_properties(
+    bool GeoBoxApplication::open_group(
+        const char* name,
+        const bool default_open
         ) {
-        if (ImGui::Button((GEO::icon_UTF8("home")).c_str(), ImVec2(-1.0, 0.0)))
-            home();
-
-        ImGui::Separator();
-        if (three_D_) {
-            ImGui::Checkbox("Lighting", &lighting_);
-            if (lighting_)
-                draw_light_properties();
-            ImGui::Separator();
-            ImGui::Checkbox("Clipping", &clipping_);
-            if (clipping_) {
-                ImGui::Combo(
-                    "##mode", (int*)&clip_mode_,
-                    "std. GL\0cells\0stradd.\0slice\0\0"
-                );
-                ImGui::Checkbox(
-                    "edit clip", &edit_clip_
-                );
-                ImGui::Checkbox(
-                    "fixed clip", &fixed_clip_
-                );
-            }
-            ImGui::Separator();
-        }
-        ImGui::ColorEdit3WithPalette("Backgnd", background_color_.data());
-        ImGui::Separator();
+        // A group is a tree node, not a header: the headers of the panels are
+        // framed rows that span the panel (see draw_viewer_properties()), and a
+        // group has to be told apart from them -- it is an arrow and a name, and
+        // ImGui indents what it holds.
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth;
+        if (default_open)
+            flags |= ImGuiTreeNodeFlags_DefaultOpen;
+        return ImGui::TreeNodeEx(name, flags);
     }
 
-    void GeoBoxApplication::draw_shading_properties(
+    void GeoBoxApplication::draw_viewer_properties(
         ) {
-        // The "Shading" block of the viewer panel: the full screen effect of the
-        // scene, which shades the whole image, then the shading controls the
-        // selected object adds there (see BaseObject::draw_scene_properties()).
-        draw_section_title("Shading");
+        // The camera button brings the scene back in view. It stays at the top of
+        // the panel, out of the groups.
+        if (ImGui::Button((GEO::icon_UTF8("home")).c_str(), ImVec2(-1.0, 0.0)))
+            home();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Frame the scene again.");
 
+        // What is on: whether the scene is lit, and the color it is drawn on, on
+        // one line and out of the groups -- the light group is only there when
+        // lighting is on.
+        if (three_D_) {
+            ImGui::Checkbox("Lighting", &lighting_);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Shade the scene with a light.");
+            ImGui::SameLine();
+        }
+        ImGui::ColorEdit3WithPalette("Backgnd", background_color_.data());
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Color the scene is drawn on.");
+
+        // The groups of settings, closed: the panel then shows what can be set
+        // without taking the room of the settings themselves.
+        if (three_D_ && lighting_ && open_group("Light")) {
+            draw_light_properties();
+            ImGui::TreePop();
+        }
+        if (three_D_ && open_group("Clipping")) {
+            draw_clipping_group();
+            ImGui::TreePop();
+        }
+        if (open_group("Shading")) {
+            draw_shading_group();
+            ImGui::TreePop();
+        }
+    }
+
+
+    void GeoBoxApplication::draw_clipping_group(
+        ) {
+        // Whether the scene is clipped, and how: the GLUP clipping modes, and the
+        // plane, which is moved with the mouse while "edit clip" is on.
+        ImGui::Checkbox("Clipping", &clipping_);
+        if (clipping_) {
+            ImGui::Combo(
+                "##mode", (int*)&clip_mode_,
+                "std. GL\0cells\0stradd.\0slice\0\0"
+            );
+            ImGui::Checkbox("edit clip", &edit_clip_);
+            ImGui::Checkbox("fixed clip", &fixed_clip_);
+        }
+    }
+
+
+    void GeoBoxApplication::draw_shading_group(
+        ) {
+        // How the scene is shaded: the full screen effect, which shades the whole
+        // image, then the shading controls the selected object adds there (see
+        // BaseObject::draw_scene_properties()).
+
+        // The width of the combos of the group, which the object draws its own with
+        // (see shading_combo_width()).
+        ImGui::PushItemWidth(shading_combo_width());
         if (ImGui::Combo(
                 "sfx", reinterpret_cast<int*>(&effect_),
                 "none\0SSAO\0cartoon\0\0")) {
@@ -563,9 +597,11 @@ namespace geolio::geobox
             ImGui::SetTooltip(
                 "Full screen effect applied to the rendered scene: SSAO shades "
                 "the creases, cartoon flattens the colors and outlines them.");
+        ImGui::PopItemWidth();
 
         if (const auto object = selected_object_.lock())
             object->draw_scene_properties();
+
     }
 
     void GeoBoxApplication::draw_light_properties(
@@ -574,8 +610,6 @@ namespace geolio::geobox
         // GLUP is given for the frame), the parameters GeoBox shades with (see
         // LightShader), and the specular factor, which the objects give to the
         // shading (see BaseObject::draw_lighting_properties()).
-        ImGui::Indent();
-
         ImGui::Checkbox("Edit light", &edit_light_);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip(
@@ -626,13 +660,6 @@ namespace geolio::geobox
             }
         }
 
-        if (ImGui::Button("reset light", ImVec2(-1.0, 0.0)))
-            light_rotation_.reset();
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Put the light back where the application starts it, over the "
-                "(1,1,1) diagonal of the view.");
-
         // The parameters of the light itself, other than its direction (see
         // SceneLight): GeoBox shades the surfaces with its own program to make
         // them settings (see LightShader), and they are the light of the whole
@@ -676,7 +703,22 @@ namespace geolio::geobox
         if (const auto object = selected_object_.lock())
             object->draw_lighting_properties();
 
-        ImGui::Unindent();
+        // The whole light back on its defaults: the direction, the color, the
+        // intensity, the ambient level, the exponent of the highlight, and the
+        // specular factor of the object. It closes the group, as it acts on all of
+        // its settings.
+        if (ImGui::Button("reset", ImVec2(-1.0, 0.0))) {
+            light_rotation_.reset();
+            scene_light() = SceneLight();
+            if (const auto object = selected_object_.lock())
+                object->reset_lighting_properties();
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Put the light back on its defaults: the direction it comes "
+                "from, its color, its intensity, its ambient level, the "
+                "exponent of its highlight, and the specular factor of the "
+                "object.");
     }
 
     void GeoBoxApplication::draw_objects_properties(

@@ -900,28 +900,28 @@ namespace geolio::geobox
 
     void MeshObject::draw_shading_properties(
         ) {
-        // Layout copied from Graphite's properties editor (autogui): the name
-        // of the property on its own line, then a widget taking the whole width
-        // of the panel, with the help of the property as a tooltip.
+        // The combos are labelled like the one of the full screen effect of the
+        // panel (see GeoBoxApplication::draw_shading_group()): the widget on its
+        // line, its name after it, and the help of the property as a tooltip. They
+        // share the width of the group (see shading_combo_width()), so that the
+        // three combos of the group are the same length.
+        ImGui::PushItemWidth(shading_combo_width());
 
         /* == culling_mode ====================================================================================== */
         static const char* CULLING_MODE_NAMES[] = {
             "NO_CULL", "CULL_FRONT", "CULL_BACK"
         };
-        ImGui::TextUnformatted("culling_mode");
+        int culling_mode = static_cast<int>(culling_mode_);
+        if (ImGui::Combo(
+                "culling_mode", &culling_mode,
+                CULLING_MODE_NAMES, IM_ARRAYSIZE(CULLING_MODE_NAMES)))
+            culling_mode_ = static_cast<CullingMode>(culling_mode);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip(
                 "Faces discarded before rasterization: NO_CULL draws both "
                 "sides of the surface, CULL_FRONT hides the faces that point "
                 "towards the camera, CULL_BACK hides the ones that point away "
                 "from it.");
-        int culling_mode = static_cast<int>(culling_mode_);
-        ImGui::PushItemWidth(-10.0f);
-        if (ImGui::Combo(
-                "##culling_mode", &culling_mode,
-                CULLING_MODE_NAMES, IM_ARRAYSIZE(CULLING_MODE_NAMES)))
-            culling_mode_ = static_cast<CullingMode>(culling_mode);
-        ImGui::PopItemWidth();
 
         /* == transparency ====================================================================================== */
         // The mode only: the amount of transparency it composites with is the
@@ -929,7 +929,12 @@ namespace geolio::geobox
         static const char* TRANSPARENCY_NAMES[] = {
             "TRANSP_OPAQUE", "TRANSP_BLEND", "TRANSP_ACCUM"
         };
-        ImGui::TextUnformatted("transparency");
+        int transparency_mode = static_cast<int>(transparency_mode_);
+        if (ImGui::Combo(
+                "transparency", &transparency_mode,
+                TRANSPARENCY_NAMES, IM_ARRAYSIZE(TRANSPARENCY_NAMES)))
+            transparency_mode_ =
+                static_cast<TransparencyMode>(transparency_mode);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip(
                 "How the transparency of the surface is composited: "
@@ -938,15 +943,10 @@ namespace geolio::geobox
                 "and shows it best on a dark background.\n\n"
                 "The amount of transparency is the `trsp.` slider of the "
                 "surface block of the properties panel.");
-        int transparency_mode = static_cast<int>(transparency_mode_);
-        ImGui::PushItemWidth(-10.0f);
-        if (ImGui::Combo(
-                "##transparency", &transparency_mode,
-                TRANSPARENCY_NAMES, IM_ARRAYSIZE(TRANSPARENCY_NAMES)))
-            transparency_mode_ =
-                static_cast<TransparencyMode>(transparency_mode);
+
         ImGui::PopItemWidth();
     }
+
 
     void MeshObject::draw_lighting_properties(
         ) {

@@ -160,16 +160,40 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the viewer-related property section.
+         * @details The camera button, whether the scene is lit and the color it is
+         *          drawn on are at the top of the panel; the settings themselves
+         *          are in groups -- the light, the clipping and the shading of the
+         *          scene -- which open as tree nodes, so that they do not look
+         *          like the headers of the panels themselves (see open_group()),
+         *          and which are closed until they are opened.
          */
         void draw_viewer_properties() override;
 
         /**
-         * @brief Draws the "Shading" block of the viewer panel.
+         * @brief Opens one of the groups of a panel.
+         * @details A group is a tree node: the headers of the panels are framed
+         *          rows, and a group has to look different from them. The caller
+         *          pops the node with ImGui::TreePop() once the content of the
+         *          group is drawn.
+         * @param[in] name Name of the group.
+         * @param[in] default_open Whether the group starts open.
+         * @return true when the group is open, and its content has to be drawn.
+         */
+        bool open_group(const char* name, bool default_open = false);
+
+        /**
+         * @brief Draws the group of the clipping of the scene.
+         */
+        void draw_clipping_group();
+
+
+        /**
+         * @brief Draws the group of the shading of the scene.
          * @details The full screen effect of the scene (SSAO, cartoon), then the
          *          shading controls the selected object adds there (see
          *          BaseObject::draw_scene_properties()).
          */
-        void draw_shading_properties();
+        void draw_shading_group();
 
         /**
          * @brief Draws the controls of the light of the scene.
@@ -178,8 +202,10 @@ namespace geolio::geobox
          *          light_direction()), and its other parameters are the ones of
          *          SceneLight, which GeoBox shades the surfaces with (see
          *          LightShader). The specular factor, which the objects bring to
-         *          the light, closes the block (see
-         *          BaseObject::draw_lighting_properties()).
+         *          the light, is drawn with them (see
+         *          BaseObject::draw_lighting_properties()), and the "reset" button
+         *          that closes the group puts all of them back on their defaults
+         *          (see BaseObject::reset_lighting_properties()).
          */
         void draw_light_properties();
 
