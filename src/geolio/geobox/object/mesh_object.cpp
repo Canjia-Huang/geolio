@@ -957,18 +957,20 @@ namespace geolio::geobox
         // 0..1 specular factor, so 10 is where the highlight starts saturating
         // to white, not a limit. The control is therefore a drag with its only
         // bound at 0 -- where the shading is Lambertian, without any highlight.
-        ImGui::TextUnformatted("specular");
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float width =
+            ImGui::CalcTextSize("intensity").x + style.ItemInnerSpacing.x;
+        ImGui::PushItemWidth(-width);
+        // A tenth of a unit per pixel: the useful range of the factor is 0..10,
+        // which a unit per pixel would cross in ten pixels.
+        ImGui::DragInt(
+            "specular", &specular_, 0.1f, 0,
+            std::numeric_limits<int>::max());
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip(
                 "Specular factor of the shading: 0 for Lambert shading, 10 for "
                 "highly specular shading, more for a highlight that saturates "
                 "to white.");
-        ImGui::PushItemWidth(-10.0f);
-        // A tenth of a unit per pixel: the useful range of the factor is 0..10,
-        // which a unit per pixel would cross in ten pixels.
-        ImGui::DragInt(
-            "##specular", &specular_, 0.1f, 0,
-            std::numeric_limits<int>::max());
         ImGui::PopItemWidth();
     }
 

@@ -578,7 +578,7 @@ namespace geolio::geobox
         // SceneLight): GeoBox shades the surfaces with its own program to make
         // them settings (see LightShader), and they are the light of the whole
         // scene, as the light of GLUP is.
-        ImGui::ColorEdit3WithPalette("color", scene_light().color.data());
+        ImGui::ColorEdit3WithPalette("Color", scene_light().color.data());
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Color of the light: it tints what it reaches.");
 
