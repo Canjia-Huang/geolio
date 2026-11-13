@@ -11,6 +11,7 @@
 #include "application/base_application.h"
 #include "application/application_menu.h"
 #include "geolio/geobox/object/base_object.h"
+#include "geolio/geobox/clipping.h"
 #include "geolio/geobox/scene_light.h"
 
 namespace geolio::geobox
@@ -183,8 +184,32 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the group of the clipping of the scene.
+         * @details The plane of the clipping, which gathers what Graphite's camera
+         *          clipping sets (an axis, a shift along it, the side that is kept)
+         *          and what GeoGram's clipping sets (the GLUP mode the elements are
+         *          discarded with): see ClipPlane.
          */
         void draw_clipping_group();
+
+        /**
+         * @brief Direction the camera looks along, in the axes of the scene.
+         * @details The camera of GeoGram looks along -Z of the view, and the scene
+         *          is turned in front of it: the direction the camera looks along is
+         *          therefore the third row of the rotation of the scene, negated.
+         *          A plane whose normal is that direction faces the camera.
+         * @return The unit direction the camera looks along.
+         */
+        [[nodiscard]] GEO::vec3 camera_direction() const;
+
+        /**
+         * @brief Applies the clipping of the viewer to the scene.
+         * @details Called while the scene is drawn, after GeoGram set its own
+         *          clipping up (see SimpleApplication::draw_scene_begin()), so that
+         *          the plane of the viewer replaces it: GeoGram's clipping itself is
+         *          never used, its controls are not drawn (see
+         *          draw_clipping_group()).
+         */
+        void apply_clip();
 
 
         /**
@@ -366,6 +391,9 @@ namespace geolio::geobox
         /** Whether the state of save_ui_state() still has to be given back to a
          *  recreated ImGui context (see restore_ui_state()). */
         bool ui_state_to_restore_ = false;
+
+        /** The clipping plane of the viewer (see ClipPlane). */
+        ClipPlane clip_plane_;
 
         bool controller_properties_visible_ = true;
         bool arc_ball_visible_ = true;

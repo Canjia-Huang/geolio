@@ -513,10 +513,15 @@ namespace geolio::geobox
         // framed rows that span the panel (see draw_viewer_properties()), and a
         // group has to be told apart from them -- it is an arrow and a name, and
         // ImGui indents what it holds.
+        // The id of the node is kept apart from the ids of the widgets that carry
+        // the name of the group -- the switch of the clipping carries it (see
+        // draw_viewer_properties()) -- with a part that is not drawn, so that
+        // clicking one does not act on the other.
+        const std::string label = std::string(name) + "##group";
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth;
         if (default_open)
             flags |= ImGuiTreeNodeFlags_DefaultOpen;
-        return ImGui::TreeNodeEx(name, flags);
+        return ImGui::TreeNodeEx(label.c_str(), flags);
     }
 
     void GeoBoxApplication::draw_viewer_properties(
@@ -528,13 +533,19 @@ namespace geolio::geobox
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Frame the scene again.");
 
-        // What is on: whether the scene is lit, and the color it is drawn on, on
-        // one line and out of the groups -- the light group is only there when
-        // lighting is on.
+        // What is on: whether the scene is lit, whether it is clipped, and the
+        // color it is drawn on, on one line and out of the groups -- the groups of
+        // the light and of the clipping are only there when they are on.
         if (three_D_) {
             ImGui::Checkbox("Lighting", &lighting_);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Shade the scene with a light.");
+            ImGui::SameLine();
+            ImGui::Checkbox("Clipping", &clip_plane_.active);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Cut the scene with a plane: the group of its settings is "
+                    "below.");
             ImGui::SameLine();
         }
         ImGui::ColorEdit3WithPalette("Backgnd", background_color_.data());
@@ -547,7 +558,7 @@ namespace geolio::geobox
             draw_light_properties();
             ImGui::TreePop();
         }
-        if (three_D_ && open_group("Clipping")) {
+        if (three_D_ && clip_plane_.active && open_group("Clipping")) {
             draw_clipping_group();
             ImGui::TreePop();
         }
@@ -560,18 +571,133 @@ namespace geolio::geobox
 
     void GeoBoxApplication::draw_clipping_group(
         ) {
-        // Whether the scene is clipped, and how: the GLUP clipping modes, and the
-        // plane, which is moved with the mouse while "edit clip" is on.
-        ImGui::Checkbox("Clipping", &clipping_);
-        if (clipping_) {
-            ImGui::Combo(
-                "##mode", (int*)&clip_mode_,
-                "std. GL\0cells\0stradd.\0slice\0\0"
-            );
-            ImGui::Checkbox("edit clip", &edit_clip_);
-            ImGui::Checkbox("fixed clip", &fixed_clip_);
+        // The clipping plane of the viewer, which is on: whether it follows the
+        // camera or stays fixed to the scene (see ClipAnchor), the direction it
+        // faces and where it stands along it, the side of it that is kept, and the
+        // GLUP mode it discards the elements with (see ClipPlane). Its switch is
+        // with the ones of the panel, above (see draw_viewer_properties()).
+        const auto combo_width = [](const char* label) {
+            return -(ImGui::CalcTextSize(label).x +
+                     ImGui::GetStyle().ItemInnerSpacing.x);
+        };
+        // The widgets of the group that carry a value and the name of it after them
+        // -- the shift and the mode -- share this width, the one the longest name
+        // leaves room for.
+        const float value_width = combo_width("shift");
+
+        // Whether the plane follows the camera, i.e. whether the scene turns under
+        // it (as with GeoGram's clipping and Graphite's camera clipping), or stays
+        // fixed to the scene and cuts the same place whatever the view is.
+        bool follows_camera = (clip_plane_.anchor == ClipAnchor::VIEW);
+        if (ImGui::Checkbox("follow cam", &follows_camera)) {
+            clip_plane_.anchor = follows_camera ?
+                ClipAnchor::VIEW : ClipAnchor::SCENE;
+            if (follows_camera) {
+                // The plane starts facing the camera, through the middle of the
+                // scene, and is kept there while it follows it (see apply_clip()).
+                clip_plane_.normal = camera_direction();
+                clip_plane_.shift = 0.0f;
+            }
         }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "The plane follows the camera, facing it: the scene turns under "
+                "it, as it does with the clipping of GeoGram and that of "
+                "Graphite's camera. Left off, the plane keeps its direction in the "
+                "axes of the scene and cuts the same place whatever the view is.");
+
+        ImGui::SameLine();
+
+        ImGui::Checkbox("invert", &clip_plane_.invert);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Keep the other side of the plane.");
+
+        // The direction the plane faces, as the three components of a vector: any
+        // direction, not just the axes of the scene. While the plane follows the
+        // camera its direction is the one of the camera, which the panel shows but
+        // does not let one set.
+        float normal[3] = {
+            float(clip_plane_.normal[0]),
+            float(clip_plane_.normal[1]),
+            float(clip_plane_.normal[2])
+        };
+        // The three components of the normal, each followed by the button that
+        // points the plane along its axis of the scene: they share the width of the
+        // panel, the buttons taken out of it.
+        static const char* AXIS_BUTTON_NAMES[] = {"x", "y", "z"};
+        static const char* AXIS_FIELD_NAMES[] = {"##x", "##y", "##z"};
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float button_width =
+            ImGui::CalcTextSize("x").x + 2.0f * style.FramePadding.x;
+        const float field_width = (
+            ImGui::GetContentRegionAvail().x -
+            3.0f * button_width -
+            5.0f * style.ItemSpacing.x
+        ) / 3.0f;
+
+        ImGui::BeginDisabled(follows_camera);
+        bool normal_changed = false;
+        ImGui::PushItemWidth(field_width);
+        for (int i = 0; i < IM_ARRAYSIZE(AXIS_FIELD_NAMES); ++i) {
+            if (i != 0)
+                ImGui::SameLine();
+            normal_changed = ImGui::DragFloat(
+                AXIS_FIELD_NAMES[i], &normal[i], 0.01f) || normal_changed;
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Direction the plane faces, in the axes of the scene: the "
+                    "plane is perpendicular to it, and only the direction counts, "
+                    "not the length. A plane that follows the camera keeps the "
+                    "direction of the camera: untick it to set another one.");
+            ImGui::SameLine();
+            if (ImGui::Button(AXIS_BUTTON_NAMES[i])) {
+                normal[0] = (i == 0) ? 1.0f : 0.0f;
+                normal[1] = (i == 1) ? 1.0f : 0.0f;
+                normal[2] = (i == 2) ? 1.0f : 0.0f;
+                normal_changed = true;
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Face the plane along the %s axis of the scene.",
+                    AXIS_BUTTON_NAMES[i]);
+        }
+        ImGui::PopItemWidth();
+        ImGui::EndDisabled();
+
+        if (normal_changed)
+            clip_plane_.normal = GEO::vec3(normal[0], normal[1], normal[2]);
+
+        // Where the plane stands along its normal, in the units of the scene and
+        // without a bound: the panel cannot guess the extent of the scene, and the
+        // value can be typed (ctrl-click) when dragging it is too slow.
+        ImGui::PushItemWidth(value_width);
+        ImGui::DragFloat("shift", &clip_plane_.shift, 0.01f, 0.0f, 0.0f, "%.3f");
+        ImGui::PopItemWidth();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Where the plane stands along its normal, in the units of the "
+                "scene: the side the normal points to is kept.");
+
+        // The GLUP mode the elements are discarded with.
+        static const char* CLIP_MODE_NAMES[] = {
+            "standard", "whole_cells", "straddling_cells", "slice_cells"
+        };
+        int mode = int(clip_plane_.mode) - int(GLUP_CLIP_STANDARD);
+        ImGui::PushItemWidth(value_width);
+        if (ImGui::Combo(
+                "mode", &mode, CLIP_MODE_NAMES, IM_ARRAYSIZE(CLIP_MODE_NAMES))) {
+            clip_plane_.mode = GLUPclipMode(int(GLUP_CLIP_STANDARD) + mode);
+        }
+        ImGui::PopItemWidth();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "How the clipping discards the elements: STANDARD cuts them, "
+                "WHOLE_CELLS and STRADDLING_CELLS keep or drop whole cells, "
+                "SLICE_CELLS cuts them open.");
     }
+
+
+
 
 
     void GeoBoxApplication::draw_shading_group(
@@ -603,6 +729,73 @@ namespace geolio::geobox
             object->draw_scene_properties();
 
     }
+
+    GEO::vec3 GeoBoxApplication::camera_direction(
+        ) const {
+        // The rotation of the scene maps the scene to the view, whose camera looks
+        // along -Z: the direction it looks along, in the axes of the scene, is the
+        // third row of that rotation, negated (the matrix is stored column major).
+        GLdouble m[16];
+        glupPushMatrix();
+        glupLoadIdentity();
+        glupMultMatrix(object_rotation_.get_value());
+        glupGetMatrixdv(GLUP_MODELVIEW_MATRIX, m);
+        glupPopMatrix();
+
+        GEO::vec3 direction(-m[2], -m[6], -m[10]);
+        const double length = std::sqrt(
+            direction[0] * direction[0] +
+            direction[1] * direction[1] +
+            direction[2] * direction[2]
+        );
+        if (length > 0.0)
+            direction = (1.0 / length) * direction;
+        return direction;
+    }
+
+    void GeoBoxApplication::apply_clip(
+        ) {
+        // A plane that follows the camera keeps its normal on the direction the
+        // camera looks along: it is what makes the scene turn under it, and it is
+        // what the panel shows of the plane while the camera turns.
+        if (clip_plane_.anchor == ClipAnchor::VIEW)
+            clip_plane_.normal = camera_direction();
+
+        if (!clip_plane_.active) {
+            // A zeroed plane rather than only the toggle turned off: some shaders
+            // test the plane without testing the toggle, as Graphite notes.
+            const double equation[4] = {0.0, 0.0, 0.0, 0.0};
+            glupClipPlane(equation);
+            glupDisable(GLUP_CLIPPING);
+            return;
+        }
+
+        // The plane is offset by a small part of the scene along its normal, so
+        // that the vertices that lie on it do not fall on one side or the other
+        // depending on the rounding of the frame: GLUP classifies the vertices of
+        // the cells on the CPU, in single precision, against the plane of the
+        // frame (see clip_plane_equation()), and a cell of a regular grid would
+        // blink as soon as one of its vertices sits on the plane.
+        const double bias = 1e-4 * roi_radius_;
+
+        const GEO::vec3 center(
+            0.5 * (roi_.xyz_min[0] + roi_.xyz_max[0]),
+            0.5 * (roi_.xyz_min[1] + roi_.xyz_max[1]),
+            0.5 * (roi_.xyz_min[2] + roi_.xyz_max[2])
+        );
+        const GEO::vec4 equation =
+            clip_plane_equation(clip_plane_, center, bias);
+
+        double coefficients[4] = {
+            equation[0], equation[1], equation[2], equation[3]
+        };
+        glupEnable(GLUP_CLIPPING);
+        glupClipPlane(coefficients);
+        glupClipMode(clip_plane_.mode);
+    }
+
+
+
 
     void GeoBoxApplication::draw_light_properties(
         ) {
@@ -992,6 +1185,11 @@ namespace geolio::geobox
 
     void GeoBoxApplication::draw_scene(
         ) {
+        // GeoGram set its own clipping up before calling this (see
+        // SimpleApplication::draw_scene_begin()): the clipping of the viewer
+        // replaces it, so that the scene is cut by one plane only.
+        apply_clip();
+
         for (const auto& base_object : objects_) {
             // An object whose data cannot be rendered is left out of the scene:
             // drawing it would read outside of it (see
