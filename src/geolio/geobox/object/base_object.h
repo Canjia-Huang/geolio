@@ -28,6 +28,32 @@ namespace geolio::geobox
     using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
 
     /**
+     * @brief Color of the titles of the blocks of the properties panels.
+     * @details Defined in one place so that every panel titles its blocks the same
+     *          way, whether the block belongs to an object or to the application.
+     * @return The accent color the titles are drawn with.
+     */
+    [[nodiscard]] inline const GEO::vec4f& section_title_color() {
+        static const GEO::vec4f color(0.05f, 0.18f, 0.50f, 1.0f);
+        return color;
+    }
+
+    /**
+     * @brief Draws the title of a block of the properties panels.
+     * @details ImGui has no section title: the titles of the blocks are separators
+     *          drawn in the accent color of the panels (see
+     *          section_title_color()).
+     * @param[in] title Title of the block, e.g. "Shading".
+     */
+    inline void draw_section_title(const char* title) {
+        const GEO::vec4f& color = section_title_color();
+        ImGui::PushStyleColor(
+            ImGuiCol_Text, ImVec4(color.x, color.y, color.z, color.w));
+        ImGui::SeparatorText(title);
+        ImGui::PopStyleColor();
+    }
+
+    /**
      * @brief Base class for all renderable GeoBox objects.
      */
     class BaseObject {
@@ -116,12 +142,11 @@ namespace geolio::geobox
          *        panel.
          * @details The scene panel is the left controller of the application
          *          (see GeoBoxApplication::draw_controller_properties()); its
-         *          "Viewer" section ends with the controls the selected object
-         *          adds there, the way Graphite's scene graph panel exposes the
-         *          properties of the current object -- Graphite's `culling_mode`,
-         *          `specular` and `transparency` for a mesh (see MeshObject). The
-         *          block titles itself, since it follows the settings of the
-         *          viewer.
+         *          "Viewer" section ends with the block the application titles
+         *          "Shading", which holds the controls the selected object adds
+         *          there, the way Graphite's scene graph panel exposes the
+         *          properties of the current object -- Graphite's `culling_mode`
+         *          and `transparency` for a mesh (see MeshObject).
          *          Objects with nothing to add there -- a directional field,
          *          ... -- keep the default, which draws nothing.
          */
@@ -224,12 +249,13 @@ namespace geolio::geobox
         bool visible_ = true;
 
         /**
-         * @brief Color of the section titles in the object property panels.
-         * @details Kept here so that every object class uses the same style and
-         *          the color is defined in a single place. MeshObject uses it
-         *          for its "Painting" title (see draw_object_properties()).
+         * @brief Color of the titles of the blocks of the object panels.
+         * @details The titles themselves are drawn by draw_section_title(), which
+         *          takes its color from section_title_color(); the objects that
+         *          color text of their own read it from here (see
+         *          MeshObject::draw_validity_dialog()).
          */
-        GEO::vec4f title_color_ = GEO::vec4f(0.05f, 0.18f, 0.50f, 1.0f);
+        GEO::vec4f title_color_ = section_title_color();
     };
 
 }

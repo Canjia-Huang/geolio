@@ -135,16 +135,22 @@ namespace geolio::geobox
         void draw_viewer_properties() override;
 
         /**
+         * @brief Draws the "Shading" block of the viewer panel.
+         * @details The full screen effect of the scene (SSAO, cartoon), then the
+         *          shading controls the selected object adds there (see
+         *          BaseObject::draw_scene_properties()).
+         */
+        void draw_shading_properties();
+
+        /**
          * @brief Draws the controls of the light of the scene.
-         * @details geogram's GLUP shades with a single directional light, and the
-         *          only parameter of it the application can set is its direction
-         *          (see light_direction()); the specular factor is a property of
-         *          each object instead (see
-         *          MeshObject::draw_shading_properties()). The intensity and the
-         *          color of the light, the ambient level and the exponent of the
-         *          highlight are constants of GLUP's fragment shader (see
-         *          glup_lighting() in
-         *          geogram_gfx/GLUP/shaders/GLUP/fragment_shader_utils.h).
+         * @details The light of the scene is GLUP's single directional light: its
+         *          direction is the one GLUP is given for the frame (see
+         *          light_direction()), and its other parameters are the ones of
+         *          SceneLight, which GeoBox shades the surfaces with (see
+         *          LightShader). The specular factor, which the objects bring to
+         *          the light, closes the block (see
+         *          BaseObject::draw_lighting_properties()).
          */
         void draw_light_properties();
 

@@ -20,6 +20,8 @@
 #include <geogram_gfx/GLUP/GLUP_private.h>
 #include <geogram_gfx/basic/GL.h>
 #include <geolio/geobox/file_dialog.h>
+#include <geolio/geobox/light_shader.h>
+#include <geolio/geobox/scene_light.h>
 
 #include "geolio/common/log.h"
 
@@ -972,27 +974,12 @@ namespace geolio::geobox
 
     void MeshObject::draw_scene_properties(
         ) {
-        // Drawn at the end of the "Viewer" section of the left controller (see
-        // GeoBoxApplication::draw_controller_properties()): the block titles
-        // itself so that its controls are not taken for part of the viewer's.
+        // Drawn in the block the application titles "Shading", at the end of the
+        // "Viewer" section of the left controller (see
+        // GeoBoxApplication::draw_controller_properties()).
         ImGui::PushID(this);
-        draw_section_title("Shading");
         draw_shading_properties();
         ImGui::PopID();
-    }
-
-    void MeshObject::draw_section_title(
-        const char* title
-        ) {
-        ImGui::PushStyleColor(
-            ImGuiCol_Text,
-            ImVec4(
-                title_color_.x,
-                title_color_.y,
-                title_color_.z,
-                title_color_.w));
-        ImGui::SeparatorText(title);
-        ImGui::PopStyleColor();
     }
 
     void MeshObject::draw_transparency_slider(
@@ -1731,7 +1718,25 @@ namespace geolio::geobox
                 break;
             }
 
+            // The light of the scene: the surface is drawn with GeoBox's own
+            // program, which shades with the color, the intensity, the ambient
+            // level and the specular exponent the viewer sets (see LightShader).
+            // GLUP has a single program bound for the whole
+            // MeshGfx::draw_surface() call, and its line program is unlit, so the
+            // facet wireframe is drawn below, once the program is GLUP's again.
+            const bool light_shader_used =
+                light_shader().begin(scene_light());
+            if (light_shader_used)
+                mesh_gfx_.set_show_mesh(false);
+
             mesh_gfx_.draw_surface();
+
+            if (light_shader_used) {
+                light_shader().end();
+                mesh_gfx_.set_show_mesh(show_surface_mesh_);
+                if (show_surface_mesh_)
+                    draw_surface_wireframe();
+            }
 
             if (culling_was_enabled) {
                 glEnable(GL_CULL_FACE);
@@ -1756,6 +1761,44 @@ namespace geolio::geobox
             glDisable(GL_BLEND);
             glDepthMask(GL_TRUE);
         }
+    }
+
+    void MeshObject::draw_surface_wireframe(
+        ) {
+        // The pass that MeshGfx::draw_surface() itself would draw for the
+        // wireframe of the facets, drawn here instead: it is a GLUP_LINES pass,
+        // and GLUP's line program is unlit, so it cannot share the program that
+        // shades the surface (see draw_surface()). It is the same pass: the same
+        // color and width, one segment per facet edge, in mesh order.
+        glupSetMeshWidth(static_cast<GLUPint>(surface_mesh_width_ * 10.0f));
+        const GLfloat mesh_color[4] = {
+            surface_mesh_color_.x,
+            surface_mesh_color_.y,
+            surface_mesh_color_.z,
+            1.0f
+        };
+        // The wireframe is drawn with the color of the mesh, not with the colors
+        // of the attribute the surface may be painted with: MeshGfx does the same
+        // before drawing it (see MeshGfx::draw_surface()).
+        const GLboolean vertex_colors_enabled =
+            glupIsEnabled(GLUP_VERTEX_COLORS);
+        if (vertex_colors_enabled)
+            glupDisable(GLUP_VERTEX_COLORS);
+        glupSetColor4fv(GLUP_FRONT_AND_BACK_COLOR, mesh_color);
+        glupBegin(GLUP_LINES);
+        for (const GEO::index_t f : mesh_.facets) {
+            for (const GEO::index_t c1 : mesh_.facets.corners(f)) {
+                const GEO::index_t c2 =
+                    mesh_.facets.next_corner_around_facet(f, c1);
+                glupPrivateVertex3dv(
+                    mesh_.vertices.point_ptr(mesh_.facet_corners.vertex(c1)));
+                glupPrivateVertex3dv(
+                    mesh_.vertices.point_ptr(mesh_.facet_corners.vertex(c2)));
+            }
+        }
+        glupEnd();
+        if (vertex_colors_enabled)
+            glupEnable(GLUP_VERTEX_COLORS);
     }
 
     void MeshObject::draw_edges(
@@ -1820,7 +1863,7 @@ namespace geolio::geobox
             // instead (see draw_volume_cell_facets_attribute(), GeoGram PR #386).
             if (cell_facets_attribute_active())
                 draw_volume_cell_facets_attribute();
-            else
+            else if (!draw_volume_with_light())
                 mesh_gfx_.draw_volume();
 
             mesh_gfx_.set_show_mesh(saved_show_mesh);
@@ -1832,6 +1875,71 @@ namespace geolio::geobox
             mesh_gfx_.set_lighting(lighting);
             glupSetSpecular(specular_backup);
         }
+    }
+
+    bool MeshObject::draw_volume_with_light(
+        ) {
+        // The mapping of GeoGram's cell types onto GLUP's primitives, which never
+        // changes.
+        static const GLUPprimitive PRIMITIVE_OF_CELL[GEO::MESH_NB_CELL_TYPES] = {
+            GLUP_TETRAHEDRA,  // GEO::MESH_TET
+            GLUP_HEXAHEDRA,   // GEO::MESH_HEX
+            GLUP_PRISMS,      // GEO::MESH_PRISM
+            GLUP_PYRAMIDS,    // GEO::MESH_PYRAMID
+            GLUP_CONNECTORS   // GEO::MESH_CONNECTOR
+        };
+        static_assert(
+            GEO::MESH_CONNECTOR + 1 == GEO::MESH_NB_CELL_TYPES,
+            "one GLUP primitive per GeoGram cell type");
+
+        // The cell types this pass draws: the two the properties panel can hide
+        // (see show_hexes_ and show_connectors_), and the three it always draws,
+        // as draw_volume() leaves them to MeshGfx.
+        const bool drawn[GEO::MESH_NB_CELL_TYPES] = {
+            true, show_hexes_, true, true, show_connectors_
+        };
+        bool any_drawn = false;
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type)
+            any_drawn = any_drawn || (drawn[type] && element_counts_.cells[type] != 0);
+        if (!any_drawn)
+            return false;
+
+        // The programs are compiled before anything is drawn: a type whose
+        // program is not available must not be drawn by this pass, else it would
+        // be drawn twice -- once here, once by GLUP when the volume is handed back
+        // to it (see draw_volume()).
+        bool available = true;
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type) {
+            if (!drawn[type] || element_counts_.cells[type] == 0)
+                continue;
+            if (!light_shader().begin(scene_light(), PRIMITIVE_OF_CELL[type]))
+                available = false;
+        }
+        light_shader().end();
+        if (!available)
+            return false;
+
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type) {
+            if (!drawn[type] || element_counts_.cells[type] == 0)
+                continue;
+
+            // MeshGfx draws the cells of this type only, so that the program of
+            // their primitive is the one bound for its draw call.
+            for (GEO::index_t other = 0;
+                 other < GEO::MESH_NB_CELL_TYPES; ++other) {
+                mesh_gfx_.set_draw_cells(
+                    GEO::MeshCellType(other), other == type);
+            }
+            light_shader().begin(scene_light(), PRIMITIVE_OF_CELL[type]);
+            mesh_gfx_.draw_volume();
+            light_shader().end();
+        }
+
+        // Leave the cell types as draw_volume() had set them, for the next pass.
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type)
+            mesh_gfx_.set_draw_cells(GEO::MeshCellType(type), drawn[type]);
+
+        return true;
     }
 
     bool MeshObject::displayed_attribute_is_defined(
@@ -1899,6 +2007,10 @@ namespace geolio::geobox
         //   MeshGfx::draw_volume() -> glupSetCellsShrink(shrink_), which is
         //     replaced by a per facet vertex shrink (see
         //     draw_volume_facet_vertex()).
+        //
+        // The facets are shaded with the light of the scene like the rest of the
+        // geometry: they are drawn as triangles and as quads, and each of the two
+        // passes uses the program of its primitive (see LightShader).
 
         // == MeshGfx::set_GLUP_parameters() ==================================
         if (mesh_gfx_.get_show_mesh())
@@ -1933,48 +2045,61 @@ namespace geolio::geobox
         const GLUPfloat saved_shrink = GLUPfloat(cells_shrink_);
         glupSetCellsShrink(0.0f);
 
+        // Which cell types are displayed and present in the mesh, once (see
+        // MeshGfx::draw_hybrid_immediate_attrib()).
+        bool has_cells[GEO::MESH_NB_CELL_TYPES] = {};
+        for (GEO::index_t c = 0; c < mesh_.cells.nb(); ++c)
+            has_cells[mesh_.cells.type(c)] = true;
+
         begin_attributes();
 
-        if (mesh_.cells.are_simplices()) {
-            // MeshGfx::draw_tets_immediate_attrib(): all the cells are
-            // tetrahedra, so all their facets are triangles.
-            if (mesh_gfx_.get_draw_cells(GEO::MESH_TET)) {
-                draw_volume_cell_facets(0, mesh_.cells.nb(), GLUP_TRIANGLES);
-                draw_volume_cell_facets(0, mesh_.cells.nb(), GLUP_QUADS);
+        // A facet is drawn by the pass of its arity -- triangles, then quads --
+        // and each pass needs the program of its primitive: GLUP derives the
+        // wireframe of the cells from the primitive that is drawn (see
+        // LightShader). A pass whose program is not available is drawn with the
+        // program of GLUP, as it always was.
+        for (const GLUPprimitive primitive : {GLUP_TRIANGLES, GLUP_QUADS}) {
+            const bool lit = light_shader().begin(scene_light(), primitive);
+
+            if (mesh_.cells.are_simplices()) {
+                // MeshGfx::draw_tets_immediate_attrib(): all the cells are
+                // tetrahedra, so all their facets are triangles.
+                if (mesh_gfx_.get_draw_cells(GEO::MESH_TET))
+                    draw_volume_cell_facets(0, mesh_.cells.nb(), primitive);
             }
-        } else {
-            // MeshGfx::draw_hybrid_immediate_attrib(): one pass per cell type,
-            // for the types that are displayed and present in the mesh.
-            bool has_cells[GEO::MESH_NB_CELL_TYPES] = {};
-            for (GEO::index_t c = 0; c < mesh_.cells.nb(); ++c)
-                has_cells[mesh_.cells.type(c)] = true;
+            else {
+                // MeshGfx::draw_hybrid_immediate_attrib(): one pass per cell
+                // type, for the types that are displayed and present in the
+                // mesh.
+                for (GEO::index_t type = GEO::MESH_TET;
+                     type < GEO::MESH_NB_CELL_TYPES;
+                     ++type) {
+                    if (!mesh_gfx_.get_draw_cells(
+                            static_cast<GEO::MeshCellType>(type)) ||
+                        !has_cells[type])
+                        continue;
 
-            for (GEO::index_t type = GEO::MESH_TET;
-                 type < GEO::MESH_NB_CELL_TYPES;
-                 ++type) {
-                if (!mesh_gfx_.get_draw_cells(
-                        static_cast<GEO::MeshCellType>(type)) ||
-                    !has_cells[type])
-                    continue;
-
-                // Equivalent of MeshGfx::draw_sequences_if(): the cells of a
-                // given type are drawn by runs of consecutive cells of that
-                // type (a hybrid mesh usually stores its types in blocks).
-                GEO::index_t c = 0;
-                while (c < mesh_.cells.nb()) {
-                    while (c < mesh_.cells.nb() &&
-                           GEO::index_t(mesh_.cells.type(c)) != type)
-                        ++c;
-                    const GEO::index_t begin_c = c;
-                    while (c < mesh_.cells.nb() &&
-                           GEO::index_t(mesh_.cells.type(c)) == type)
-                        ++c;
-                    if (begin_c == c)
-                        break;
-                    draw_volume_cell_facets(begin_c, c, GLUP_TRIANGLES);
-                    draw_volume_cell_facets(begin_c, c, GLUP_QUADS);
+                    // Equivalent of MeshGfx::draw_sequences_if(): the cells of a
+                    // given type are drawn by runs of consecutive cells of that
+                    // type (a hybrid mesh usually stores its types in blocks).
+                    GEO::index_t c = 0;
+                    while (c < mesh_.cells.nb()) {
+                        while (c < mesh_.cells.nb() &&
+                               GEO::index_t(mesh_.cells.type(c)) != type)
+                            ++c;
+                        const GEO::index_t begin_c = c;
+                        while (c < mesh_.cells.nb() &&
+                               GEO::index_t(mesh_.cells.type(c)) == type)
+                            ++c;
+                        if (begin_c == c)
+                            break;
+                        draw_volume_cell_facets(begin_c, c, primitive);
+                    }
                 }
             }
+
+            if (lit)
+                light_shader().end();
         }
 
         end_attributes();

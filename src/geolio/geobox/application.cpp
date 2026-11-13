@@ -24,6 +24,8 @@
 #include "object/mesh_object.h"
 #include "colormap.h"
 #include <geolio/geobox/application/register_applications.h>
+#include <geolio/geobox/light_shader.h>
+#include <geolio/geobox/scene_light.h>
 #include <geogram_gfx/full_screen_effects/ambient_occlusion.h>
 #include <geogram_gfx/full_screen_effects/unsharp_masking.h>
 
@@ -265,6 +267,9 @@ namespace geolio::geobox
         // The images displayed by the TEXTURE painting mode are cached by
         // file name and shared by the objects (see MeshObject::texture()).
         release_texture_cache();
+        // The program the surfaces are shaded with belongs to the process (see
+        // light_shader()): it is released here, while the context is current.
+        light_shader().release();
         delete_scene_framebuffer();
         SimpleMeshApplication::GL_terminate();
     }
@@ -438,14 +443,11 @@ namespace geolio::geobox
         if (ImGui::CollapsingHeader("Viewer")) {
             draw_viewer_properties();
 
-            // The shading controls of the selected object close the viewer
-            // panel: Graphite's scene panel exposes culling_mode, specular and
-            // transparency for the current object, and the viewer is where the
-            // panel of the controller shows how the scene is drawn. The object
-            // draws them itself, title included (see
-            // BaseObject::draw_scene_properties()).
-            if (const auto object = selected_object_.lock())
-                object->draw_scene_properties();
+            // The shading of the scene closes the viewer panel: Graphite's scene
+            // panel exposes the full screen effect and the shading properties of
+            // the current object there, and the viewer is where the panel of the
+            // controller shows how the scene is drawn.
+            draw_shading_properties();
         }
         if (ImGui::CollapsingHeader("Object", ImGuiTreeNodeFlags_DefaultOpen))
             draw_objects_properties();
@@ -479,8 +481,18 @@ namespace geolio::geobox
         }
         ImGui::ColorEdit3WithPalette("Backgnd", background_color_.data());
         ImGui::Separator();
+    }
 
-        if(ImGui::Combo("sfx", reinterpret_cast<int *>(&effect_), "none\0SSAO\0cartoon\0\0")) {
+    void GeoBoxApplication::draw_shading_properties(
+        ) {
+        // The "Shading" block of the viewer panel: the full screen effect of the
+        // scene, which shades the whole image, then the shading controls the
+        // selected object adds there (see BaseObject::draw_scene_properties()).
+        draw_section_title("Shading");
+
+        if (ImGui::Combo(
+                "sfx", reinterpret_cast<int*>(&effect_),
+                "none\0SSAO\0cartoon\0\0")) {
             switch(effect_) {
                 case 0: full_screen_effect_.reset(); break;
                 case 1: full_screen_effect_ = new GEO::AmbientOcclusionImpl(); break;
@@ -488,13 +500,20 @@ namespace geolio::geobox
                 default: assert(0);
             }
         }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Full screen effect applied to the rendered scene: SSAO shades "
+                "the creases, cartoon flattens the colors and outlines them.");
+
+        if (const auto object = selected_object_.lock())
+            object->draw_scene_properties();
     }
 
     void GeoBoxApplication::draw_light_properties(
         ) {
-        // The light of the scene, as far as this rendering stack lets it be
-        // controlled (see draw_light_properties() in the header): the direction
-        // it comes from, and the specular factor, which the objects give to the
+        // The light of the scene: the direction it comes from (which is the one
+        // GLUP is given for the frame), the parameters GeoBox shades with (see
+        // LightShader), and the specular factor, which the objects give to the
         // shading (see BaseObject::draw_lighting_properties()).
         ImGui::Indent();
 
@@ -554,6 +573,43 @@ namespace geolio::geobox
             ImGui::SetTooltip(
                 "Put the light back where the application starts it, over the "
                 "(1,1,1) diagonal of the view.");
+
+        // The parameters of the light itself, other than its direction (see
+        // SceneLight): GeoBox shades the surfaces with its own program to make
+        // them settings (see LightShader), and they are the light of the whole
+        // scene, as the light of GLUP is.
+        ImGui::ColorEdit3WithPalette("color", scene_light().color.data());
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Color of the light: it tints what it reaches.");
+
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float light_label_width =
+            ImGui::CalcTextSize("intensity").x + style.ItemInnerSpacing.x;
+        ImGui::PushItemWidth(-light_label_width);
+        ImGui::SliderFloat(
+            "intensity", &scene_light().intensity, 0.0f, 4.0f, "%.2f");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Intensity of the light: 1 is the light GeoGram shades with.");
+        ImGui::SliderFloat(
+            "ambient", &scene_light().ambient, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Ambient level, added to every lit fragment: GeoGram's is "
+                "0.2.");
+        ImGui::DragFloat(
+            "shininess", &scene_light().specular_exponent,
+            0.5f, 1.0f, 256.0f, "%.0f");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Exponent of the specular highlight: the higher, the smaller "
+                "and sharper the highlight. GeoGram's is 30.");
+        ImGui::PopItemWidth();
+
+        if (!LightShader::supported()) {
+            ImGui::TextDisabled(
+                "Light parameters need the GLUPES2 profile.");
+        }
 
         // What the selected object brings to the light, i.e. its specular
         // factor: it belongs with the controls of the light rather than with the

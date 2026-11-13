@@ -476,15 +476,6 @@ namespace geolio::geobox
         void draw_shading_properties();
 
         /**
-         * @brief Draws the title of a block of the properties panels.
-         * @details ImGui has no section title: the titles of the property
-         *          blocks are separators drawn in the accent color of the
-         *          objects (see title_color_).
-         * @param[in] title Title of the block, e.g. "Shading".
-         */
-        void draw_section_title(const char* title);
-
-        /**
          * @brief Whether the `trsp.` controls of the properties panel are
          *        locked.
          * @details Graphite's TRANSP_OPAQUE draws the object opaque, so the
@@ -555,6 +546,30 @@ namespace geolio::geobox
          * @return The counts, indexed by facet arity and by cell type.
          */
         ElementCounts count_elements() const;
+
+        /**
+         * @brief Draws the volumetric cells with the light of the scene.
+         * @details The cells are drawn one type at a time, each with the program
+         *          GLUP compiles for its primitive (see LightShader): GLUP derives
+         *          the wireframe of the cells from the primitive drawn, so the
+         *          program of a hexahedron cannot draw a tetrahedron. The pass is
+         *          what MeshGfx::draw_volume() does, called once per cell type, and
+         *          it leaves the type flags of MeshGfx as draw_volume() set them.
+         * @return false when the volume has to be handed to
+         *         MeshGfx::draw_volume(), i.e. when the programs are not available
+         *         (see LightShader::supported()): nothing was drawn then.
+         */
+        bool draw_volume_with_light();
+
+        /**
+         * @brief Draws the wireframe of the surface facets.
+         * @details The facets are drawn with GeoBox's own light program (see
+         *          draw_surface()), and GLUP has a single program bound for a
+         *          whole MeshGfx::draw_surface() call: the wireframe, which is an
+         *          unlit GLUP_LINES pass, is therefore drawn here with GLUP's own
+         *          program, as MeshGfx::draw_surface() would draw it.
+         */
+        void draw_surface_wireframe();
 
         /**
          * @brief Draws the explicit 1-D edges of the mesh (mesh.edges).
