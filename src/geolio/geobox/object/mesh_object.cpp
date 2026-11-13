@@ -3,6 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "mesh_object.h"
+#include <limits>
 #include <map>
 #include <geogram/basic/file_system.h>
 #include <geogram_gfx/imgui_ext/imgui_ext.h>
@@ -19,6 +20,8 @@
 #include <geogram_gfx/GLUP/GLUP_private.h>
 #include <geogram_gfx/basic/GL.h>
 #include <geolio/geobox/file_dialog.h>
+#include <geolio/geobox/light_shader.h>
+#include <geolio/geobox/scene_light.h>
 
 #include "geolio/common/log.h"
 
@@ -500,15 +503,7 @@ namespace geolio::geobox
             };
             const int nb_painting_modes = can_texture ? 3 : 2;
             int painting_mode = static_cast<int>(painting_mode_);
-            ImGui::PushStyleColor(
-                ImGuiCol_Text,
-                ImVec4(
-                    title_color_.x,
-                    title_color_.y,
-                    title_color_.z,
-                    title_color_.w));
-            ImGui::SeparatorText("Painting");
-            ImGui::PopStyleColor();
+            draw_section_title("Painting");
             ImGui::PushItemWidth(-10.0f);
             if (ImGui::Combo(
                     "##painting", &painting_mode,
@@ -778,15 +773,7 @@ namespace geolio::geobox
             }
 
             ImGui::Separator();
-            ImGui::PushStyleColor(
-                ImGuiCol_Text,
-                ImVec4(
-                    title_color_.x,
-                    title_color_.y,
-                    title_color_.z,
-                    title_color_.w));
-            ImGui::SeparatorText("Elements");
-            ImGui::PopStyleColor();
+            draw_section_title("Elements");
 
             /* == Vertices ========================================================================================= */
             ImGui::Checkbox("##VertOnOff", &show_vertices_);
@@ -812,7 +799,7 @@ namespace geolio::geobox
                         "Marker diameter in model coordinates (absolute "
                         "size). The on-screen size therefore varies with "
                         "the camera distance.");
-                ImGui::SliderFloat("trsp.##vertices", &vertices_transparency_, 0.0f, 1.0f, "%.2f");
+                draw_transparency_slider("trsp.##vertices", vertices_transparency_);
 
                 ImGui::Unindent();
             }
@@ -844,7 +831,11 @@ namespace geolio::geobox
                     ImGui::SameLine();
                     ImGui::ColorEdit3WithPalette("2sided", surface_color_2_.data());
 
-                    ImGui::SliderFloat("trsp.##surface", &surface_transparency_, 0.0f, 1.0f, "%.2f");
+                    // The amount of transparency of the surface. The scene panel
+                    // of the application sets how it is composited (see
+                    // draw_shading_properties()): the transparency mode of
+                    // Graphite decides what this amount means.
+                    draw_transparency_slider("trsp.##surface", surface_transparency_);
 
                     ImGui::Checkbox("##MeshOnOff", &show_surface_mesh_);
                     ImGui::SameLine();
@@ -905,6 +896,120 @@ namespace geolio::geobox
         }
 
         ImGui::PopID();
+    }
+
+    void MeshObject::draw_shading_properties(
+        ) {
+        // The combos are labelled like the one of the full screen effect of the
+        // panel (see GeoBoxApplication::draw_shading_group()): the widget on its
+        // line, its name after it, and the help of the property as a tooltip. They
+        // share the width of the group (see shading_combo_width()), so that the
+        // three combos of the group are the same length.
+        ImGui::PushItemWidth(shading_combo_width());
+
+        /* == culling_mode ====================================================================================== */
+        static const char* CULLING_MODE_NAMES[] = {
+            "NO_CULL", "CULL_FRONT", "CULL_BACK"
+        };
+        int culling_mode = static_cast<int>(culling_mode_);
+        if (ImGui::Combo(
+                "culling_mode", &culling_mode,
+                CULLING_MODE_NAMES, IM_ARRAYSIZE(CULLING_MODE_NAMES)))
+            culling_mode_ = static_cast<CullingMode>(culling_mode);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Faces discarded before rasterization: NO_CULL draws both "
+                "sides of the surface, CULL_FRONT hides the faces that point "
+                "towards the camera, CULL_BACK hides the ones that point away "
+                "from it.");
+
+        /* == transparency ====================================================================================== */
+        // The mode only: the amount of transparency it composites with is the
+        // `trsp.` slider of the surface block of the properties panel.
+        static const char* TRANSPARENCY_NAMES[] = {
+            "TRANSP_OPAQUE", "TRANSP_BLEND", "TRANSP_ACCUM"
+        };
+        int transparency_mode = static_cast<int>(transparency_mode_);
+        if (ImGui::Combo(
+                "transparency", &transparency_mode,
+                TRANSPARENCY_NAMES, IM_ARRAYSIZE(TRANSPARENCY_NAMES)))
+            transparency_mode_ =
+                static_cast<TransparencyMode>(transparency_mode);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "How the transparency of the surface is composited: "
+                "TRANSP_OPAQUE draws it opaque, TRANSP_BLEND blends it over "
+                "what is behind it, TRANSP_ACCUM adds it to what is behind it "
+                "and shows it best on a dark background.\n\n"
+                "The amount of transparency is the `trsp.` slider of the "
+                "surface block of the properties panel.");
+
+        ImGui::PopItemWidth();
+    }
+
+
+    void MeshObject::draw_lighting_properties(
+        ) {
+        // The specular factor of Graphite's mesh shader: the parameter the light
+        // has in the shading of this object (see set_specular()), so it is drawn
+        // with the controls of the light. Graphite's `specular` has no upper
+        // bound: it is an integer factor that GLUP takes divided by 10 as its
+        // 0..1 specular factor, so 10 is where the highlight starts saturating
+        // to white, not a limit. The control is therefore a drag with its only
+        // bound at 0 -- where the shading is Lambertian, without any highlight.
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float width =
+            ImGui::CalcTextSize("intensity").x + style.ItemInnerSpacing.x;
+        ImGui::PushItemWidth(-width);
+        // A tenth of a unit per pixel: the useful range of the factor is 0..10,
+        // which a unit per pixel would cross in ten pixels.
+        ImGui::DragInt(
+            "specular", &specular_, 0.1f, 0,
+            std::numeric_limits<int>::max());
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Specular factor of the shading: 0 for Lambert shading, 10 for "
+                "highly specular shading, more for a highlight that saturates "
+                "to white.");
+        ImGui::PopItemWidth();
+    }
+
+    void MeshObject::draw_scene_properties(
+        ) {
+        // Drawn in the block the application titles "Shading", at the end of the
+        // "Viewer" section of the left controller (see
+        // GeoBoxApplication::draw_controller_properties()).
+        ImGui::PushID(this);
+        draw_shading_properties();
+        ImGui::PopID();
+    }
+
+    void MeshObject::draw_transparency_slider(
+        const char* label,
+        float& amount
+        ) {
+        // TRANSP_OPAQUE draws the object opaque, so the amount of transparency
+        // of its elements has no effect then: the slider is locked rather than
+        // left able to change something that would not be seen. Its value is
+        // kept, and comes back with the slider when another transparency mode is
+        // chosen.
+        const bool locked = transparency_controls_locked();
+        ImGui::BeginDisabled(locked);
+        ImGui::SliderFloat(label, &amount, 0.0f, 1.0f, "%.2f");
+        // The slider cannot be hovered while it is disabled, unless the hover
+        // test is told to ignore that: that is what lets the tooltip below
+        // explain why it is locked.
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            if (locked)
+                ImGui::SetTooltip(
+                    "Locked: the `transparency` mode of the scene panel is "
+                    "TRANSP_OPAQUE, which draws the object opaque.");
+            else
+                ImGui::SetTooltip(
+                    "Amount of transparency, from 0 (opaque) to 1 "
+                    "(invisible).");
+        }
+        ImGui::EndDisabled();
     }
 
     void MeshObject::draw_scene(
@@ -975,7 +1080,7 @@ namespace geolio::geobox
             (painting_mode_ == PaintingMode::ATTRIBUTE &&
              colormap_is_transparent()) ||
             (painting_mode_ == PaintingMode::TEXTURE &&
-             surface_transparency_ == 0.0f);
+             surface_alpha() == 1.0f);
         GLboolean saved_alpha_discard = GL_FALSE;
         GLUPfloat saved_alpha_threshold = 0.0f;
         if (discard_transparent_fragments) {
@@ -1284,7 +1389,12 @@ namespace geolio::geobox
         // diameter using GLUP's sphere impostor primitive (per-vertex radius
         // in the w component of glupVertex4d), which gives the round marker
         // silhouette with correct perspective scaling.
-        const bool blended = vertices_transparency_ != 0.0f;
+        // The amount the markers are drawn with: TRANSP_OPAQUE draws the whole
+        // object opaque, so the `trsp.` amount of the vertices is not applied
+        // then (see applied_transparency()).
+        const float vertices_transparency = applied_transparency(
+            vertices_transparency_);
+        const bool blended = vertices_transparency != 0.0f;
         if (blended) {
             glDepthMask(GL_FALSE);
             glEnable(GL_BLEND);
@@ -1393,7 +1503,7 @@ namespace geolio::geobox
                 vertices_color_.x,
                 vertices_color_.y,
                 vertices_color_.z,
-                1.0f - vertices_transparency_
+                1.0f - vertices_transparency
             };
             glupSetColor4fv(GLUP_FRONT_COLOR, rgba);
         }
@@ -1550,12 +1660,23 @@ namespace geolio::geobox
         ) {
         mesh_gfx_.set_mesh_color(0.0, 0.0, 0.0);
 
-        const float alpha = 1.0f - surface_transparency_;
-        if (surface_transparency_ != 0.0f) {
+        // Transparency: TRANSP_OPAQUE draws the surface opaque whatever amount
+        // of transparency it is set to, the two other modes blend it over what
+        // is behind it -- TRANSP_BLEND mixing with it, TRANSP_ACCUM adding to it
+        // (see TransparencyMode). The surface does not write depth while it is
+        // blended, so that what is behind it stays visible.
+        const float alpha = surface_alpha();
+        const bool blended =
+            transparency_mode_ != TransparencyMode::TRANSP_OPAQUE &&
+            alpha < 1.0f;
+        if (blended) {
             glDepthMask(GL_FALSE);
             glEnable(GL_BLEND);
             glBlendEquation(GL_FUNC_ADD);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glBlendFunc(
+                GL_SRC_ALPHA,
+                transparency_mode_ == TransparencyMode::TRANSP_ACCUM ?
+                GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
         }
 
         mesh_gfx_.set_surface_color(
@@ -1572,9 +1693,59 @@ namespace geolio::geobox
             static_cast<GEO::index_t>(surface_mesh_width_ * 10.0f));
 
         if (show_surface_) {
+            // Specular: Graphite's `specular` property, from 0 (Lambert) to 10,
+            // which GLUP takes as its 0..1 factor.
             const float specular_backup = glupGetSpecular();
-            glupSetSpecular(0.4f);
+            glupSetSpecular(static_cast<float>(specular_) / 10.0f);
+
+            // Culling: Graphite's `culling_mode` property, the GL state the
+            // faces are discarded with before rasterization. It is shared with
+            // the rest of the frame, so it is saved and restored around the
+            // pass.
+            const GLboolean culling_was_enabled = glIsEnabled(GL_CULL_FACE);
+            GLint culling_face = GL_BACK;
+            if (culling_was_enabled)
+                glGetIntegerv(GL_CULL_FACE_MODE, &culling_face);
+            switch (culling_mode_) {
+            case CullingMode::CULL_FRONT:
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_FRONT);
+                break;
+            case CullingMode::CULL_BACK:
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_BACK);
+                break;
+            case CullingMode::NO_CULL:
+                glDisable(GL_CULL_FACE);
+                break;
+            }
+
+            // The light of the scene: the surface is drawn with GeoBox's own
+            // program, which shades with the color, the intensity, the ambient
+            // level and the specular exponent the viewer sets (see LightShader).
+            // GLUP has a single program bound for the whole
+            // MeshGfx::draw_surface() call, and its line program is unlit, so the
+            // facet wireframe is drawn below, once the program is GLUP's again.
+            const bool light_shader_used =
+                light_shader().begin(scene_light());
+            if (light_shader_used)
+                mesh_gfx_.set_show_mesh(false);
+
             mesh_gfx_.draw_surface();
+
+            if (light_shader_used) {
+                light_shader().end();
+                mesh_gfx_.set_show_mesh(show_surface_mesh_);
+                if (show_surface_mesh_)
+                    draw_surface_wireframe();
+            }
+
+            if (culling_was_enabled) {
+                glEnable(GL_CULL_FACE);
+                glCullFace(static_cast<GLenum>(culling_face));
+            }
+            else
+                glDisable(GL_CULL_FACE);
             glupSetSpecular(specular_backup);
 
             // Nothing to draw when the surface is closed (see
@@ -1588,10 +1759,48 @@ namespace geolio::geobox
             }
         }
 
-        if (surface_transparency_ != 0.0f) {
+        if (blended) {
             glDisable(GL_BLEND);
             glDepthMask(GL_TRUE);
         }
+    }
+
+    void MeshObject::draw_surface_wireframe(
+        ) {
+        // The pass that MeshGfx::draw_surface() itself would draw for the
+        // wireframe of the facets, drawn here instead: it is a GLUP_LINES pass,
+        // and GLUP's line program is unlit, so it cannot share the program that
+        // shades the surface (see draw_surface()). It is the same pass: the same
+        // color and width, one segment per facet edge, in mesh order.
+        glupSetMeshWidth(static_cast<GLUPint>(surface_mesh_width_ * 10.0f));
+        const GLfloat mesh_color[4] = {
+            surface_mesh_color_.x,
+            surface_mesh_color_.y,
+            surface_mesh_color_.z,
+            1.0f
+        };
+        // The wireframe is drawn with the color of the mesh, not with the colors
+        // of the attribute the surface may be painted with: MeshGfx does the same
+        // before drawing it (see MeshGfx::draw_surface()).
+        const GLboolean vertex_colors_enabled =
+            glupIsEnabled(GLUP_VERTEX_COLORS);
+        if (vertex_colors_enabled)
+            glupDisable(GLUP_VERTEX_COLORS);
+        glupSetColor4fv(GLUP_FRONT_AND_BACK_COLOR, mesh_color);
+        glupBegin(GLUP_LINES);
+        for (const GEO::index_t f : mesh_.facets) {
+            for (const GEO::index_t c1 : mesh_.facets.corners(f)) {
+                const GEO::index_t c2 =
+                    mesh_.facets.next_corner_around_facet(f, c1);
+                glupPrivateVertex3dv(
+                    mesh_.vertices.point_ptr(mesh_.facet_corners.vertex(c1)));
+                glupPrivateVertex3dv(
+                    mesh_.vertices.point_ptr(mesh_.facet_corners.vertex(c2)));
+            }
+        }
+        glupEnd();
+        if (vertex_colors_enabled)
+            glupEnable(GLUP_VERTEX_COLORS);
     }
 
     void MeshObject::draw_edges(
@@ -1622,6 +1831,11 @@ namespace geolio::geobox
                 glupGetClipMode() == GLUP_CLIP_SLICE_CELLS)
                 mesh_gfx_.set_lighting(false);
 
+            // The same specular factor as the surface (Graphite's `specular`
+            // property shades the volumetric cells too).
+            const float specular_backup = glupGetSpecular();
+            glupSetSpecular(static_cast<float>(specular_) / 10.0f);
+
             mesh_gfx_.set_shrink(static_cast<double>(cells_shrink_));
             mesh_gfx_.set_draw_cells(GEO::MESH_HEX, show_hexes_);
             mesh_gfx_.set_draw_cells(GEO::MESH_CONNECTOR, show_connectors_);
@@ -1651,7 +1865,7 @@ namespace geolio::geobox
             // instead (see draw_volume_cell_facets_attribute(), GeoGram PR #386).
             if (cell_facets_attribute_active())
                 draw_volume_cell_facets_attribute();
-            else
+            else if (!draw_volume_with_light())
                 mesh_gfx_.draw_volume();
 
             mesh_gfx_.set_show_mesh(saved_show_mesh);
@@ -1661,7 +1875,73 @@ namespace geolio::geobox
                 static_cast<GEO::index_t>(surface_mesh_width_ * 10.0f));
 
             mesh_gfx_.set_lighting(lighting);
+            glupSetSpecular(specular_backup);
         }
+    }
+
+    bool MeshObject::draw_volume_with_light(
+        ) {
+        // The mapping of GeoGram's cell types onto GLUP's primitives, which never
+        // changes.
+        static const GLUPprimitive PRIMITIVE_OF_CELL[GEO::MESH_NB_CELL_TYPES] = {
+            GLUP_TETRAHEDRA,  // GEO::MESH_TET
+            GLUP_HEXAHEDRA,   // GEO::MESH_HEX
+            GLUP_PRISMS,      // GEO::MESH_PRISM
+            GLUP_PYRAMIDS,    // GEO::MESH_PYRAMID
+            GLUP_CONNECTORS   // GEO::MESH_CONNECTOR
+        };
+        static_assert(
+            GEO::MESH_CONNECTOR + 1 == GEO::MESH_NB_CELL_TYPES,
+            "one GLUP primitive per GeoGram cell type");
+
+        // The cell types this pass draws: the two the properties panel can hide
+        // (see show_hexes_ and show_connectors_), and the three it always draws,
+        // as draw_volume() leaves them to MeshGfx.
+        const bool drawn[GEO::MESH_NB_CELL_TYPES] = {
+            true, show_hexes_, true, true, show_connectors_
+        };
+        bool any_drawn = false;
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type)
+            any_drawn = any_drawn || (drawn[type] && element_counts_.cells[type] != 0);
+        if (!any_drawn)
+            return false;
+
+        // The programs are compiled before anything is drawn: a type whose
+        // program is not available must not be drawn by this pass, else it would
+        // be drawn twice -- once here, once by GLUP when the volume is handed back
+        // to it (see draw_volume()).
+        bool available = true;
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type) {
+            if (!drawn[type] || element_counts_.cells[type] == 0)
+                continue;
+            if (!light_shader().begin(scene_light(), PRIMITIVE_OF_CELL[type]))
+                available = false;
+        }
+        light_shader().end();
+        if (!available)
+            return false;
+
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type) {
+            if (!drawn[type] || element_counts_.cells[type] == 0)
+                continue;
+
+            // MeshGfx draws the cells of this type only, so that the program of
+            // their primitive is the one bound for its draw call.
+            for (GEO::index_t other = 0;
+                 other < GEO::MESH_NB_CELL_TYPES; ++other) {
+                mesh_gfx_.set_draw_cells(
+                    GEO::MeshCellType(other), other == type);
+            }
+            light_shader().begin(scene_light(), PRIMITIVE_OF_CELL[type]);
+            mesh_gfx_.draw_volume();
+            light_shader().end();
+        }
+
+        // Leave the cell types as draw_volume() had set them, for the next pass.
+        for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type)
+            mesh_gfx_.set_draw_cells(GEO::MeshCellType(type), drawn[type]);
+
+        return true;
     }
 
     bool MeshObject::displayed_attribute_is_defined(
@@ -1729,6 +2009,10 @@ namespace geolio::geobox
         //   MeshGfx::draw_volume() -> glupSetCellsShrink(shrink_), which is
         //     replaced by a per facet vertex shrink (see
         //     draw_volume_facet_vertex()).
+        //
+        // The facets are shaded with the light of the scene like the rest of the
+        // geometry: they are drawn as triangles and as quads, and each of the two
+        // passes uses the program of its primitive (see LightShader).
 
         // == MeshGfx::set_GLUP_parameters() ==================================
         if (mesh_gfx_.get_show_mesh())
@@ -1763,48 +2047,61 @@ namespace geolio::geobox
         const GLUPfloat saved_shrink = GLUPfloat(cells_shrink_);
         glupSetCellsShrink(0.0f);
 
+        // Which cell types are displayed and present in the mesh, once (see
+        // MeshGfx::draw_hybrid_immediate_attrib()).
+        bool has_cells[GEO::MESH_NB_CELL_TYPES] = {};
+        for (GEO::index_t c = 0; c < mesh_.cells.nb(); ++c)
+            has_cells[mesh_.cells.type(c)] = true;
+
         begin_attributes();
 
-        if (mesh_.cells.are_simplices()) {
-            // MeshGfx::draw_tets_immediate_attrib(): all the cells are
-            // tetrahedra, so all their facets are triangles.
-            if (mesh_gfx_.get_draw_cells(GEO::MESH_TET)) {
-                draw_volume_cell_facets(0, mesh_.cells.nb(), GLUP_TRIANGLES);
-                draw_volume_cell_facets(0, mesh_.cells.nb(), GLUP_QUADS);
+        // A facet is drawn by the pass of its arity -- triangles, then quads --
+        // and each pass needs the program of its primitive: GLUP derives the
+        // wireframe of the cells from the primitive that is drawn (see
+        // LightShader). A pass whose program is not available is drawn with the
+        // program of GLUP, as it always was.
+        for (const GLUPprimitive primitive : {GLUP_TRIANGLES, GLUP_QUADS}) {
+            const bool lit = light_shader().begin(scene_light(), primitive);
+
+            if (mesh_.cells.are_simplices()) {
+                // MeshGfx::draw_tets_immediate_attrib(): all the cells are
+                // tetrahedra, so all their facets are triangles.
+                if (mesh_gfx_.get_draw_cells(GEO::MESH_TET))
+                    draw_volume_cell_facets(0, mesh_.cells.nb(), primitive);
             }
-        } else {
-            // MeshGfx::draw_hybrid_immediate_attrib(): one pass per cell type,
-            // for the types that are displayed and present in the mesh.
-            bool has_cells[GEO::MESH_NB_CELL_TYPES] = {};
-            for (GEO::index_t c = 0; c < mesh_.cells.nb(); ++c)
-                has_cells[mesh_.cells.type(c)] = true;
+            else {
+                // MeshGfx::draw_hybrid_immediate_attrib(): one pass per cell
+                // type, for the types that are displayed and present in the
+                // mesh.
+                for (GEO::index_t type = GEO::MESH_TET;
+                     type < GEO::MESH_NB_CELL_TYPES;
+                     ++type) {
+                    if (!mesh_gfx_.get_draw_cells(
+                            static_cast<GEO::MeshCellType>(type)) ||
+                        !has_cells[type])
+                        continue;
 
-            for (GEO::index_t type = GEO::MESH_TET;
-                 type < GEO::MESH_NB_CELL_TYPES;
-                 ++type) {
-                if (!mesh_gfx_.get_draw_cells(
-                        static_cast<GEO::MeshCellType>(type)) ||
-                    !has_cells[type])
-                    continue;
-
-                // Equivalent of MeshGfx::draw_sequences_if(): the cells of a
-                // given type are drawn by runs of consecutive cells of that
-                // type (a hybrid mesh usually stores its types in blocks).
-                GEO::index_t c = 0;
-                while (c < mesh_.cells.nb()) {
-                    while (c < mesh_.cells.nb() &&
-                           GEO::index_t(mesh_.cells.type(c)) != type)
-                        ++c;
-                    const GEO::index_t begin_c = c;
-                    while (c < mesh_.cells.nb() &&
-                           GEO::index_t(mesh_.cells.type(c)) == type)
-                        ++c;
-                    if (begin_c == c)
-                        break;
-                    draw_volume_cell_facets(begin_c, c, GLUP_TRIANGLES);
-                    draw_volume_cell_facets(begin_c, c, GLUP_QUADS);
+                    // Equivalent of MeshGfx::draw_sequences_if(): the cells of a
+                    // given type are drawn by runs of consecutive cells of that
+                    // type (a hybrid mesh usually stores its types in blocks).
+                    GEO::index_t c = 0;
+                    while (c < mesh_.cells.nb()) {
+                        while (c < mesh_.cells.nb() &&
+                               GEO::index_t(mesh_.cells.type(c)) != type)
+                            ++c;
+                        const GEO::index_t begin_c = c;
+                        while (c < mesh_.cells.nb() &&
+                               GEO::index_t(mesh_.cells.type(c)) == type)
+                            ++c;
+                        if (begin_c == c)
+                            break;
+                        draw_volume_cell_facets(begin_c, c, primitive);
+                    }
                 }
             }
+
+            if (lit)
+                light_shader().end();
         }
 
         end_attributes();

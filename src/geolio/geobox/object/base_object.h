@@ -28,6 +28,48 @@ namespace geolio::geobox
     using ApplicationObjects = std::vector<std::shared_ptr<BaseObject>>;
 
     /**
+     * @brief Color of the titles of the blocks of the properties panels.
+     * @details Defined in one place so that every panel titles its blocks the same
+     *          way, whether the block belongs to an object or to the application.
+     * @return The accent color the titles are drawn with.
+     */
+    [[nodiscard]] inline const GEO::vec4f& section_title_color() {
+        static const GEO::vec4f color(0.05f, 0.18f, 0.50f, 1.0f);
+        return color;
+    }
+
+    /**
+     * @brief Draws the title of a block of the properties panels.
+     * @details ImGui has no section title: the titles of the blocks are separators
+     *          drawn in the accent color of the panels (see
+     *          section_title_color()).
+     * @param[in] title Title of the block, e.g. "Shading".
+     */
+    inline void draw_section_title(const char* title) {
+        const GEO::vec4f& color = section_title_color();
+        ImGui::PushStyleColor(
+            ImGuiCol_Text, ImVec4(color.x, color.y, color.z, color.w));
+        ImGui::SeparatorText(title);
+        ImGui::PopStyleColor();
+    }
+
+    /**
+     * @brief Width the combos of the "Shading" group of the scene panel are given.
+     * @details The three combos of that group are drawn by different classes -- the
+     *          application draws the full screen effect, the selected object draws
+     *          its shading modes (see MeshObject::draw_shading_properties()) -- and
+     *          they have to line up. They are therefore all given this one width,
+     *          which leaves room for the longest of their names: the panel is too
+     *          narrow for the width ImGui gives its items by default.
+     * @return The width, from the room left in the panel.
+     */
+    [[nodiscard]] inline float shading_combo_width() {
+        return ImGui::GetContentRegionAvail().x -
+            ImGui::CalcTextSize("transparency").x -
+            ImGui::GetStyle().ItemInnerSpacing.x;
+    }
+
+    /**
      * @brief Base class for all renderable GeoBox objects.
      */
     class BaseObject {
@@ -110,6 +152,46 @@ namespace geolio::geobox
          * @param[in] lighting Whether scene lighting should be enabled.
          */
         virtual void draw_scene(bool lighting) = 0;
+
+        /**
+         * @brief Draws the rendering controls the object adds to the scene
+         *        panel.
+         * @details The scene panel is the left controller of the application
+         *          (see GeoBoxApplication::draw_controller_properties()); its
+         *          "Viewer" section ends with the block the application titles
+         *          "Shading", which holds the controls the selected object adds
+         *          there, the way Graphite's scene graph panel exposes the
+         *          properties of the current object -- Graphite's `culling_mode`
+         *          and `transparency` for a mesh (see MeshObject).
+         *          Objects with nothing to add there -- a directional field,
+         *          ... -- keep the default, which draws nothing.
+         */
+        virtual void draw_scene_properties() {}
+
+        /**
+         * @brief Draws the parameters the object gives to the light of the
+         *        scene.
+         * @details The controls of the light, in the viewer panel of the left
+         *          controller (see GeoBoxApplication::draw_light_properties()),
+         *          end with what the selected object contributes to the light:
+         *          a mesh gives it the specular factor of its shading (see
+         *          MeshObject).
+         *          Objects that have nothing to give it -- a directional field,
+         *          ... -- keep the default, which draws nothing.
+         */
+        virtual void draw_lighting_properties() {}
+
+        /**
+         * @brief Gives the object back the parameters it gives to the light of the
+         *        scene.
+         * @details What the "reset" button of the light controls puts back on its
+         *          defaults, after the light itself (see
+         *          GeoBoxApplication::draw_light_properties()): a mesh gives the
+         *          light its specular factor (see MeshObject).
+         *          Objects that have nothing to give the light keep the default,
+         *          which does nothing.
+         */
+        virtual void reset_lighting_properties() {}
 
         virtual void reload() {}
 
@@ -195,12 +277,13 @@ namespace geolio::geobox
         bool visible_ = true;
 
         /**
-         * @brief Color of the section titles in the object property panels.
-         * @details Kept here so that every object class uses the same style and
-         *          the color is defined in a single place. MeshObject uses it
-         *          for its "Painting" title (see draw_object_properties()).
+         * @brief Color of the titles of the blocks of the object panels.
+         * @details The titles themselves are drawn by draw_section_title(), which
+         *          takes its color from section_title_color(); the objects that
+         *          color text of their own read it from here (see
+         *          MeshObject::draw_validity_dialog()).
          */
-        GEO::vec4f title_color_ = GEO::vec4f(0.05f, 0.18f, 0.50f, 1.0f);
+        GEO::vec4f title_color_ = section_title_color();
     };
 
 }

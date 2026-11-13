@@ -5,10 +5,14 @@
 #ifndef GEOLIO_APPLICATION_H
 #define GEOLIO_APPLICATION_H
 
+#include <map>
+#include <string>
 #include <geogram_gfx/gui/simple_mesh_application.h>
 #include "application/base_application.h"
 #include "application/application_menu.h"
 #include "geolio/geobox/object/base_object.h"
+#include "geolio/geobox/clipping.h"
+#include "geolio/geobox/scene_light.h"
 
 namespace geolio::geobox
 {
@@ -64,6 +68,33 @@ namespace geolio::geobox
          *        scene framebuffer, colormap table, image texture cache).
          */
         void GL_terminate() override;
+
+        /**
+         * @brief Saves the state of the ImGui panels before GeoGram destroys it.
+         * @details GeoGram recreates the ImGui context whenever the fonts are
+         *          reloaded, which is what happens when the window is moved to a
+         *          monitor with another pixel ratio (see Application::one_frame()):
+         *          the geometry of the panels and the open/closed state of their
+         *          collapsing headers are kept by ImGui itself, so they would be
+         *          lost and the panels would come back on their defaults. Both are
+         *          saved here and given back to the context that replaces it (see
+         *          restore_ui_state()).
+         */
+        void save_ui_state();
+
+        /**
+         * @brief Gives the state saved by save_ui_state() back to ImGui.
+         * @details Called at the beginning of a frame, before the panels are
+         *          drawn, so that the windows take their geometry from it; the
+         *          open/closed state of their headers is given back at the end of
+         *          that frame, once the windows exist (see draw_gui()).
+         */
+        void restore_ui_state();
+
+        /**
+         * @brief Saves the state of the ImGui panels, then terminates ImGui.
+         */
+        void ImGui_terminate() override;
 
         /**
          * @brief Marks the scene dirty on key events (base class shortcuts
@@ -130,8 +161,100 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the viewer-related property section.
+         * @details The camera button, whether the scene is lit and the color it is
+         *          drawn on are at the top of the panel; the settings themselves
+         *          are in groups -- the light, the clipping and the shading of the
+         *          scene -- which open as tree nodes, so that they do not look
+         *          like the headers of the panels themselves (see open_group()),
+         *          and which are closed until they are opened.
          */
         void draw_viewer_properties() override;
+
+        /**
+         * @brief Opens one of the groups of a panel.
+         * @details A group is a tree node: the headers of the panels are framed
+         *          rows, and a group has to look different from them. The caller
+         *          pops the node with ImGui::TreePop() once the content of the
+         *          group is drawn.
+         * @param[in] name Name of the group.
+         * @param[in] default_open Whether the group starts open.
+         * @return true when the group is open, and its content has to be drawn.
+         */
+        bool open_group(const char* name, bool default_open = false);
+
+        /**
+         * @brief Draws the group of the clipping of the scene.
+         * @details The plane of the clipping, which gathers what Graphite's camera
+         *          clipping sets (an axis, a shift along it, the side that is kept)
+         *          and what GeoGram's clipping sets (the GLUP mode the elements are
+         *          discarded with): see ClipPlane.
+         */
+        void draw_clipping_group();
+
+        /**
+         * @brief Direction the camera looks along, in the axes of the scene.
+         * @details The camera of GeoGram looks along -Z of the view, and the scene
+         *          is turned in front of it: the direction the camera looks along is
+         *          therefore the third row of the rotation of the scene, negated.
+         *          A plane whose normal is that direction faces the camera.
+         * @return The unit direction the camera looks along.
+         */
+        [[nodiscard]] GEO::vec3 camera_direction() const;
+
+        /**
+         * @brief Applies the clipping of the viewer to the scene.
+         * @details Called while the scene is drawn, after GeoGram set its own
+         *          clipping up (see SimpleApplication::draw_scene_begin()), so that
+         *          the plane of the viewer replaces it: GeoGram's clipping itself is
+         *          never used, its controls are not drawn (see
+         *          draw_clipping_group()).
+         */
+        void apply_clip();
+
+
+        /**
+         * @brief Draws the group of the shading of the scene.
+         * @details The full screen effect of the scene (SSAO, cartoon), then the
+         *          shading controls the selected object adds there (see
+         *          BaseObject::draw_scene_properties()).
+         */
+        void draw_shading_group();
+
+        /**
+         * @brief Draws the controls of the light of the scene.
+         * @details The light of the scene is GLUP's single directional light: its
+         *          direction is the one GLUP is given for the frame (see
+         *          light_direction()), and its other parameters are the ones of
+         *          SceneLight, which GeoBox shades the surfaces with (see
+         *          LightShader). The specular factor, which the objects bring to
+         *          the light, is drawn with them (see
+         *          BaseObject::draw_lighting_properties()), and the "reset" button
+         *          that closes the group puts all of them back on their defaults
+         *          (see BaseObject::reset_lighting_properties()).
+         */
+        void draw_light_properties();
+
+        /**
+         * @brief Direction the light of the scene comes from.
+         * @details The light is the fixed direction of
+         *          scene_light_reference_direction() rotated by the arc ball of
+         *          the light, which is what SimpleApplication hands to GLUP (see
+         *          SimpleApplication::draw_scene_begin()). Dragging the light in
+         *          the viewport ("edit light") and the angle controls of the
+         *          viewer panel therefore edit the same state.
+         */
+        [[nodiscard]] GEO::vec3 light_direction() const {
+            return scene_light_direction(light_rotation_.get_value());
+        }
+
+        /**
+         * @brief Points the light of the scene in a direction.
+         * @param[in] direction Direction the light should come from (see
+         *            light_direction()); it does not need to be normalized.
+         */
+        void set_light_direction(const GEO::vec3& direction) {
+            light_rotation_.set_value(scene_light_rotation(direction));
+        }
 
         /**
          * @brief Draws the properties for all objects currently managed by the application.
@@ -254,6 +377,23 @@ namespace geolio::geobox
         /** Frames to draw after the most recent input event (replaces the
          *  base class's 100-frame redraw storm). */
         mutable GEO::index_t redraw_budget_ = 0;
+
+        /** Geometry of the ImGui windows, in the format ImGui saves its settings
+         *  in, as it was before the context was recreated (see save_ui_state()). */
+        std::string ui_settings_;
+
+        /** Open/closed state of the collapsing headers of each window, as it was
+         *  before the context was recreated, indexed by window name (see
+         *  save_ui_state()): the settings saved with the geometry do not hold
+         *  it. */
+        std::map<std::string, ImGuiStorage> window_states_;
+
+        /** Whether the state of save_ui_state() still has to be given back to a
+         *  recreated ImGui context (see restore_ui_state()). */
+        bool ui_state_to_restore_ = false;
+
+        /** The clipping plane of the viewer (see ClipPlane). */
+        ClipPlane clip_plane_;
 
         bool controller_properties_visible_ = true;
         bool arc_ball_visible_ = true;
