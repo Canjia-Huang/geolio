@@ -9,6 +9,7 @@
 #include "application/base_application.h"
 #include "application/application_menu.h"
 #include "geolio/geobox/object/base_object.h"
+#include "geolio/geobox/scene_light.h"
 
 namespace geolio::geobox
 {
@@ -132,6 +133,42 @@ namespace geolio::geobox
          * @brief Draws the viewer-related property section.
          */
         void draw_viewer_properties() override;
+
+        /**
+         * @brief Draws the controls of the light of the scene.
+         * @details geogram's GLUP shades with a single directional light, and the
+         *          only parameter of it the application can set is its direction
+         *          (see light_direction()); the specular factor is a property of
+         *          each object instead (see
+         *          MeshObject::draw_shading_properties()). The intensity and the
+         *          color of the light, the ambient level and the exponent of the
+         *          highlight are constants of GLUP's fragment shader (see
+         *          glup_lighting() in
+         *          geogram_gfx/GLUP/shaders/GLUP/fragment_shader_utils.h).
+         */
+        void draw_light_properties();
+
+        /**
+         * @brief Direction the light of the scene comes from.
+         * @details The light is the fixed direction of
+         *          scene_light_reference_direction() rotated by the arc ball of
+         *          the light, which is what SimpleApplication hands to GLUP (see
+         *          SimpleApplication::draw_scene_begin()). Dragging the light in
+         *          the viewport ("edit light") and the angle controls of the
+         *          viewer panel therefore edit the same state.
+         */
+        [[nodiscard]] GEO::vec3 light_direction() const {
+            return scene_light_direction(light_rotation_.get_value());
+        }
+
+        /**
+         * @brief Points the light of the scene in a direction.
+         * @param[in] direction Direction the light should come from (see
+         *            light_direction()); it does not need to be normalized.
+         */
+        void set_light_direction(const GEO::vec3& direction) {
+            light_rotation_.set_value(scene_light_rotation(direction));
+        }
 
         /**
          * @brief Draws the properties for all objects currently managed by the application.

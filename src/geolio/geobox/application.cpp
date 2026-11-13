@@ -459,9 +459,8 @@ namespace geolio::geobox
         ImGui::Separator();
         if (three_D_) {
             ImGui::Checkbox("Lighting", &lighting_);
-            if(lighting_) {
-                ImGui::Checkbox("Edit light", &edit_light_);
-            }
+            if (lighting_)
+                draw_light_properties();
             ImGui::Separator();
             ImGui::Checkbox("Clipping", &clipping_);
             if (clipping_) {
@@ -489,6 +488,80 @@ namespace geolio::geobox
                 default: assert(0);
             }
         }
+    }
+
+    void GeoBoxApplication::draw_light_properties(
+        ) {
+        // The light of the scene, as far as this rendering stack lets it be
+        // controlled (see draw_light_properties() in the header): the direction
+        // it comes from, and the specular factor, which the objects give to the
+        // shading (see BaseObject::draw_lighting_properties()).
+        ImGui::Indent();
+
+        ImGui::Checkbox("Edit light", &edit_light_);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Rotate the light by dragging in the viewport (instead of "
+                "rotating the scene).");
+
+        if (edit_light_) {
+            // While the light is aimed with the mouse, the angles below are just
+            // what the drag moves: they are left out.
+            ImGui::TextDisabled("drag in the viewport");
+        }
+        else {
+            // Both angles on one line: they are short drags, and the panel is
+            // narrow. The tooltips give the full names and the unit, the values
+            // are read back from the rotation of the light on every frame --
+            // which stays what the light is computed from, so that dragging the
+            // light in the viewport and editing them agree.
+            const GEO::vec2 angles = scene_light_angles(light_direction());
+            float azimuth = static_cast<float>(angles.x);
+            float elevation = static_cast<float>(angles.y);
+
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float label_width = std::max(
+                ImGui::CalcTextSize("az").x,
+                ImGui::CalcTextSize("el").x);
+            ImGui::PushItemWidth(
+                0.5f * (ImGui::GetContentRegionAvail().x - style.ItemSpacing.x)
+                - label_width - style.ItemInnerSpacing.x);
+
+            bool moved = ImGui::DragFloat(
+                "az", &azimuth, 0.5f, -180.0f, 180.0f, "%.1f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Azimuth of the light, in degrees: the angle its direction "
+                    "makes with the X axis of the view.");
+            ImGui::SameLine();
+            moved = ImGui::DragFloat(
+                "el", &elevation, 0.5f, -90.0f, 90.0f, "%.1f") || moved;
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Elevation of the light, in degrees: the angle its direction "
+                    "makes with the horizontal plane of the view.");
+            ImGui::PopItemWidth();
+
+            if (moved) {
+                set_light_direction(scene_light_direction_from_angles(
+                    {azimuth, elevation}));
+            }
+        }
+
+        if (ImGui::Button("reset light", ImVec2(-1.0, 0.0)))
+            light_rotation_.reset();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Put the light back where the application starts it, over the "
+                "(1,1,1) diagonal of the view.");
+
+        // What the selected object brings to the light, i.e. its specular
+        // factor: it belongs with the controls of the light rather than with the
+        // geometry of the object.
+        if (const auto object = selected_object_.lock())
+            object->draw_lighting_properties();
+
+        ImGui::Unindent();
     }
 
     void GeoBoxApplication::draw_objects_properties(

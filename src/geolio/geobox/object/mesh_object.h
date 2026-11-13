@@ -106,11 +106,23 @@ namespace geolio::geobox
         /**
          * @brief Draws the shading controls of the object in the scene panel.
          * @details The shading properties of Graphite's mesh shader that the
-         *          properties panel does not offer: culling_mode, specular and
-         *          transparency (see draw_shading_properties()). Drawn at the
-         *          end of the "Viewer" section of the left controller.
+         *          properties panel does not offer: culling_mode and transparency
+         *          (see draw_shading_properties()). Drawn at the end of the
+         *          "Viewer" section of the left controller; the specular factor
+         *          is drawn with the controls of the light instead (see
+         *          draw_lighting_properties()).
          */
         void draw_scene_properties() override;
+
+        /**
+         * @brief Draws the specular factor of the object with the light
+         *        controls.
+         * @details Graphite's `specular` is the parameter the light has in the
+         *          shading of the object, so its control is part of the light
+         *          controls of the viewer panel (see
+         *          GeoBoxApplication::draw_light_properties()).
+         */
+        void draw_lighting_properties() override;
 
         /**
          * @brief Renders the mesh object in the scene.
@@ -259,7 +271,9 @@ namespace geolio::geobox
          *          white -- and applies to the surface facets and to the
          *          volumetric cells, as it does in Graphite. The default of 4
          *          keeps 0.4 for the surface, which is what the objects were
-         *          drawn with before the property existed.
+         *          drawn with before the property existed. Its control is part of
+         *          the light controls of the viewer panel (see
+         *          draw_lighting_properties()).
          */
         void set_specular(const int specular) {
             specular_ = std::max(specular, 0);
@@ -448,14 +462,16 @@ namespace geolio::geobox
 
         /**
          * @brief Draws the shading controls ported from Graphite's shader.
-         * @details culling_mode, specular and transparency, in the layout
-         *          Graphite's properties editor gives them: the name of the
-         *          property on its own line, then the widget. Drawn by the scene
-         *          panel of the application (see draw_scene_properties()).
+         * @details culling_mode and transparency, in the layout Graphite's
+         *          properties editor gives them: the name of the property on its
+         *          own line, then the widget. Drawn by the scene panel of the
+         *          application (see draw_scene_properties()).
          *          Only what the properties panel does not offer is here: the
          *          two-sided shading keeps its `2sided` control, and the amount
          *          of the transparency its `trsp.` slider, in the surface block
-         *          of the mesh properties panel.
+         *          of the mesh properties panel; the specular factor is drawn
+         *          with the controls of the light (see
+         *          draw_lighting_properties()).
          */
         void draw_shading_properties();
 

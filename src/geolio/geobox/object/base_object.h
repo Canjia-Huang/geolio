@@ -127,6 +127,19 @@ namespace geolio::geobox
          */
         virtual void draw_scene_properties() {}
 
+        /**
+         * @brief Draws the parameters the object gives to the light of the
+         *        scene.
+         * @details The controls of the light, in the viewer panel of the left
+         *          controller (see GeoBoxApplication::draw_light_properties()),
+         *          end with what the selected object contributes to the light:
+         *          a mesh gives it the specular factor of its shading (see
+         *          MeshObject).
+         *          Objects that have nothing to give it -- a directional field,
+         *          ... -- keep the default, which draws nothing.
+         */
+        virtual void draw_lighting_properties() {}
+
         virtual void reload() {}
 
         /**

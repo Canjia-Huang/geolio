@@ -921,26 +921,6 @@ namespace geolio::geobox
             culling_mode_ = static_cast<CullingMode>(culling_mode);
         ImGui::PopItemWidth();
 
-        /* == specular ========================================================================================== */
-        // Graphite's `specular` has no upper bound: it is an integer factor that
-        // GLUP takes divided by 10 as its 0..1 specular factor, so 10 is where
-        // the highlight starts saturating to white, not a limit. The control is
-        // therefore a drag with its only bound at 0 -- where the shading is
-        // Lambertian, without any highlight.
-        ImGui::TextUnformatted("specular");
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Specular factor of the shading: 0 for Lambert shading, 10 for "
-                "highly specular shading, more for a highlight that saturates "
-                "to white.");
-        ImGui::PushItemWidth(-10.0f);
-        // A tenth of a unit per pixel: the useful range of the factor is 0..10,
-        // which a unit per pixel would cross in ten pixels.
-        ImGui::DragInt(
-            "##specular", &specular_, 0.1f, 0,
-            std::numeric_limits<int>::max());
-        ImGui::PopItemWidth();
-
         /* == transparency ====================================================================================== */
         // The mode only: the amount of transparency it composites with is the
         // `trsp.` slider of the surface block of the properties panel.
@@ -963,6 +943,30 @@ namespace geolio::geobox
                 TRANSPARENCY_NAMES, IM_ARRAYSIZE(TRANSPARENCY_NAMES)))
             transparency_mode_ =
                 static_cast<TransparencyMode>(transparency_mode);
+        ImGui::PopItemWidth();
+    }
+
+    void MeshObject::draw_lighting_properties(
+        ) {
+        // The specular factor of Graphite's mesh shader: the parameter the light
+        // has in the shading of this object (see set_specular()), so it is drawn
+        // with the controls of the light. Graphite's `specular` has no upper
+        // bound: it is an integer factor that GLUP takes divided by 10 as its
+        // 0..1 specular factor, so 10 is where the highlight starts saturating
+        // to white, not a limit. The control is therefore a drag with its only
+        // bound at 0 -- where the shading is Lambertian, without any highlight.
+        ImGui::TextUnformatted("specular");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Specular factor of the shading: 0 for Lambert shading, 10 for "
+                "highly specular shading, more for a highlight that saturates "
+                "to white.");
+        ImGui::PushItemWidth(-10.0f);
+        // A tenth of a unit per pixel: the useful range of the factor is 0..10,
+        // which a unit per pixel would cross in ten pixels.
+        ImGui::DragInt(
+            "##specular", &specular_, 0.1f, 0,
+            std::numeric_limits<int>::max());
         ImGui::PopItemWidth();
     }
 
