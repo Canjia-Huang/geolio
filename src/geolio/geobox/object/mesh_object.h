@@ -31,6 +31,44 @@ namespace geolio::geobox
     };
 
     /**
+     * @brief Which faces of the surface are discarded before rasterization.
+     * @details The culling modes of Graphite's MeshGrobShader (OGF::CullingMode,
+     *          its `culling_mode` property):
+     *          - NO_CULL draws both faces of the surface;
+     *          - CULL_FRONT discards the faces that point towards the camera,
+     *            so a closed surface shows its inside;
+     *          - CULL_BACK discards the faces that point away from the camera.
+     */
+    enum class CullingMode {
+        NO_CULL,
+        CULL_FRONT,
+        CULL_BACK
+    };
+
+    /**
+     * @brief How the transparency of the object is composited.
+     * @details The transparency modes of Graphite's Shader (its `transparency`
+     *          property), applied by the drawing passes of the object:
+     *          - TRANSP_OPAQUE draws the object opaque, whatever amount of
+     *            transparency its `trsp.` controls are set to: those amounts
+     *            are kept but not applied, and the controls are locked while
+     *            the mode is chosen (see
+     *            MeshObject::transparency_controls_locked());
+     *          - TRANSP_BLEND blends the surface over what is behind it, the
+     *            usual source-alpha blending;
+     *          - TRANSP_ACCUM adds the surface to what is behind it, so the
+     *            faces that overlap accumulate instead of mixing: the X-ray
+     *            look Graphite's TRANSP_ACCUM gives. Adding to a light
+     *            background saturates it to white, so the mode shows best on a
+     *            dark one (Graphite behaves the same way).
+     */
+    enum class TransparencyMode {
+        TRANSP_OPAQUE,
+        TRANSP_BLEND,
+        TRANSP_ACCUM
+    };
+
+    /**
      * @brief Releases the GL textures loaded for the TEXTURE painting mode.
      * @details The textures are shared by all the objects (they are cached by
      *          image file name), so they cannot be owned by a MeshObject. The
@@ -64,6 +102,15 @@ namespace geolio::geobox
          * @brief Draws the object-specific property widgets.
          */
         void draw_object_properties(ApplicationObjects& objects) override;
+
+        /**
+         * @brief Draws the shading controls of the object in the scene panel.
+         * @details The shading properties of Graphite's mesh shader that the
+         *          properties panel does not offer: culling_mode, specular and
+         *          transparency (see draw_shading_properties()). Drawn at the
+         *          end of the "Viewer" section of the left controller.
+         */
+        void draw_scene_properties() override;
 
         /**
          * @brief Renders the mesh object in the scene.
@@ -194,6 +241,89 @@ namespace geolio::geobox
         void set_painting_mode(const PaintingMode mode) { painting_mode_ = mode; }
         [[nodiscard]] PaintingMode painting_mode() const { return painting_mode_; }
 
+        /**
+         * @brief Which faces of the surface are discarded (see CullingMode).
+         * @details Graphite's `culling_mode` property. NO_CULL by default, as
+         *          in Graphite: a mesh whose facets are wound either way, or an
+         *          open surface seen from its back, is drawn either way.
+         */
+        void set_culling_mode(const CullingMode mode) { culling_mode_ = mode; }
+        [[nodiscard]] CullingMode culling_mode() const { return culling_mode_; }
+
+        /**
+         * @brief Specular factor of the shading of the object.
+         * @details Graphite's `specular` property: 0 for Lambert shading, 10
+         *          for highly specular shading. GLUP takes it divided by 10, the
+         *          0..1 factor it multiplies the specular term with. It has no
+         *          upper bound -- a value above 10 saturates the highlight to
+         *          white -- and applies to the surface facets and to the
+         *          volumetric cells, as it does in Graphite. The default of 4
+         *          keeps 0.4 for the surface, which is what the objects were
+         *          drawn with before the property existed.
+         */
+        void set_specular(const int specular) {
+            specular_ = std::max(specular, 0);
+        }
+        [[nodiscard]] int specular() const { return specular_; }
+
+        /**
+         * @brief How the transparency of the surface is composited (see
+         *        TransparencyMode).
+         * @details Graphite's `transparency` property, TRANSP_BLEND by default:
+         *          the surface is then blended over the scene when it is given
+         *          an amount of transparency, which is what the object always
+         *          did. Its control is in the scene panel (see
+         *          draw_scene_properties()); the amount it composites with is
+         *          the `trsp.` slider of the properties panel (see
+         *          set_surface_transparency()).
+         */
+        void set_transparency_mode(const TransparencyMode mode) {
+            transparency_mode_ = mode;
+        }
+        [[nodiscard]] TransparencyMode transparency_mode() const {
+            return transparency_mode_;
+        }
+
+        /**
+         * @brief Amount of transparency of the surface, from 0 (opaque) to 1
+         *        (invisible).
+         * @details It is the alpha the surface is drawn with, when the
+         *          transparency mode lets it be transparent (see
+         *          surface_alpha()). It is set by the `trsp.` slider of the
+         *          surface block of the properties panel, as it has always been.
+         */
+        void set_surface_transparency(const float transparency) {
+            surface_transparency_ = std::clamp(transparency, 0.0f, 1.0f);
+        }
+        [[nodiscard]] float surface_transparency() const {
+            return surface_transparency_;
+        }
+
+        /**
+         * @brief Amount of transparency a drawing pass applies.
+         * @details TRANSP_OPAQUE draws the object opaque: the amounts the
+         *          `trsp.` controls are set to are kept, so that they come back
+         *          when another transparency mode is chosen, but they are not
+         *          applied -- the controls are locked meanwhile (see
+         *          transparency_controls_locked()).
+         * @param[in] amount Amount one of the `trsp.` controls is set to.
+         * @return The amount to draw with, 0 under TRANSP_OPAQUE.
+         */
+        [[nodiscard]] float applied_transparency(const float amount) const {
+            return transparency_controls_locked() ? 0.0f : amount;
+        }
+
+        /**
+         * @brief Alpha the surface is drawn with.
+         * @details The amount of transparency of the object, unless the
+         *          transparency mode is TRANSP_OPAQUE: the surface is then drawn
+         *          opaque whatever that amount is, as Graphite's TRANSP_OPAQUE
+         *          draws an object without letting it be seen through.
+         */
+        [[nodiscard]] float surface_alpha() const {
+            return 1.0f - applied_transparency(surface_transparency_);
+        }
+
         /** @brief Shows or hides the markers drawn at the mesh vertices. */
         void set_vertices_visible(const bool visible) {
             show_vertices_ = visible;
@@ -315,6 +445,51 @@ namespace geolio::geobox
          * @ref <geogram_gfx/gui/simple_mesh_application.cpp> draw_surface()
          */
         void draw_surface();
+
+        /**
+         * @brief Draws the shading controls ported from Graphite's shader.
+         * @details culling_mode, specular and transparency, in the layout
+         *          Graphite's properties editor gives them: the name of the
+         *          property on its own line, then the widget. Drawn by the scene
+         *          panel of the application (see draw_scene_properties()).
+         *          Only what the properties panel does not offer is here: the
+         *          two-sided shading keeps its `2sided` control, and the amount
+         *          of the transparency its `trsp.` slider, in the surface block
+         *          of the mesh properties panel.
+         */
+        void draw_shading_properties();
+
+        /**
+         * @brief Draws the title of a block of the properties panels.
+         * @details ImGui has no section title: the titles of the property
+         *          blocks are separators drawn in the accent color of the
+         *          objects (see title_color_).
+         * @param[in] title Title of the block, e.g. "Shading".
+         */
+        void draw_section_title(const char* title);
+
+        /**
+         * @brief Whether the `trsp.` controls of the properties panel are
+         *        locked.
+         * @details Graphite's TRANSP_OPAQUE draws the object opaque, so the
+         *          amount of transparency of its elements has no effect then
+         *          (see TransparencyMode and surface_alpha()). The `trsp.`
+         *          sliders keep showing the amount they are set to -- greyed out,
+         *          so that it comes back as it was when another transparency
+         *          mode is chosen -- but cannot be changed.
+         */
+        [[nodiscard]] bool transparency_controls_locked() const {
+            return transparency_mode_ == TransparencyMode::TRANSP_OPAQUE;
+        }
+
+        /**
+         * @brief Draws one of the `trsp.` sliders of the element sections.
+         * @details All of them go through here, so that they are locked
+         *          together (see transparency_controls_locked()).
+         * @param[in] label Label and ID of the slider, e.g. "trsp.##surface".
+         * @param[in,out] amount Amount of transparency, from 0 to 1.
+         */
+        void draw_transparency_slider(const char* label, float& amount);
 
         /**
          * @brief Tests whether the surface has border edges to draw.
@@ -943,7 +1118,18 @@ namespace geolio::geobox
         bool show_surface_sides_ = false;
         GEO::vec4f surface_color_ = GEO::vec4f(0.5f, 0.5f, 1.0f, 1.0f);
         GEO::vec4f surface_color_2_ = GEO::vec4f(1.0f, 0.5f, 0.0f, 1.0f);
+
+        // Amount of transparency of the surface, applied by the blending modes
+        // (see surface_alpha() and TransparencyMode).
         float surface_transparency_ = 0.0f;
+
+        // Shading properties ported from Graphite's mesh shader that the mesh
+        // properties panel does not offer: the scene panel draws their controls
+        // (see draw_shading_properties()) and the drawing passes apply them
+        // (see CullingMode and TransparencyMode).
+        CullingMode culling_mode_ = CullingMode::NO_CULL;
+        int specular_ = 4;
+        TransparencyMode transparency_mode_ = TransparencyMode::TRANSP_BLEND;
 
         // Wireframe of the surface facets ("mesh" lines: the edges of
         // mesh.facets, drawn over the surface).

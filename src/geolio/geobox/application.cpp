@@ -435,8 +435,18 @@ namespace geolio::geobox
 
     void GeoBoxApplication::draw_controller_properties(
         ) {
-        if (ImGui::CollapsingHeader("Viewer"))
+        if (ImGui::CollapsingHeader("Viewer")) {
             draw_viewer_properties();
+
+            // The shading controls of the selected object close the viewer
+            // panel: Graphite's scene panel exposes culling_mode, specular and
+            // transparency for the current object, and the viewer is where the
+            // panel of the controller shows how the scene is drawn. The object
+            // draws them itself, title included (see
+            // BaseObject::draw_scene_properties()).
+            if (const auto object = selected_object_.lock())
+                object->draw_scene_properties();
+        }
         if (ImGui::CollapsingHeader("Object", ImGuiTreeNodeFlags_DefaultOpen))
             draw_objects_properties();
     }

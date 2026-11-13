@@ -3,6 +3,7 @@
 // Copyright (c) 2026 Graphics@XMU (https://graphics.xmu.edu.cn). All rights reserved.
 //
 #include "mesh_object.h"
+#include <limits>
 #include <map>
 #include <geogram/basic/file_system.h>
 #include <geogram_gfx/imgui_ext/imgui_ext.h>
@@ -500,15 +501,7 @@ namespace geolio::geobox
             };
             const int nb_painting_modes = can_texture ? 3 : 2;
             int painting_mode = static_cast<int>(painting_mode_);
-            ImGui::PushStyleColor(
-                ImGuiCol_Text,
-                ImVec4(
-                    title_color_.x,
-                    title_color_.y,
-                    title_color_.z,
-                    title_color_.w));
-            ImGui::SeparatorText("Painting");
-            ImGui::PopStyleColor();
+            draw_section_title("Painting");
             ImGui::PushItemWidth(-10.0f);
             if (ImGui::Combo(
                     "##painting", &painting_mode,
@@ -778,15 +771,7 @@ namespace geolio::geobox
             }
 
             ImGui::Separator();
-            ImGui::PushStyleColor(
-                ImGuiCol_Text,
-                ImVec4(
-                    title_color_.x,
-                    title_color_.y,
-                    title_color_.z,
-                    title_color_.w));
-            ImGui::SeparatorText("Elements");
-            ImGui::PopStyleColor();
+            draw_section_title("Elements");
 
             /* == Vertices ========================================================================================= */
             ImGui::Checkbox("##VertOnOff", &show_vertices_);
@@ -812,7 +797,7 @@ namespace geolio::geobox
                         "Marker diameter in model coordinates (absolute "
                         "size). The on-screen size therefore varies with "
                         "the camera distance.");
-                ImGui::SliderFloat("trsp.##vertices", &vertices_transparency_, 0.0f, 1.0f, "%.2f");
+                draw_transparency_slider("trsp.##vertices", vertices_transparency_);
 
                 ImGui::Unindent();
             }
@@ -844,7 +829,11 @@ namespace geolio::geobox
                     ImGui::SameLine();
                     ImGui::ColorEdit3WithPalette("2sided", surface_color_2_.data());
 
-                    ImGui::SliderFloat("trsp.##surface", &surface_transparency_, 0.0f, 1.0f, "%.2f");
+                    // The amount of transparency of the surface. The scene panel
+                    // of the application sets how it is composited (see
+                    // draw_shading_properties()): the transparency mode of
+                    // Graphite decides what this amount means.
+                    draw_transparency_slider("trsp.##surface", surface_transparency_);
 
                     ImGui::Checkbox("##MeshOnOff", &show_surface_mesh_);
                     ImGui::SameLine();
@@ -905,6 +894,129 @@ namespace geolio::geobox
         }
 
         ImGui::PopID();
+    }
+
+    void MeshObject::draw_shading_properties(
+        ) {
+        // Layout copied from Graphite's properties editor (autogui): the name
+        // of the property on its own line, then a widget taking the whole width
+        // of the panel, with the help of the property as a tooltip.
+
+        /* == culling_mode ====================================================================================== */
+        static const char* CULLING_MODE_NAMES[] = {
+            "NO_CULL", "CULL_FRONT", "CULL_BACK"
+        };
+        ImGui::TextUnformatted("culling_mode");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Faces discarded before rasterization: NO_CULL draws both "
+                "sides of the surface, CULL_FRONT hides the faces that point "
+                "towards the camera, CULL_BACK hides the ones that point away "
+                "from it.");
+        int culling_mode = static_cast<int>(culling_mode_);
+        ImGui::PushItemWidth(-10.0f);
+        if (ImGui::Combo(
+                "##culling_mode", &culling_mode,
+                CULLING_MODE_NAMES, IM_ARRAYSIZE(CULLING_MODE_NAMES)))
+            culling_mode_ = static_cast<CullingMode>(culling_mode);
+        ImGui::PopItemWidth();
+
+        /* == specular ========================================================================================== */
+        // Graphite's `specular` has no upper bound: it is an integer factor that
+        // GLUP takes divided by 10 as its 0..1 specular factor, so 10 is where
+        // the highlight starts saturating to white, not a limit. The control is
+        // therefore a drag with its only bound at 0 -- where the shading is
+        // Lambertian, without any highlight.
+        ImGui::TextUnformatted("specular");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Specular factor of the shading: 0 for Lambert shading, 10 for "
+                "highly specular shading, more for a highlight that saturates "
+                "to white.");
+        ImGui::PushItemWidth(-10.0f);
+        // A tenth of a unit per pixel: the useful range of the factor is 0..10,
+        // which a unit per pixel would cross in ten pixels.
+        ImGui::DragInt(
+            "##specular", &specular_, 0.1f, 0,
+            std::numeric_limits<int>::max());
+        ImGui::PopItemWidth();
+
+        /* == transparency ====================================================================================== */
+        // The mode only: the amount of transparency it composites with is the
+        // `trsp.` slider of the surface block of the properties panel.
+        static const char* TRANSPARENCY_NAMES[] = {
+            "TRANSP_OPAQUE", "TRANSP_BLEND", "TRANSP_ACCUM"
+        };
+        ImGui::TextUnformatted("transparency");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "How the transparency of the surface is composited: "
+                "TRANSP_OPAQUE draws it opaque, TRANSP_BLEND blends it over "
+                "what is behind it, TRANSP_ACCUM adds it to what is behind it "
+                "and shows it best on a dark background.\n\n"
+                "The amount of transparency is the `trsp.` slider of the "
+                "surface block of the properties panel.");
+        int transparency_mode = static_cast<int>(transparency_mode_);
+        ImGui::PushItemWidth(-10.0f);
+        if (ImGui::Combo(
+                "##transparency", &transparency_mode,
+                TRANSPARENCY_NAMES, IM_ARRAYSIZE(TRANSPARENCY_NAMES)))
+            transparency_mode_ =
+                static_cast<TransparencyMode>(transparency_mode);
+        ImGui::PopItemWidth();
+    }
+
+    void MeshObject::draw_scene_properties(
+        ) {
+        // Drawn at the end of the "Viewer" section of the left controller (see
+        // GeoBoxApplication::draw_controller_properties()): the block titles
+        // itself so that its controls are not taken for part of the viewer's.
+        ImGui::PushID(this);
+        draw_section_title("Shading");
+        draw_shading_properties();
+        ImGui::PopID();
+    }
+
+    void MeshObject::draw_section_title(
+        const char* title
+        ) {
+        ImGui::PushStyleColor(
+            ImGuiCol_Text,
+            ImVec4(
+                title_color_.x,
+                title_color_.y,
+                title_color_.z,
+                title_color_.w));
+        ImGui::SeparatorText(title);
+        ImGui::PopStyleColor();
+    }
+
+    void MeshObject::draw_transparency_slider(
+        const char* label,
+        float& amount
+        ) {
+        // TRANSP_OPAQUE draws the object opaque, so the amount of transparency
+        // of its elements has no effect then: the slider is locked rather than
+        // left able to change something that would not be seen. Its value is
+        // kept, and comes back with the slider when another transparency mode is
+        // chosen.
+        const bool locked = transparency_controls_locked();
+        ImGui::BeginDisabled(locked);
+        ImGui::SliderFloat(label, &amount, 0.0f, 1.0f, "%.2f");
+        // The slider cannot be hovered while it is disabled, unless the hover
+        // test is told to ignore that: that is what lets the tooltip below
+        // explain why it is locked.
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            if (locked)
+                ImGui::SetTooltip(
+                    "Locked: the `transparency` mode of the scene panel is "
+                    "TRANSP_OPAQUE, which draws the object opaque.");
+            else
+                ImGui::SetTooltip(
+                    "Amount of transparency, from 0 (opaque) to 1 "
+                    "(invisible).");
+        }
+        ImGui::EndDisabled();
     }
 
     void MeshObject::draw_scene(
@@ -975,7 +1087,7 @@ namespace geolio::geobox
             (painting_mode_ == PaintingMode::ATTRIBUTE &&
              colormap_is_transparent()) ||
             (painting_mode_ == PaintingMode::TEXTURE &&
-             surface_transparency_ == 0.0f);
+             surface_alpha() == 1.0f);
         GLboolean saved_alpha_discard = GL_FALSE;
         GLUPfloat saved_alpha_threshold = 0.0f;
         if (discard_transparent_fragments) {
@@ -1284,7 +1396,12 @@ namespace geolio::geobox
         // diameter using GLUP's sphere impostor primitive (per-vertex radius
         // in the w component of glupVertex4d), which gives the round marker
         // silhouette with correct perspective scaling.
-        const bool blended = vertices_transparency_ != 0.0f;
+        // The amount the markers are drawn with: TRANSP_OPAQUE draws the whole
+        // object opaque, so the `trsp.` amount of the vertices is not applied
+        // then (see applied_transparency()).
+        const float vertices_transparency = applied_transparency(
+            vertices_transparency_);
+        const bool blended = vertices_transparency != 0.0f;
         if (blended) {
             glDepthMask(GL_FALSE);
             glEnable(GL_BLEND);
@@ -1393,7 +1510,7 @@ namespace geolio::geobox
                 vertices_color_.x,
                 vertices_color_.y,
                 vertices_color_.z,
-                1.0f - vertices_transparency_
+                1.0f - vertices_transparency
             };
             glupSetColor4fv(GLUP_FRONT_COLOR, rgba);
         }
@@ -1550,12 +1667,23 @@ namespace geolio::geobox
         ) {
         mesh_gfx_.set_mesh_color(0.0, 0.0, 0.0);
 
-        const float alpha = 1.0f - surface_transparency_;
-        if (surface_transparency_ != 0.0f) {
+        // Transparency: TRANSP_OPAQUE draws the surface opaque whatever amount
+        // of transparency it is set to, the two other modes blend it over what
+        // is behind it -- TRANSP_BLEND mixing with it, TRANSP_ACCUM adding to it
+        // (see TransparencyMode). The surface does not write depth while it is
+        // blended, so that what is behind it stays visible.
+        const float alpha = surface_alpha();
+        const bool blended =
+            transparency_mode_ != TransparencyMode::TRANSP_OPAQUE &&
+            alpha < 1.0f;
+        if (blended) {
             glDepthMask(GL_FALSE);
             glEnable(GL_BLEND);
             glBlendEquation(GL_FUNC_ADD);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glBlendFunc(
+                GL_SRC_ALPHA,
+                transparency_mode_ == TransparencyMode::TRANSP_ACCUM ?
+                GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
         }
 
         mesh_gfx_.set_surface_color(
@@ -1572,9 +1700,41 @@ namespace geolio::geobox
             static_cast<GEO::index_t>(surface_mesh_width_ * 10.0f));
 
         if (show_surface_) {
+            // Specular: Graphite's `specular` property, from 0 (Lambert) to 10,
+            // which GLUP takes as its 0..1 factor.
             const float specular_backup = glupGetSpecular();
-            glupSetSpecular(0.4f);
+            glupSetSpecular(static_cast<float>(specular_) / 10.0f);
+
+            // Culling: Graphite's `culling_mode` property, the GL state the
+            // faces are discarded with before rasterization. It is shared with
+            // the rest of the frame, so it is saved and restored around the
+            // pass.
+            const GLboolean culling_was_enabled = glIsEnabled(GL_CULL_FACE);
+            GLint culling_face = GL_BACK;
+            if (culling_was_enabled)
+                glGetIntegerv(GL_CULL_FACE_MODE, &culling_face);
+            switch (culling_mode_) {
+            case CullingMode::CULL_FRONT:
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_FRONT);
+                break;
+            case CullingMode::CULL_BACK:
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_BACK);
+                break;
+            case CullingMode::NO_CULL:
+                glDisable(GL_CULL_FACE);
+                break;
+            }
+
             mesh_gfx_.draw_surface();
+
+            if (culling_was_enabled) {
+                glEnable(GL_CULL_FACE);
+                glCullFace(static_cast<GLenum>(culling_face));
+            }
+            else
+                glDisable(GL_CULL_FACE);
             glupSetSpecular(specular_backup);
 
             // Nothing to draw when the surface is closed (see
@@ -1588,7 +1748,7 @@ namespace geolio::geobox
             }
         }
 
-        if (surface_transparency_ != 0.0f) {
+        if (blended) {
             glDisable(GL_BLEND);
             glDepthMask(GL_TRUE);
         }
@@ -1621,6 +1781,11 @@ namespace geolio::geobox
             if (glupIsEnabled(GLUP_CLIPPING) &&
                 glupGetClipMode() == GLUP_CLIP_SLICE_CELLS)
                 mesh_gfx_.set_lighting(false);
+
+            // The same specular factor as the surface (Graphite's `specular`
+            // property shades the volumetric cells too).
+            const float specular_backup = glupGetSpecular();
+            glupSetSpecular(static_cast<float>(specular_) / 10.0f);
 
             mesh_gfx_.set_shrink(static_cast<double>(cells_shrink_));
             mesh_gfx_.set_draw_cells(GEO::MESH_HEX, show_hexes_);
@@ -1661,6 +1826,7 @@ namespace geolio::geobox
                 static_cast<GEO::index_t>(surface_mesh_width_ * 10.0f));
 
             mesh_gfx_.set_lighting(lighting);
+            glupSetSpecular(specular_backup);
         }
     }
 

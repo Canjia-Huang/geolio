@@ -111,6 +111,22 @@ namespace geolio::geobox
          */
         virtual void draw_scene(bool lighting) = 0;
 
+        /**
+         * @brief Draws the rendering controls the object adds to the scene
+         *        panel.
+         * @details The scene panel is the left controller of the application
+         *          (see GeoBoxApplication::draw_controller_properties()); its
+         *          "Viewer" section ends with the controls the selected object
+         *          adds there, the way Graphite's scene graph panel exposes the
+         *          properties of the current object -- Graphite's `culling_mode`,
+         *          `specular` and `transparency` for a mesh (see MeshObject). The
+         *          block titles itself, since it follows the settings of the
+         *          viewer.
+         *          Objects with nothing to add there -- a directional field,
+         *          ... -- keep the default, which draws nothing.
+         */
+        virtual void draw_scene_properties() {}
+
         virtual void reload() {}
 
         /**
