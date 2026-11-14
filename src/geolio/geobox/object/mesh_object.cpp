@@ -1727,7 +1727,8 @@ namespace geolio::geobox
             // MeshGfx::draw_surface() call, and its line program is unlit, so the
             // facet wireframe is drawn below, once the program is GLUP's again.
             const bool light_shader_used =
-                light_shader().begin(scene_light());
+                light_shader().begin(
+                    scene_light(), GLUP_TRIANGLES, tex_coord_mapping());
             if (light_shader_used)
                 mesh_gfx_.set_show_mesh(false);
 
@@ -1914,7 +1915,9 @@ namespace geolio::geobox
         for (GEO::index_t type = 0; type < GEO::MESH_NB_CELL_TYPES; ++type) {
             if (!drawn[type] || element_counts_.cells[type] == 0)
                 continue;
-            if (!light_shader().begin(scene_light(), PRIMITIVE_OF_CELL[type]))
+            if (!light_shader().begin(
+                    scene_light(), PRIMITIVE_OF_CELL[type],
+                    tex_coord_mapping()))
                 available = false;
         }
         light_shader().end();
@@ -1932,7 +1935,8 @@ namespace geolio::geobox
                 mesh_gfx_.set_draw_cells(
                     GEO::MeshCellType(other), other == type);
             }
-            light_shader().begin(scene_light(), PRIMITIVE_OF_CELL[type]);
+            light_shader().begin(
+                scene_light(), PRIMITIVE_OF_CELL[type], tex_coord_mapping());
             mesh_gfx_.draw_volume();
             light_shader().end();
         }
@@ -2061,7 +2065,8 @@ namespace geolio::geobox
         // LightShader). A pass whose program is not available is drawn with the
         // program of GLUP, as it always was.
         for (const GLUPprimitive primitive : {GLUP_TRIANGLES, GLUP_QUADS}) {
-            const bool lit = light_shader().begin(scene_light(), primitive);
+            const bool lit = light_shader().begin(
+                scene_light(), primitive, tex_coord_mapping());
 
             if (mesh_.cells.are_simplices()) {
                 // MeshGfx::draw_tets_immediate_attrib(): all the cells are
@@ -2337,6 +2342,26 @@ namespace geolio::geobox
 
         if (!glupIsEnabled(GLUP_NORMAL_MAPPING))
             glupSetColor3f(GLUP_FRONT_AND_BACK_COLOR, 1.0f, 1.0f, 1.0f);
+    }
+
+    TexCoordMapping MeshObject::tex_coord_mapping(
+        ) const {
+        // The attribute the surfaces and the cells are painted with is rescaled from
+        // the range of the colormap to [0,1] by the texture matrix of GLUP, which a
+        // client program does not receive in time (see TexCoordMapping): the
+        // drawing passes give it the rescale themselves. A painted image has its
+        // texture coordinates as they are, and a solid color has none.
+        TexCoordMapping mapping;
+        if (painting_mode_ != PaintingMode::ATTRIBUTE)
+            return mapping;
+        if (attribute_subelements_ == GEO::MESH_NONE ||
+            point_attribute_name_.empty())
+            return mapping;
+        mapping.rescale = true;
+        mapping.min = colormap_mapping_min();
+        mapping.max = colormap_mapping_max();
+        mapping.repeat = 1;
+        return mapping;
     }
 
     void MeshObject::end_attributes(

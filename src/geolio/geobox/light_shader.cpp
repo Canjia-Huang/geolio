@@ -4,6 +4,9 @@
 //
 #include "light_shader.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include <cstring>
 #include <map>
 #include <string>
@@ -70,6 +73,13 @@ namespace geolio::geobox
 //import <GLUP/current_profile/toggles.h>
 //import <GLUP/current_profile/primitive.h>
 //import <GLUPES/fragment_shader_utils.h>
+
+// The rescale of the range of the attribute, which the vertex shader of the ES2
+// profile does not apply (see TexCoordMapping): the programs of GLUP are compiled
+// with the toggles of the draw and take the texture matrix into account, ours are
+// not, so they rescale the texture coordinate themselves.
+uniform float geolio_tex_coord_scale;
+uniform float geolio_tex_coord_offset;
 
 // The light of the scene (see SceneLight). GLUP's own lighting has them as
 // constants: the ambient level 0.2, a white light of intensity 1 and a specular
@@ -164,13 +174,19 @@ void main() {
         }
     }
 
+    // The rescale of the range of the attribute, which the vertex shader of this
+    // program does not apply (see TexCoordMapping).
+    vec4 geolio_tex_coord = tex_coord;
+    geolio_tex_coord.x = geolio_tex_coord_scale * geolio_tex_coord.x +
+        geolio_tex_coord_offset;
+
     vec3 N;
     if(glupIsEnabled(GLUP_LIGHTING)) {
         if(
             glupIsEnabled(GLUP_TEXTURING) &&
             glupIsEnabled(GLUP_NORMAL_MAPPING)
         ) {
-            N = glup_texturing(vec4(1.0,1.0,1.0,1.0), tex_coord).xyz;
+            N = glup_texturing(vec4(1.0,1.0,1.0,1.0), geolio_tex_coord).xyz;
             N = N-vec3(0.5,0.5,0.5);
             N = normalize(GLUP.normal_matrix*N);
             if(!gl_FrontFacing) {
@@ -200,7 +216,7 @@ void main() {
     }
 
     glup_FragColor = geolio_shading(
-        color, tex_coord, N, int(primitive_id), mesh_tex_coord
+        color, geolio_tex_coord, N, int(primitive_id), mesh_tex_coord
     );
     glup_alpha_discard();
 }
@@ -245,6 +261,24 @@ void main() {
         }
     }
 
+    GEO::vec2 tex_coord_rescale(
+        const TexCoordMapping& mapping
+        ) {
+        if (!mapping.rescale)
+            return GEO::vec2(1.0, 0.0);
+
+        const double span = mapping.max - mapping.min;
+        if (std::fabs(span) < 1e-10) {
+            // A range that spans nothing: there is nothing to map onto the
+            // colormap, and dividing by it would give an infinite scale.
+            return GEO::vec2(1.0, 0.0);
+        }
+
+        const double scale =
+            double(std::max(mapping.repeat, 1)) / span;
+        return GEO::vec2(scale, -scale * mapping.min);
+    }
+
     bool LightShader::supported(
         ) {
         // glupCompileProgram() takes the shaders of the current profile: the one
@@ -264,7 +298,8 @@ void main() {
 
     bool LightShader::begin(
         const SceneLight& light,
-        GLUPprimitive primitive
+        GLUPprimitive primitive,
+        const TexCoordMapping& mapping
         ) {
         if (!supported())
             return false;
@@ -272,11 +307,29 @@ void main() {
         Program& shader = program(primitive);
         if (!shader.tried && !compile(shader, primitive))
             return false;
-
         if (!shader.uploaded || !same_light(shader.uploaded_light, light))
             upload(shader, light);
 
         glupUseProgram(shader.id);
+
+        // The rescale of the range of the attribute, which the vertex shader of the
+        // program does not apply (see TexCoordMapping).
+        const GEO::vec2 rescale = tex_coord_rescale(mapping);
+        glUseProgram(shader.id);
+        if (shader.tex_coord_scale_location < 0) {
+            shader.tex_coord_scale_location = glGetUniformLocation(
+                shader.id, "geolio_tex_coord_scale");
+            shader.tex_coord_offset_location = glGetUniformLocation(
+                shader.id, "geolio_tex_coord_offset");
+        }
+        if (shader.tex_coord_scale_location >= 0) {
+            glUniform1f(
+                shader.tex_coord_scale_location, GLfloat(rescale[0]));
+        }
+        if (shader.tex_coord_offset_location >= 0) {
+            glUniform1f(
+                shader.tex_coord_offset_location, GLfloat(rescale[1]));
+        }
         return true;
     }
 

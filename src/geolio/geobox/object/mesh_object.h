@@ -12,6 +12,7 @@
 #include <geogram/mesh/mesh.h>
 #include <geogram_gfx/mesh/mesh_gfx.h>
 #include "geolio/geobox/colormap.h"
+#include "geolio/geobox/light_shader.h"
 #include "geolio/geobox/object/surface_borders.h"
 
 namespace geolio::geobox
@@ -811,6 +812,14 @@ namespace geolio::geobox
          * @ref <geogram_gfx/mesh/mesh_gfx.cpp> MeshGfx::end_attributes()
          */
         void end_attributes();
+
+        /**
+         * @brief Rescale of the texture coordinates the geometry is drawn with.
+         * @details The range the colormap spans, when the object paints an
+         *          attribute; nothing is rescaled otherwise (see TexCoordMapping).
+         * @return The rescale to give the programs of the light shader.
+         */
+        [[nodiscard]] TexCoordMapping tex_coord_mapping() const;
 
         /**
          * @brief Autoscales the attribute range for display.

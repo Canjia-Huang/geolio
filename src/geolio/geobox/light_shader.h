@@ -7,6 +7,7 @@
 
 #include <array>
 
+#include <geogram/basic/geometry.h>
 #include <geogram_gfx/GLUP/GLUP.h>
 #include <geogram_gfx/basic/GL.h>
 
@@ -14,6 +15,51 @@
 
 namespace geolio::geobox
 {
+    /**
+     * @brief Rescale of the texture coordinates the geometry is drawn with.
+     * @details GLUP rescales the texture coordinates of an attribute from the range
+     *          of the attribute to [0,1] with the texture matrix, so that the
+     *          colormap spans that range (see glupMapTexCoords1d(), which
+     *          MeshGfx::begin_attributes() calls). Its vertex shader applies the
+     *          matrix, but only when it does not assume indirect texturing: the
+     *          toggles live in the state of the fragment shader, so the vertex
+     *          shader cannot know them and takes indirect texturing for on (see
+     *          Context_ES2::get_toggles_pseudo_file()), which uses the texture
+     *          coordinates as they are. The programs of GLUP are compiled with the
+     *          toggles of the draw, ours are not: they therefore rescale the
+     *          texture coordinate themselves, from the mapping they are given with
+     *          the light (see LightShader::begin()), and the colormap spans the
+     *          range of the attribute as it does with the programs of GLUP.
+     */
+    struct TexCoordMapping {
+        /** @brief Whether the texture coordinates are rescaled at all. */
+        bool rescale = false;
+
+        /** @brief Value of the attribute the first color of the colormap is bound
+         *  to. */
+        double min = 0.0;
+
+        /** @brief Value of the attribute the last color of the colormap is bound
+         *  to. */
+        double max = 1.0;
+
+        /** @brief Number of times the colormap is repeated over the range. */
+        int repeat = 1;
+    };
+
+    /**
+     * @brief Coefficients a rescale of the texture coordinates is applied with.
+     * @details The scale and the offset the coordinate of an attribute is
+     *          multiplied by and shifted with, so that the range of the attribute
+     *          is mapped onto the [0,1] the colormap is sampled with: the same ones
+     *          the texture matrix GLUP builds holds (see glupMapTexCoords1d()).
+     * @param[in] mapping Rescale to build the coefficients of.
+     * @return The scale on the first coordinate of the vector and the offset on the
+     *         second one; an identity (1, 0) when nothing is rescaled or when the
+     *         range of the attribute spans nothing.
+     */
+    [[nodiscard]] GEO::vec2 tex_coord_rescale(const TexCoordMapping& mapping);
+
     /**
      * @brief The GLUP programs GeoBox shades the geometry with.
      * @details GLUP shades with a single directional light whose color, intensity,
@@ -72,7 +118,8 @@ namespace geolio::geobox
          */
         bool begin(
             const SceneLight& light,
-            GLUPprimitive primitive = GLUP_TRIANGLES
+            GLUPprimitive primitive = GLUP_TRIANGLES,
+            const TexCoordMapping& mapping = TexCoordMapping()
             );
 
         /**
@@ -117,6 +164,9 @@ namespace geolio::geobox
             GLint light_intensity_location = -1;
             GLint light_ambient_location = -1;
             GLint specular_exponent_location = -1;
+            /** Locations of the rescale of the texture coordinates of the program. */
+            GLint tex_coord_scale_location = -1;
+            GLint tex_coord_offset_location = -1;
             /** The light the uniform values of the program are set to. */
             SceneLight uploaded_light;
             /** Whether uploaded_light describes what the program holds. */
