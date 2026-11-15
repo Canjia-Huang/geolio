@@ -156,11 +156,15 @@ namespace geolio::test
     }
 
     /**
-     * @brief Repairing with only "remove invalid vertices" keeps the elements,
-     *        and reports them again, since removing a vertex leaves the
-     *        elements that reference it with no vertex at all.
+     * @brief Repairing with only "remove invalid vertices" removes the elements
+     *        that use them.
+     * @details A vertex cannot be removed and leave the elements that reference it
+     *          behind: GeoGram re-numbers them and writes NO_VERTEX where the vertex
+     *          was, which its debug builds assert on. The elements that use a vertex
+     *          that is removed therefore go with it, even when "remove invalid
+     *          elements" is not checked, and the mesh becomes valid again.
      */
-    TEST(MeshObjectValidityTest, RemovingVerticesLeavesElementsToFix) {
+    TEST(MeshObjectValidityTest, RemovingVerticesRemovesTheElementsThatUseThem) {
         GEO::Mesh mesh;
         make_valid_mesh(mesh);
         const double nan = std::numeric_limits<double>::quiet_NaN();
@@ -174,14 +178,14 @@ namespace geolio::test
         object.set_remove_invalid_elements(false);
         object.repair();
 
-        // The vertex is gone, but the facet that referenced it is now the
-        // invalid one: the dialog comes back with the new counts.
+        // The vertex is gone, and so is the facet that was made of it: there is
+        // nothing left to repair, and the mesh is drawn again.
         EXPECT_EQ(object.mesh().vertices.nb(), 2);
+        EXPECT_EQ(object.mesh().facets.nb(), 0);
         EXPECT_EQ(object.counts().vertices, 0);
-        EXPECT_EQ(object.counts().facets, 1);
-        EXPECT_TRUE(object.dialog_pending());
-        // Still invalid, so still left out of the scene.
-        EXPECT_FALSE(object.renderable());
+        EXPECT_EQ(object.counts().facets, 0);
+        EXPECT_FALSE(object.dialog_pending());
+        EXPECT_TRUE(object.renderable());
     }
 
     /**
