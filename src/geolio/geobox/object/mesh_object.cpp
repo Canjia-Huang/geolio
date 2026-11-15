@@ -1315,8 +1315,9 @@ namespace geolio::geobox
         ImGui::Checkbox("remove invalid vertices", &remove_invalid_vertices_);
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(
-                "Remove the vertices whose coordinates are NaN/not finite.\n"
-                "Used when the mesh is repaired.");
+                "Remove the vertices whose coordinates are NaN/not finite,\n"
+                "and the elements that use them. Used when the mesh is\n"
+                "repaired.");
         }
         ImGui::Checkbox("remove invalid elements", &remove_invalid_elements_);
         if (ImGui::IsItemHovered()) {
@@ -1352,20 +1353,70 @@ namespace geolio::geobox
         ImGui::EndPopup();
     }
 
+    void MeshObject::mark_elements_using_deleted_vertices(
+        ) {
+        // The elements of an invalid mesh may reference vertices that the mesh does
+        // not have (that is what made it invalid): a reference is only looked up in
+        // the mask when it is one of the vertices of the mesh.
+        const GEO::index_t nb_vertices = vertices_to_delete_.size();
+        const auto uses_deleted_vertex = [&](const GEO::index_t v) {
+            return v < nb_vertices && vertices_to_delete_[v] != 0;
+        };
+
+        for (const auto& e : mesh_.edges) {
+            if (uses_deleted_vertex(mesh_.edges.vertex(e, 0)) ||
+                uses_deleted_vertex(mesh_.edges.vertex(e, 1))) {
+                edges_to_delete_[e] = 1;
+            }
+        }
+        for (const auto& f : mesh_.facets) {
+            for (GEO::index_t lv = 0, lv_end = mesh_.facets.nb_vertices(f);
+                 lv < lv_end; ++lv) {
+                if (uses_deleted_vertex(mesh_.facets.vertex(f, lv))) {
+                    // The facet goes away with the vertex it uses: it is not an
+                    // element to repair, it is one that cannot exist any more.
+                    facets_to_delete_[f] = 1;
+                    break;
+                }
+            }
+        }
+        for (const auto& c : mesh_.cells) {
+            for (GEO::index_t lv = 0, lv_end = mesh_.cells.nb_vertices(c);
+                 lv < lv_end; ++lv) {
+                if (uses_deleted_vertex(mesh_.cells.vertex(c, lv))) {
+                    cells_to_delete_[c] = 1;
+                    break;
+                }
+            }
+        }
+    }
+
     void MeshObject::repair_invalid_vertices_and_elements(
         ) {
-        // Elements first: deleting vertices re-indexes the elements that
-        // reference them (see GEO::MeshVertices::delete_elements()).
-        if (remove_invalid_elements_) {
-            if (invalid_counts_.edges != 0)
-                mesh_.edges.delete_elements(edges_to_delete_, false);
-            if (invalid_counts_.facets != 0)
-                mesh_.facets.delete_elements(facets_to_delete_, false);
-            if (invalid_counts_.cells != 0)
-                mesh_.cells.delete_elements(cells_to_delete_, false);
+        // A vertex cannot go away and leave the elements that reference it behind:
+        // GEO::MeshVertices::delete_elements() re-numbers the elements and writes
+        // NO_VERTEX where a deleted vertex was, which its debug builds assert on
+        // ("v < vertices_.nb()", in the setter of the corners of the facets). The
+        // elements that use a vertex that is removed are therefore removed with it,
+        // whatever "remove invalid elements" asks for: they have nothing left to be
+        // made of.
+        bool remove_elements = remove_invalid_elements_;
+        if (remove_invalid_vertices_ && invalid_counts_.vertices != 0) {
+            mark_elements_using_deleted_vertices();
+            remove_elements = true;
         }
-        if (remove_invalid_vertices_ && invalid_counts_.vertices != 0)
+
+        // Elements first: deleting vertices re-indexes the elements that
+        // reference them (see GEO::MeshVertices::delete_elements()). The masks
+        // say what goes, and a mask with nothing in it deletes nothing.
+        if (remove_elements) {
+            mesh_.edges.delete_elements(edges_to_delete_, false);
+            mesh_.facets.delete_elements(facets_to_delete_, false);
+            mesh_.cells.delete_elements(cells_to_delete_, false);
+        }
+        if (remove_invalid_vertices_ && invalid_counts_.vertices != 0) {
             mesh_.vertices.delete_elements(vertices_to_delete_, false);
+        }
 
         // Removing a vertex leaves NO_VERTEX in the elements that referenced it,
         // so the mesh may still be invalid: the check tells, and keeps the

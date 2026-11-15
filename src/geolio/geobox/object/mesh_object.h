@@ -540,11 +540,21 @@ namespace geolio::geobox
          *          vertices whose coordinates are not finite when the dialog
          *          asked for it. Elements are deleted first, since deleting
          *          vertices re-indexes the elements that reference them (see
-         *          GEO::MeshVertices::delete_elements()). The validity check is
-         *          run again afterwards, so that the elements that a vertex
-         *          removal left behind are reported again.
+         *          GEO::MeshVertices::delete_elements()). A vertex cannot be
+         *          removed and leave the elements that use it behind -- GeoGram
+         *          writes NO_VERTEX in them, which its debug builds assert on --
+         *          so those elements are removed with it (see
+         *          mark_elements_using_deleted_vertices()). The validity check is
+         *          run again afterwards.
          */
         void repair_invalid_vertices_and_elements();
+
+        /**
+         * @brief Marks the elements that use a vertex that is going to be removed.
+         * @details See repair_invalid_vertices_and_elements(): the elements that
+         *          use a removed vertex go with it.
+         */
+        void mark_elements_using_deleted_vertices();
 
         /**
          * @brief Recomputes what this object caches about the mesh.
