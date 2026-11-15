@@ -250,7 +250,9 @@ namespace geolio::test
         EXPECT_EQ(
             find_attribute(mesh_object, point.full_name()).dimension, 4u);
         EXPECT_DOUBLE_EQ(mesh_object.mesh().vertices.point(0)[0], 0.0);
-        EXPECT_DOUBLE_EQ(mesh_object.mesh().vertices.point(0)[3], 0.0);
+        // The coordinates are read through the pointer of the vertex: point()
+        // returns the three first ones, whatever the dimension of the mesh.
+        EXPECT_DOUBLE_EQ(mesh_object.mesh().vertices.point_ptr(0)[3], 0.0);
 
         // A row that asks for its removal anyway is ignored, but its dimension
         // is applied: that is what the window does (see

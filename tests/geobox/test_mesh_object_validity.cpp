@@ -63,8 +63,12 @@ namespace geolio::test
             mesh.vertices.point(2) = GEO::vec3(nan, nan, nan);
 
             mesh.facets.create_triangle(0, 1, 2);
-            // The facet references a vertex that does not exist.
-            mesh.facets.set_vertex(0, 0, 99);
+            // The facet references a vertex that does not exist. The setter that
+            // checks the index is the one of the facets, which asserts in debug
+            // builds on the very index the mesh has to hold to be invalid: the
+            // corner is written through the store that does not check it.
+            mesh.facet_corners.set_vertex_no_check(
+                mesh.facets.corner(0, 0), 99);
 
             // So does the edge.
             mesh.edges.create_edge(0, 42);
