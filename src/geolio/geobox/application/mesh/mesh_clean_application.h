@@ -38,27 +38,35 @@ namespace geolio::geobox
                 ) {
                 auto& mesh = mesh_object->mesh();
 
-                if (ImGui::Button("Clean isolated vertices", ImVec2(-1.0f, 0.0f)))
+                if (ImGui::Button("Clean isolated vertices", ImVec2(-1.0f, 0.0f))) {
                     mesh.vertices.remove_isolated();
+                    mesh_object->mesh_changed();
+                }
 
                 ImGui::BeginDisabled(mesh.edges.nb() == 0);
                 {
-                    if (ImGui::Button("Clean edges", ImVec2(-1.0f, 0.0f)))
+                    if (ImGui::Button("Clean edges", ImVec2(-1.0f, 0.0f))) {
                         mesh.edges.clear();
+                        mesh_object->mesh_changed();
+                    }
                 }
                 ImGui::EndDisabled();
 
                 ImGui::BeginDisabled(mesh.facets.nb() == 0);
                 {
-                    if (ImGui::Button("Clean facets", ImVec2(-1.0f, 0.0f)))
+                    if (ImGui::Button("Clean facets", ImVec2(-1.0f, 0.0f))) {
                         mesh.facets.clear();
+                        mesh_object->mesh_changed();
+                    }
                 }
                 ImGui::EndDisabled();
 
                 ImGui::BeginDisabled(mesh.cells.nb() == 0);
                 {
-                    if (ImGui::Button("Clean cells", ImVec2(-1.0f, 0.0f)))
+                    if (ImGui::Button("Clean cells", ImVec2(-1.0f, 0.0f))) {
                         mesh.cells.clear();
+                        mesh_object->mesh_changed();
+                    }
                 }
                 ImGui::EndDisabled();
             }
