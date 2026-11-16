@@ -258,6 +258,40 @@ namespace geolio::geobox
             return vertices_point_attribute_name_;
         }
 
+        /**
+         * @brief Selects the colormap the displayed attribute is sampled with.
+         * @details Same as picking an entry in the colormap popup of the
+         *          properties panel (see draw_object_properties()), for an
+         *          application that knows which colormap its result is read
+         *          with. RANDOM_COLORMAP_NAME, for instance, gives each of the
+         *          few distinct values of a label attribute a color of its
+         *          own, which a gradient would blend together: it is what
+         *          applications display the block labels they computed with
+         *          (see MotorcycleComplexApplication).
+         * @details The colormap is only sampled while the painting mode is
+         *          ATTRIBUTE, but the selection is kept when another mode is
+         *          chosen: it is the colormap that is drawn again when the
+         *          attribute display comes back.
+         * @param[in] name Name of the colormap, as ColormapInfo::name spells it
+         *            (e.g. RANDOM_COLORMAP_NAME, "inferno").
+         * @return true when the colormap table has that entry, which is then
+         *         the selected one; false when it does not, and the colormap
+         *         the object samples stays as it is.
+         */
+        bool set_colormap(const std::string& name);
+
+        /**
+         * @brief Name of the colormap the displayed attribute is sampled with.
+         * @details Returned by value: the table the name is read from is
+         *          rebuilt while the GL context is recreated (see
+         *          ColormapLibrary::initialize()), so an entry of it must not
+         *          be held on to.
+         * @return The name of the selected colormap, or an empty string while
+         *         the colormap table is empty (see ColormapLibrary::empty()) or
+         *         the selected index is out of its range.
+         */
+        [[nodiscard]] std::string colormap_name() const;
+
         /** @brief How the mesh is painted (see PaintingMode). */
         void set_painting_mode(const PaintingMode mode) { painting_mode_ = mode; }
         [[nodiscard]] PaintingMode painting_mode() const { return painting_mode_; }

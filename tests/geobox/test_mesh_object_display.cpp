@@ -5,8 +5,10 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
+#include <vector>
 #include <geogram/basic/attributes.h>
 #include <geogram/mesh/mesh.h>
+#include <geolio/geobox/colormap.h>
 #include <geolio/geobox/object/mesh_object.h>
 
 namespace geolio::test
@@ -102,6 +104,59 @@ namespace geolio::test
         object.set_painting_mode(geobox::PaintingMode::TEXTURE);
         EXPECT_EQ(object.painting_mode(), geobox::PaintingMode::TEXTURE);
         object.set_painting_mode(geobox::PaintingMode::SOLID_COLOR);
+        EXPECT_EQ(object.painting_mode(), geobox::PaintingMode::SOLID_COLOR);
+    }
+
+    /**
+     * @brief An application can select the colormap the displayed attribute is
+     *        drawn with, without going through the properties panel.
+     * @details The reported need: after computing the blocks of a motorcycle
+     *          complex, an application wants them shown with the random
+     *          colormap, one color per block, instead of the gradient the
+     *          object starts on.
+     * @details A MeshObject reads the process-wide colormap library, which the
+     *          application builds while its GL context is current (see
+     *          ColormapLibrary). The tests run without a GL context, so the
+     *          fixture installs a table of names only: the textures are bound
+     *          while drawing, which the tests do not do.
+     */
+    class MeshObjectColormapTest : public ::testing::Test {
+    protected:
+        void SetUp() override {
+            std::vector<geobox::ColormapInfo> colormaps(2);
+            colormaps[0].name = "viridis";
+            colormaps[1].name = geobox::RANDOM_COLORMAP_NAME;
+            geobox::ColormapLibrary::instance().set_colormaps(
+                std::move(colormaps));
+        }
+
+        void TearDown() override {
+            geobox::ColormapLibrary::instance().set_colormaps(
+                std::vector<geobox::ColormapInfo>());
+        }
+    };
+
+    TEST_F(MeshObjectColormapTest, SelectsTheColormapByName) {
+        GEO::Mesh mesh;
+        make_triangle_mesh(mesh);
+        create_weight_attribute(mesh);
+
+        geobox::MeshObject object("mesh", "", mesh);
+        // As in GeoGram's mesh applications, the object starts on the first
+        // colormap of the table.
+        EXPECT_EQ(object.colormap_name(), "viridis");
+
+        EXPECT_TRUE(object.set_colormap(geobox::RANDOM_COLORMAP_NAME));
+        EXPECT_EQ(object.colormap_name(), geobox::RANDOM_COLORMAP_NAME);
+
+        // A name the table does not have is refused, and the colormap the
+        // object samples stays as it is.
+        EXPECT_FALSE(object.set_colormap("no_such_colormap"));
+        EXPECT_FALSE(object.set_colormap(""));
+        EXPECT_EQ(object.colormap_name(), geobox::RANDOM_COLORMAP_NAME);
+
+        // Selecting the colormap of a result does not select the attribute it
+        // is meant to color: that is what display_attribute() is for.
         EXPECT_EQ(object.painting_mode(), geobox::PaintingMode::SOLID_COLOR);
     }
 }

@@ -2765,6 +2765,37 @@ namespace geolio::geobox
         return true;
     }
 
+    bool MeshObject::set_colormap(
+        const std::string& name
+        ) {
+        // The table is looked up by name: it is a constant of the application,
+        // but its order is the one the colormaps are built in, and an index the
+        // callers would hard-code could only break when that order changes (see
+        // ColormapLibrary::initialize()).
+        const std::vector<ColormapInfo>& available_colormaps = colormaps();
+        for (GEO::index_t i = 0; i < available_colormaps.size(); ++i) {
+            if (available_colormaps[i].name != name)
+                continue;
+            // The index is enough: the texture is read from the table when the
+            // attribute is drawn (see colormap_texture()), so nothing else has
+            // to be refreshed here. The display copy of the attribute holds the
+            // values the colormap is sampled with, not the colors (see
+            // update_display_attribute()).
+            current_colormap_index_ = i;
+            return true;
+        }
+        return false;
+    }
+
+    std::string MeshObject::colormap_name(
+        ) const {
+        const ColormapInfo* colormap =
+            ColormapLibrary::instance().colormap(current_colormap_index_);
+        if (colormap == nullptr)
+            return {};
+        return colormap->name;
+    }
+
     void MeshObject::set_attribute(
         const std::string& attribute
         ) {
