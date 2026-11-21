@@ -304,6 +304,17 @@ namespace geolio::geobox
         void draw_application_menus() override;
 
         /**
+         * @brief Reports the load() that failed, if one still has to be.
+         * @details Drawn once per frame by draw_gui(), on top of everything
+         *          else, while a load failure was not acknowledged: the dialog
+         *          is modal and has a single button, so the failure cannot be
+         *          skipped without reading it. What the failure was (a file
+         *          that cannot be read, a format that cannot be parsed, ...) is
+         *          logged by load() to the console, which the dialog points to.
+         */
+        void draw_load_error_dialog();
+
+        /**
          * @brief Draws the rotation gizmo in the viewport.
          * @details The gizmo is rendered in the lower-left corner and updates the current
          *          object rotation when the user drags it.
@@ -356,6 +367,23 @@ namespace geolio::geobox
          * @return true if the field was read; false otherwise.
          */
         bool load_directional_field(const std::string& filepath);
+
+        /**
+         * @brief Remembers a failed load, for draw_load_error_dialog() to
+         *        report.
+         * @details The reason of the failure is not kept: load() already
+         *          logged it to the console, which the dialog points to.
+         * @param[in] filepath Path of the file that could not be loaded.
+         */
+        void report_load_failure(const std::string& filepath);
+
+        /** The file whose load() failed and was not acknowledged yet (see
+         *  report_load_failure() and draw_load_error_dialog()). */
+        std::string failed_load_filepath_;
+
+        /** Whether a load failure still has to be reported (see
+         *  draw_load_error_dialog()). */
+        bool load_error_pending_ = false;
 
         /** True when the rendered scene (camera, mesh state, ...) changed and
          *  the 3D view must be re-rendered. Cleared after each full render. */

@@ -135,6 +135,13 @@ namespace geolio::geobox
         if (scene_dirty_)
             return true;
 
+        // A modal dialog waiting for the user -- e.g. the report of a load
+        // failure (see draw_load_error_dialog()) -- has to be drawn and
+        // interacted with until it is acknowledged, whether or not the scene
+        // changed.
+        if (load_error_pending_)
+            return true;
+
         // ImGui needs continuous frames to process hover, clicks, popups and
         // slider drags, so keep rendering while it captures the mouse/keyboard.
         if (ImGui::GetIO().WantCaptureMouse ||
@@ -378,6 +385,10 @@ namespace geolio::geobox
         // the rest of the UI (they are modal, so they cannot be skipped).
         for (const auto& object : objects_)
             object->draw_validity_dialog();
+
+        // The load failure of the frame, if any (see report_load_failure()),
+        // is reported above everything else, for the same reason.
+        draw_load_error_dialog();
 
         // All the file dialogs of the frame (Load/Save menu entries, texture
         // image pickers, ...) have been drawn at this point: give the ones that
@@ -1493,6 +1504,61 @@ namespace geolio::geobox
             SimpleMeshApplication::supported_write_file_extensions());
     }
 
+    void GeoBoxApplication::report_load_failure(
+        const std::string& filepath
+        ) {
+        failed_load_filepath_ = filepath;
+        load_error_pending_ = true;
+    }
+
+    void GeoBoxApplication::draw_load_error_dialog(
+        ) {
+        if (!load_error_pending_)
+            return;
+
+        // The popup is opened again on every frame until the failure is
+        // acknowledged: it has no close button and the Escape key must not
+        // dismiss it, so reading it and pressing its button is the only way
+        // out (same scheme as MeshObject::draw_validity_dialog()).
+        constexpr const char* POPUP_NAME = "Loading failed##load_error";
+        ImGui::OpenPopup(POPUP_NAME);
+        if (!ImGui::BeginPopupModal(
+                POPUP_NAME, nullptr,
+                ImGuiWindowFlags_AlwaysAutoResize |
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoMove)) {
+            return;
+        }
+
+        // What the failure was -- a file that does not exist, a format that
+        // cannot be parsed, ... -- is logged by load() while it fails (see
+        // report_load_failure()): the dialog only points the user to it.
+        ImGui::TextUnformatted("The file");
+        // A long path wraps instead of making the dialog as wide as it is.
+        ImGui::PushTextWrapPos(
+            ImGui::GetCursorPos().x + ImGui::GetFontSize() * 24.0f);
+        const GEO::vec4f& color = section_title_color();
+        ImGui::PushStyleColor(
+            ImGuiCol_Text, ImVec4(color.x, color.y, color.z, color.w));
+        ImGui::TextUnformatted(failed_load_filepath_.c_str());
+        ImGui::PopStyleColor();
+        ImGui::PopTextWrapPos();
+        ImGui::TextUnformatted("could not be loaded.");
+        ImGui::Spacing();
+        ImGui::TextUnformatted(
+            "The details of the failure are in the console output.");
+
+        ImGui::Spacing();
+        ImGui::Separator();
+
+        if (ImGui::Button("OK", ImVec2(-1.0f, 0.0f))) {
+            load_error_pending_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
     bool GeoBoxApplication::load(
         const std::string& filepath
         ) {
@@ -1506,6 +1572,7 @@ namespace geolio::geobox
         GEO::Mesh mesh;
         if (!mesh.load(filepath)) {
             LOG::ERROR("Cannot load mesh from `{}`!", filepath);
+            report_load_failure(filepath);
             return false;
         }
 
@@ -1538,6 +1605,7 @@ namespace geolio::geobox
         std::vector<double> vectors;
         if (!fra_load(filepath, vectors_nb_per_element, vectors)) {
             LOG::ERROR("Cannot load a directional field from `{}`!", filepath);
+            report_load_failure(filepath);
             return false;
         }
 
