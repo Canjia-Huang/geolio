@@ -260,11 +260,16 @@ namespace geolio
          *          rather than part of the published method, so it is not offered for a
          *          non-L2 objective.
          * @param[in] nb_iter Number of Lloyd iterations.
+         * @param[in] safe_mode If set, keeps Geogram's radius-of-security check enabled
+         *          during the relaxation, which avoids potential errors when a point has
+         *          many neighbors, at the cost of speed. When unset, any such error is
+         *          typically minor (and still produces a suitable input for
+         *          ``Newton_iterations()``) but may depend on the number of threads.
          * @pre @f$p = 2@f$ and at least one point, both checked and reported with an
          *      error message, leaving the points untouched. The points have to be
          *      populated first, with compute_initial_sampling() or set_points().
          */
-        void Lloyd_iterations(GEO::index_t nb_iter) override;
+        void Lloyd_iterations(GEO::index_t nb_iter, bool safe_mode = false) override;
 
     protected:
         /**

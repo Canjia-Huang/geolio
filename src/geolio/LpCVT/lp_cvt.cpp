@@ -154,7 +154,10 @@ namespace geolio
         GEO::CentroidalVoronoiTesselation::Newton_iterations(nb_iter, m);
     }
 
-    void LpCentroidalVoronoiTesselation::Lloyd_iterations(const GEO::index_t nb_iter) {
+    void LpCentroidalVoronoiTesselation::Lloyd_iterations(
+        const GEO::index_t nb_iter,
+        const bool safe_mode
+        ) {
         // Lloyd relaxation moves every point to the centroid of its restricted Voronoi
         // cell, which is the stationary condition of the L2 energy and not of the Lp
         // one. It is therefore only offered when the objective really is the L2 one;
@@ -178,7 +181,9 @@ namespace geolio
             return;
         }
 
-        GEO::CentroidalVoronoiTesselation::Lloyd_iterations(nb_iter);
+        // safe_mode defaults to false, which is what Geogram did unconditionally before
+        // the flag existed, so the default behaviour is unchanged.
+        GEO::CentroidalVoronoiTesselation::Lloyd_iterations(nb_iter, safe_mode);
     }
 
     void LpCentroidalVoronoiTesselation::funcgrad(
