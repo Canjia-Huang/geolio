@@ -214,9 +214,9 @@ namespace geolio
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
             std::vector<double> Bw(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
+            Lagrange_basis_1D(uvw.x, this->node_distribution_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_distribution_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_distribution_1D_, Bw);
 
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
@@ -298,9 +298,9 @@ namespace geolio
             std::vector<double> Bu(this->order_+1);
             std::vector<double> Bv(this->order_+1);
             std::vector<double> Bw(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
+            Lagrange_basis_1D(uvw.x, this->node_distribution_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_distribution_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_distribution_1D_, Bw);
 
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
@@ -350,10 +350,10 @@ namespace geolio
             std::vector<double> Bv(this->order_+1);
             std::vector<double> dBu(this->order_+1);
             std::vector<double> dBv(this->order_+1);
-            Lagrange_basis_1D(uv.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uv.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_deriv_1D(uv.x, this->node_positions_1D_, dBu);
-            Lagrange_basis_deriv_1D(uv.y, this->node_positions_1D_, dBv);
+            Lagrange_basis_1D(uv.x, this->node_distribution_1D_, Bu);
+            Lagrange_basis_1D(uv.y, this->node_distribution_1D_, Bv);
+            Lagrange_basis_deriv_1D(uv.x, this->node_distribution_1D_, dBu);
+            Lagrange_basis_deriv_1D(uv.y, this->node_distribution_1D_, dBv);
 
             GEO::vec3 Tu(0, 0, 0), Tv(0, 0, 0);
             for (GEO::index_t i = 0; i <= this->order_; ++i) {
@@ -423,12 +423,12 @@ namespace geolio
             dBu.resize(this->order_+1);
             dBv.resize(this->order_+1);
             dBw.resize(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
-            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D_, dBu);
-            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D_, dBv);
-            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D_, dBw);
+            Lagrange_basis_1D(uvw.x, this->node_distribution_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_distribution_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_distribution_1D_, Bw);
+            Lagrange_basis_deriv_1D(uvw.x, this->node_distribution_1D_, dBu);
+            Lagrange_basis_deriv_1D(uvw.y, this->node_distribution_1D_, dBv);
+            Lagrange_basis_deriv_1D(uvw.z, this->node_distribution_1D_, dBw);
 
             for (GEO::index_t k = 0; k <= this->order_; ++k) {
                 for (GEO::index_t j = 0; j <= this->order_; ++j) {
@@ -681,12 +681,12 @@ namespace geolio
             std::vector<double> dBu(this->order_+1);
             std::vector<double> dBv(this->order_+1);
             std::vector<double> dBw(this->order_+1);
-            Lagrange_basis_1D(uvw.x, this->node_positions_1D_, Bu);
-            Lagrange_basis_1D(uvw.y, this->node_positions_1D_, Bv);
-            Lagrange_basis_1D(uvw.z, this->node_positions_1D_, Bw);
-            Lagrange_basis_deriv_1D(uvw.x, this->node_positions_1D_, dBu);
-            Lagrange_basis_deriv_1D(uvw.y, this->node_positions_1D_, dBv);
-            Lagrange_basis_deriv_1D(uvw.z, this->node_positions_1D_, dBw);
+            Lagrange_basis_1D(uvw.x, this->node_distribution_1D_, Bu);
+            Lagrange_basis_1D(uvw.y, this->node_distribution_1D_, Bv);
+            Lagrange_basis_1D(uvw.z, this->node_distribution_1D_, Bw);
+            Lagrange_basis_deriv_1D(uvw.x, this->node_distribution_1D_, dBu);
+            Lagrange_basis_deriv_1D(uvw.y, this->node_distribution_1D_, dBv);
+            Lagrange_basis_deriv_1D(uvw.z, this->node_distribution_1D_, dBw);
             for (GEO::index_t i = 0; i < this->control_nodes.nb_per_edge(); ++i) {
                 for (GEO::index_t j = 0; j < this->control_nodes.nb_per_edge(); ++j) {
                     const auto dBu_Bv = dBu[i]*Bv[j];
@@ -1041,7 +1041,7 @@ namespace geolio
          */
         void initialize_control_nodes(const GEO::Mesh& mesh) override {
             assert(control_nodes.dimension() >= mesh_dimension_);
-            assert(this->node_positions_1D_.size() == this->order_+1);
+            assert(this->node_distribution_1D_.size() == this->order_+1);
 
             /* == Get all shared edges and facets ================================================================== */
             GEO::index_t hex_facets_nb = 0;
@@ -1101,7 +1101,7 @@ namespace geolio
                 const auto ep0 = mesh.vertices.point(edge.first);
                 const auto ep1 = mesh.vertices.point(edge.second);
                 for (GEO::index_t i = 0; i < this->control_nodes.internal_nb_per_edge(); ++i) {
-                    const double r = this->node_positions_1D_[i+1];
+                    const double r = this->node_distribution_1D_[i+1];
                     this->control_nodes.point<3>(new_v) = (1-r)*ep0 + r*ep1;
                     control_vertices[i] = new_v;
                     ++new_v;
@@ -1132,9 +1132,9 @@ namespace geolio
                     lf_control_points.reserve(this->control_nodes.internal_nb_per_facet());
 
                     for (GEO::index_t i = 0; i < this->control_nodes.internal_nb_per_edge(); ++i) {
-                        const double ri = this->node_positions_1D_[i+1];
+                        const double ri = this->node_distribution_1D_[i+1];
                         for (GEO::index_t j = 0; j < this->control_nodes.internal_nb_per_edge(); ++j) {
-                            const double rj = this->node_positions_1D_[j+1];
+                            const double rj = this->node_distribution_1D_[j+1];
 
                             this->control_nodes.point<3>(new_v) = (1-ri)*(1-rj)*lf_p0
                                                 + ri*(1-rj)*lf_p3
@@ -1211,11 +1211,11 @@ namespace geolio
                 const auto c_p7 = mesh.cells.point(c, 7);
 
                 for (GEO::index_t k = 0; k < this->control_nodes.internal_nb_per_edge(); ++k) {
-                    const double rk = this->node_positions_1D_[k+1];
+                    const double rk = this->node_distribution_1D_[k+1];
                     for (GEO::index_t j = 0; j < this->control_nodes.internal_nb_per_edge(); ++j) {
-                        const double rj = this->node_positions_1D_[j+1];
+                        const double rj = this->node_distribution_1D_[j+1];
                         for (GEO::index_t i = 0; i < this->control_nodes.internal_nb_per_edge(); ++i) {
-                            const double ri = this->node_positions_1D_[i+1];
+                            const double ri = this->node_distribution_1D_[i+1];
                             this->control_nodes.point<3>(new_v) = (1-ri)*(1-rj)*(1-rk)*c_p0
                                                     + ri*(1-rj)*(1-rk)*c_p1
                                                     + (1-ri)*rj*(1-rk)*c_p2

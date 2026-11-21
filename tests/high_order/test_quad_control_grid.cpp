@@ -359,7 +359,7 @@ namespace geolio::test
          * @param[in] f Facet index.
          */
         void expect_mapping_interpolates_control_nodes(const GEO::index_t f) const {
-            const auto& node_positions = control_grid->node_positions_1D();
+            const auto& node_positions = control_grid->node_distribution_1D();
             for (GEO::index_t i = 0, i_end = control_grid->order(); i <= i_end; ++i) {
                 for (GEO::index_t j = 0, j_end = control_grid->order(); j <= j_end; ++j) {
                     SCOPED_TRACE(::testing::Message() << "control node (" << i << ", " << j << ")");
@@ -399,7 +399,7 @@ namespace geolio::test
          * @param[in] j Second local control-node index of the perturbed node.
          */
         void expect_mapping_moved_at_node(const GEO::index_t f, const GEO::index_t i, const GEO::index_t j) const {
-            const auto& node_positions = control_grid->node_positions_1D();
+            const auto& node_positions = control_grid->node_distribution_1D();
             const GEO::vec2 uv(node_positions[i], node_positions[j]);
 
             GEO::vecng<DIM, double> reference;

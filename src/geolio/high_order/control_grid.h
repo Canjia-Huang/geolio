@@ -6,7 +6,7 @@
 #define GEOLIO_CONTROL_GRID_H
 #include <cassert>
 #include <geogram/mesh/mesh.h>
-#include "node_positions.h"
+#include "node_distributions.h"
 #include "geolio/common/utils.h"
 
 namespace geolio
@@ -167,7 +167,7 @@ namespace geolio
               mesh_dimension_(mesh_v_dim),
               order_(order)
         {
-            initialize_node_positions_1D();
+            initialize_node_distribution_1D();
         }
 
         /**
@@ -217,14 +217,14 @@ namespace geolio
          */
         void set_nodes_type(const NodesType nodes_type) {
             if (nodes_type != nodes_type_)
-                initialize_node_positions_1D();
+                initialize_node_distribution_1D();
         }
 
         /**
          * @brief Get the 1D parametric coordinates of the control nodes.
          * @return Const reference to node positions in [0, 1].
          */
-        [[nodiscard]] const auto& node_positions_1D() const { return node_positions_1D_; }
+        [[nodiscard]] const auto& node_distribution_1D() const { return node_distribution_1D_; }
 
         ControlNodes control_nodes;
 
@@ -270,26 +270,26 @@ namespace geolio
         /**
          * @brief Initialize the 1D parametric node positions according to `nodes_type_`.
          */
-        void initialize_node_positions_1D() {
+        void initialize_node_distribution_1D() {
             switch (nodes_type_) {
                 case NodesType::EQUALLY_SPACED_NODES:
-                    compute_equally_spaced_nodes(order_, node_positions_1D_);
+                    compute_equally_spaced_nodes(order_, node_distribution_1D_);
                     break;
                 case NodesType::CHEBYSHEV_GAUSS:
-                    compute_Chebyshev_Gauss_nodes(order_, node_positions_1D_);
+                    compute_Chebyshev_Gauss_nodes(order_, node_distribution_1D_);
                     break;
                 case NodesType::CHEBYSHEV_GAUSS_LOBATTO:
-                    compute_Chebyshev_Gauss_Lobatto_nodes(order_, node_positions_1D_);
+                    compute_Chebyshev_Gauss_Lobatto_nodes(order_, node_distribution_1D_);
                     break;
                 case NodesType::LEGENDRE_GAUSS_LOBATTO:
-                    compute_Legendre_Gauss_Lobatto_nodes(order_, node_positions_1D_);
+                    compute_Legendre_Gauss_Lobatto_nodes(order_, node_distribution_1D_);
                     break;
                 default:
                     assert(0);
             }
         }
         NodesType nodes_type_ = NodesType::EQUALLY_SPACED_NODES;
-        std::vector<double> node_positions_1D_; // 1D distribution of control nodes
+        std::vector<double> node_distribution_1D_; // 1D distribution of control nodes
 
         /* ========================================================================================================= */
 

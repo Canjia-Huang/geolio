@@ -491,7 +491,7 @@ namespace geolio::test
          * @param[in] c Cell index.
          */
         void expect_mapping_interpolates_control_nodes(const GEO::index_t c) const {
-            const auto& node_positions = control_grid->node_positions_1D();
+            const auto& node_positions = control_grid->node_distribution_1D();
             for (GEO::index_t i = 0, i_end = control_grid->order(); i <= i_end; ++i) {
                 for (GEO::index_t j = 0, j_end = control_grid->order(); j <= j_end; ++j) {
                     for (GEO::index_t k = 0, k_end = control_grid->order(); k <= k_end; ++k) {
@@ -538,7 +538,7 @@ namespace geolio::test
             const GEO::index_t j,
             const GEO::index_t k
             ) const {
-            const auto& node_positions = control_grid->node_positions_1D();
+            const auto& node_positions = control_grid->node_distribution_1D();
             const GEO::vec3 uvw(node_positions[i], node_positions[j], node_positions[k]);
 
             EXPECT_GT(GEO::distance2(
