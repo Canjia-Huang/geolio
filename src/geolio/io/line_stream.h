@@ -6,6 +6,7 @@
 #define GEOLIO_LINE_STREAM_H
 
 #include <cerrno>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -35,6 +36,11 @@
  *   rational number "p/q" with arbitrarily large integers (as produced
  *   by Ansys AEDT files) into an approximate double, e.g.
  *   "-9910370759100826714601236637/3271414488397938850655109120".
+ *   The reduction is done on the significands and the powers of ten
+ *   separately, so that a quotient is read correctly even when its
+ *   numerator or denominator (or both) do not fit in long double, e.g.
+ *   the 300+ digits rationals written by hexahedral integer grid
+ *   mappings whose quotient is an ordinary grid coordinate.
  */
 namespace geolio
 {
@@ -215,47 +221,68 @@ namespace geolio
      * undefined.
      * \details A field written as a rational number "p/q" with
      * arbitrarily large integers (e.g. "-9910370759100826714601236637/
-     * 3271414488397938850655109120", as produced by Ansys AEDT files)
-     * is converted to an approximate double. Fields that do not contain
-     * a '/' are converted exactly like field_as_double().
+     * 3271414488397938850655109120", as produced by Ansys AEDT files) is
+     * converted to an approximate double. Since the numerator and the
+     * denominator may individually exceed the range of long double (on
+     * Apple Silicon long double is 64 bit, that is the same range as
+     * double, and hexahedral integer grid mappings emit rationals with
+     * more than 300 digits) while their quotient is an ordinary number,
+     * each part is reduced to a significand of at most 19 significant
+     * digits plus a power of ten (see parse_decimal_field()), and the two
+     * powers of ten are recombined instead of dividing two converted
+     * parts. Fields that do not contain a '/' are converted the same way,
+     * so they are accepted with any number of digits as well. The result
+     * carries the accuracy of a double (a few ulps), which is what
+     * "approximate" means here.
      * \param[in] i the index of the field
      * \return the floating point value of the field at index \p i
      * \exception std::logic_error if the field cannot be converted to a
-     * floating point value
+     * floating point value, including when the value itself overflows the
+     * range of double.
      */
     [[nodiscard]] double field_as_appro_double(GEO::index_t i) const {
-        const char* s = field(i);
-        const char* slash = strchr(s, '/');
+        const char* begin = field(i);
+        const char* const end = begin + strlen(begin);
+        const char* slash = strchr(begin, '/');
         if(slash == nullptr) {
-            double result = 0;
-            if(!GEO::String::from_string(s, result))
+            bool negative = false;
+            double significand = 0.0;
+            long long exponent = 0;
+            if(!parse_decimal_field(begin, end, negative, significand, exponent)) {
                 conversion_error(i, "floating point");
-            return result;
-        }
-        // Skips spaces, tabs and end-of-line characters.
-        const auto skip_ws = [](const char* p) {
-            while(*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') {
-                ++p;
             }
-            return p;
-        };
-        // Numerator: parse up to the '/', tolerating surrounding whitespace.
-        errno = 0;
-        char* end_num = nullptr;
-        const long double num = strtold(s, &end_num);
-        if(end_num == s || skip_ws(end_num) != slash || errno == ERANGE) {
+            const double value = significand * std::pow(10.0, double(exponent));
+            // Overflowing the range of double is an error, unlike an
+            // intermediate part of a rational that does not fit in a double.
+            if(!std::isfinite(value)) {
+                conversion_error(i, "floating point");
+            }
+            return negative ? -value : value;
+        }
+
+        bool num_negative = false;
+        bool den_negative = false;
+        double num_significand = 0.0;
+        double den_significand = 0.0;
+        long long num_exponent = 0;
+        long long den_exponent = 0;
+        if(!parse_decimal_field(begin, slash, num_negative, num_significand, num_exponent) ||
+           !parse_decimal_field(slash + 1, end, den_negative, den_significand, den_exponent) ||
+           den_significand == 0.0) {
             conversion_error(i, "floating point");
         }
-        // Denominator: must be a non-empty, non-zero, fully consumed number.
-        const char* den_start = skip_ws(slash + 1);
-        errno = 0;
-        char* end_den = nullptr;
-        const long double den = strtold(den_start, &end_den);
-        if(end_den == den_start || *skip_ws(end_den) != '\0' ||
-           den == 0.0L || errno == ERANGE) {
+
+        // The two parts may be far outside the range of double even though
+        // their quotient is not (e.g. 1e356/1e355), so the powers of ten
+        // are recombined here rather than by dividing two converted parts.
+        const double ratio = num_significand / den_significand;
+        const double value = ratio * std::pow(10.0, double(num_exponent - den_exponent));
+        // Overflowing the range of double is an error, unlike an intermediate
+        // part of the quotient that does not fit in a double.
+        if(!std::isfinite(value)) {
             conversion_error(i, "floating point");
         }
-        return static_cast<double>(num / den);
+        return (num_negative != den_negative) ? -value : value;
     }
 
     /**
@@ -331,6 +358,148 @@ namespace geolio
      * any character
      */
     bool read_line(std::string& out) const;
+
+    /**
+     * \brief Converts a decimal literal into a significand and a power of ten.
+     * \details The characters in [\p begin, \p end) are read as a decimal
+     * number (sign, digits, optional decimal point, optional exponent, and
+     * surrounding whitespace) and written back as \p significand times
+     * 10^(\p exponent). Only the 19 leading significant digits are kept,
+     * which is enough to round a double correctly, and every other digit is
+     * folded into the exponent. A literal of any length can therefore be
+     * converted, including literals whose value or whose digit string does
+     * not fit in long double / in an integer type.
+     * \param[in] begin the first character of the literal
+     * \param[in] end one past the last character of the literal
+     * \param[out] negative true if the literal is negative
+     * \param[out] significand the leading significant digits, as a double
+     * \param[out] exponent the power of ten to apply to \p significand
+     * \retval true if the whole of [\p begin, \p end) is a decimal number
+     * \retval false otherwise
+     */
+    static bool parse_decimal_field(
+        const char* begin, const char* end,
+        bool& negative, double& significand, long long& exponent
+    ) {
+        const auto is_space = [](char c) {
+            return c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
+                   c == '\f' || c == '\v';
+        };
+        const auto is_digit = [](char c) {
+            return c >= '0' && c <= '9';
+        };
+
+        while(begin != end && is_space(*begin)) {
+            ++begin;
+        }
+        while(end != begin && is_space(*(end - 1))) {
+            --end;
+        }
+        if(begin == end) {
+            return false;
+        }
+
+        negative = false;
+        if(*begin == '+' || *begin == '-') {
+            negative = (*begin == '-');
+            ++begin;
+        }
+
+        // The value is significand * 10^exponent, where significand holds the
+        // first `nb_kept` significant digits, i.e. the digits from the first
+        // non-zero one on. `nb_digits` counts all the digits of the literal
+        // (leading zeros included) and `nb_int_digits` the ones before the
+        // decimal point, so that the decimal point contributes
+        // nb_int_digits - nb_digits while the digits that do not fit in
+        // significand contribute nb_significant_digits - nb_kept:
+        // value = significand * 10^(nb_int_digits - nb_digits
+        //                            + nb_significant_digits - nb_kept)
+        constexpr long long max_kept = 19;
+        char kept[max_kept];
+        long long nb_kept = 0;
+        long long nb_digits = 0;
+        long long nb_int_digits = 0;
+        long long nb_significant_digits = 0;
+        bool started = false;
+
+        while(begin != end && is_digit(*begin)) { // Integer part.
+            const char digit = *begin++;
+            ++nb_int_digits;
+            ++nb_digits;
+            if(!started) {
+                if(digit == '0') {
+                    continue;
+                }
+                started = true;
+            }
+            ++nb_significant_digits;
+            if(nb_kept < max_kept) {
+                kept[nb_kept++] = digit;
+            }
+        }
+        if(begin != end && *begin == '.') { // Fractional part.
+            ++begin;
+            while(begin != end && is_digit(*begin)) {
+                const char digit = *begin++;
+                ++nb_digits;
+                if(!started) {
+                    if(digit == '0') {
+                        continue;
+                    }
+                    started = true;
+                }
+                ++nb_significant_digits;
+                if(nb_kept < max_kept) {
+                    kept[nb_kept++] = digit;
+                }
+            }
+        }
+        long long exp10 = 0;
+        if(begin != end && (*begin == 'e' || *begin == 'E')) { // Exponent part.
+            ++begin;
+            bool exp_negative = false;
+            if(begin != end && (*begin == '+' || *begin == '-')) {
+                exp_negative = (*begin == '-');
+                ++begin;
+            }
+            if(begin == end || !is_digit(*begin)) {
+                return false;
+            }
+            long long exp_value = 0;
+            while(begin != end && is_digit(*begin)) {
+                // The exponent saturates long before it could overflow, and
+                // any value beyond the range of double is saturated anyway.
+                if(exp_value < 1000000) {
+                    exp_value = exp_value * 10 + (*begin - '0');
+                }
+                ++begin;
+            }
+            exp10 = exp_negative ? -exp_value : exp_value;
+        }
+        if(begin != end) { // Trailing characters.
+            return false;
+        }
+        if(nb_digits == 0) { // No digit at all, e.g. "" or "e10".
+            return false;
+        }
+        if(!started) { // A zero mantissa, e.g. "0", "-0.000" or "0e10".
+            significand = 0.0;
+            exponent = 0;
+            return true;
+        }
+
+        // At most max_kept == 19 decimal digits were kept, which always fits
+        // in an unsigned 64 bit integer, so the significand is accumulated
+        // exactly and rounded only once, when it is converted to a double.
+        unsigned long long exact = 0;
+        for(long long d = 0; d < nb_kept; ++d) {
+            exact = exact * 10ULL + static_cast<unsigned long long>(kept[d] - '0');
+        }
+        significand = static_cast<double>(exact);
+        exponent = nb_int_digits - nb_digits +
+                   (nb_significant_digits - nb_kept) + exp10;
+        return true;
+    }
 
     /**
      * \brief Throws a conversion error.
