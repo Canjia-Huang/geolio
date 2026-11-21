@@ -200,14 +200,26 @@ namespace geolio
      * a double. Function get_fields() must be called once after
      * get_line() before calling this function, otherwise the result is
      * undefined.
+     * \details Unlike GEO::String::from_string(), this function accepts a
+     * subnormal value. strtod() reports a gradual underflow (e.g. the
+     * coordinate "4.9406564584124654e-324" written by hexahedral
+     * mappings) by setting errno to ERANGE, but the value it returns is a
+     * perfectly valid double; only an overflow, whose value is infinite,
+     * is an error.
      * \param[in] i the index of the field
      * \return the floating point value of the field at index \p i
      * \exception std::logic_error if the field cannot be converted to a
      * floating point value
      */
     [[nodiscard]] double field_as_double(GEO::index_t i) const {
-        double result = 0;
-        if(!GEO::String::from_string(field(i), result)) {
+        const char* begin = field(i);
+        errno = 0;
+        char* end = nullptr;
+        const double result = strtod(begin, &end);
+        if(end == begin || *end != '\0') {
+            conversion_error(i, "floating point");
+        }
+        if(errno == ERANGE && !std::isfinite(result)) {
             conversion_error(i, "floating point");
         }
         return result;
@@ -233,7 +245,8 @@ namespace geolio
      * parts. Fields that do not contain a '/' are converted the same way,
      * so they are accepted with any number of digits as well. The result
      * carries the accuracy of a double (a few ulps), which is what
-     * "approximate" means here.
+     * "approximate" means here; a result below the normal range is rounded
+     * to a subnormal rather than to zero (see scale_by_pow10()).
      * \param[in] i the index of the field
      * \return the floating point value of the field at index \p i
      * \exception std::logic_error if the field cannot be converted to a
@@ -251,7 +264,7 @@ namespace geolio
             if(!parse_decimal_field(begin, end, negative, significand, exponent)) {
                 conversion_error(i, "floating point");
             }
-            const double value = significand * std::pow(10.0, double(exponent));
+            const double value = scale_by_pow10(significand, exponent);
             // Overflowing the range of double is an error, unlike an
             // intermediate part of a rational that does not fit in a double.
             if(!std::isfinite(value)) {
@@ -276,7 +289,7 @@ namespace geolio
         // their quotient is not (e.g. 1e356/1e355), so the powers of ten
         // are recombined here rather than by dividing two converted parts.
         const double ratio = num_significand / den_significand;
-        const double value = ratio * std::pow(10.0, double(num_exponent - den_exponent));
+        const double value = scale_by_pow10(ratio, num_exponent - den_exponent);
         // Overflowing the range of double is an error, unlike an intermediate
         // part of the quotient that does not fit in a double.
         if(!std::isfinite(value)) {
@@ -358,6 +371,32 @@ namespace geolio
      * any character
      */
     bool read_line(std::string& out) const;
+
+    /**
+     * \brief Multiplies a number by a power of ten.
+     * \details The power is applied in chunks of 10^300, so that only the
+     * final result can overflow or underflow and not an intermediate
+     * factor. This keeps a subnormal result meaningful: 4.9406564584124654e16
+     * times 10^-340 is 4.9406564584124654e-324, while 10^-340 itself
+     * already underflows to zero.
+     * \param[in] value the number to scale
+     * \param[in] exponent the power of ten to scale it by
+     * \return \p value times 10^\p exponent, possibly infinite or zero
+     */
+    static double scale_by_pow10(double value, long long exponent) {
+        // 10^300 is a double, and there is room for one more factor of it
+        // before the result would have to overflow.
+        constexpr long long chunk = 300;
+        while(exponent > chunk && value != 0.0 && std::isfinite(value)) {
+            value *= 1e300;
+            exponent -= chunk;
+        }
+        while(exponent < -chunk && value != 0.0) {
+            value *= 1e-300;
+            exponent += chunk;
+        }
+        return value * std::pow(10.0, double(exponent));
+    }
 
     /**
      * \brief Converts a decimal literal into a significand and a power of ten.
