@@ -28,6 +28,20 @@ jobs:
 
       # == Install Dependency Geogram =================================================================================
 
+      # The clone below tracks geogram's default branch, so the build caches further down
+      # have to be keyed by the revision that branch points at today. `git ls-remote`
+      # resolves it without a clone, and it runs under bash on every OS because the
+      # windows-latest image ships Git Bash.
+      - name: Resolve Dependency Geogram Revision
+        id: geogram-rev
+        shell: bash
+        run: |
+          rev=$(git ls-remote https://github.com/BrunoLevy/geogram.git HEAD | cut -f1)
+          # An empty revision would key the cache on nothing and silently reuse a stale
+          # build tree, so a failed lookup fails the step instead.
+          test -n "$rev"
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
       - name: Install Dependency Geogram (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -35,11 +49,42 @@ jobs:
           sudo apt-get install libxi-dev libxcursor-dev libxinerama-dev libxrandr-dev
           sudo apt-get install libtbb-dev
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          echo "GEOGRAM_DIR=$(pwd)/geogram" >> $GITHUB_ENV
+
+      # Building geogram from source is by far the most expensive step of this job. The
+      # output only depends on the geogram revision, so it is restored from the action
+      # cache instead of rebuilt. The key carries no workflow name on purpose: Linux CI,
+      # Nightly and the Linux Consumer job all clone geogram into
+      # $GITHUB_WORKSPACE/geogram and configure it the same way, so they share one entry.
+      # The cached tree holds absolute paths (CMakeCache.txt, the link lines of the built
+      # libraries), which is why the share works - and why the key ends in a manual salt:
+      # bump it to `v2` when the way geogram is configured here changes, or when a stale
+      # entry misbehaves after a runner image update.
+      - name: Restore Dependency Geogram Cache (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v6
+        with:
+          path: geogram/build/Linux64-gcc-dynamic-Release
+          key: geogram-${{ runner.os }}-${{ steps.geogram-rev.outputs.rev }}-v1
+
+      - name: Build Dependency Geogram (Linux)
+        if: runner.os == 'Linux'
+        run: |
           cd geogram
-          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          # A restored build tree has to be told that it is up to date: the cache keeps the
+          # mtimes it had when it was saved, while the source tree was cloned a moment ago
+          # and therefore looks newer than every object file in it. Touching the restored
+          # tree restores that ordering, so configure.sh + make below become no-ops on a
+          # hit and only fill in what the cache is missing - a build that was interrupted
+          # leaves a partially populated directory behind, and it heals on the next run
+          # because make, not the cache hit, decides what has to be compiled.
+          if [ -d build/Linux64-gcc-dynamic-Release ]; then
+            find build/Linux64-gcc-dynamic-Release -exec touch {} +
+          fi
           ./configure.sh
-          cd build/Linux64-gcc-dynamic-Release
-          make -j
+          # -j"$(nproc)" instead of a bare `make -j`: an unbounded job count starts one
+          # compiler per source file on a 4 vCPU runner, which is slow and memory hungry.
+          make -C build/Linux64-gcc-dynamic-Release -j"$(nproc)"
 
       - name: Install Dependency Geogram (Windows)
         shell: pwsh
@@ -47,22 +92,61 @@ jobs:
         run: |
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
           cd geogram
+          echo "GEOGRAM_DIR=$(Get-Location)" >> $env:GITHUB_ENV
+
+      # build/Windows holds both configurations of this matrix, and a cache entry only
+      # carries the one its job built, so the configuration is part of the key: a Debug
+      # job must never end up "restoring" a tree that only has the Release libraries.
+      - name: Restore Dependency Geogram Cache (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: geogram/build/Windows
+          key: geogram-${{ runner.os }}-${{ matrix.build_type }}-${{ steps.geogram-rev.outputs.rev }}-v1
+
+      - name: Build Dependency Geogram (Windows)
+        shell: pwsh
+        if: runner.os == 'Windows'
+        run: |
+          cd geogram
+          # MSBuild decides what to rebuild by timestamp, so a restored tree looks older
+          # than the freshly cloned sources and would be rebuilt from scratch. Touching it
+          # first turns that into an incremental build that only fills in what is missing
+          # (see the Linux step above for the same reasoning).
+          if (Test-Path 'build/Windows') {
+            Get-ChildItem -Path 'build/Windows' -Recurse -File | ForEach-Object { $_.LastWriteTime = Get-Date }
+          }
           .\configure.bat
-          $geogramRoot = Get-Location
-          echo "GEOGRAM_DIR=$geogramRoot" >> $env:GITHUB_ENV
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Build the configuration matching the matrix build type (Release or
           # Debug); the Build/Test steps below link the corresponding geogram lib.
           cmake --build build/Windows --config ${{ matrix.build_type }} --parallel (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install Dependency Geogram (macOS)
         if: runner.os == 'macOS'
         run: |
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          echo "GEOGRAM_DIR=$(pwd)/geogram" >> $GITHUB_ENV
+
+      - name: Restore Dependency Geogram Cache (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v6
+        with:
+          path: geogram/build/Darwin-clang-dynamic-Release
+          key: geogram-${{ runner.os }}-${{ steps.geogram-rev.outputs.rev }}-v1
+
+      - name: Build Dependency Geogram (macOS)
+        if: runner.os == 'macOS'
+        run: |
           cd geogram
-          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          # Same timestamp repair as on the other platforms: the cache keeps the mtimes of
+          # the build it saved, the clone is newer than all of them.
+          if [ -d build/Darwin-clang-dynamic-Release ]; then
+            find build/Darwin-clang-dynamic-Release -exec touch {} +
+          fi
           ./configure.sh
-          cd build/Darwin-clang-dynamic-Release
-          make -j
+          make -C build/Darwin-clang-dynamic-Release -j"$(sysctl -n hw.ncpu)"
 
       # == Install Dependency Eigen3 ==================================================================================
 
@@ -104,38 +188,52 @@ jobs:
       # libigl is header-only: igl::core is an INTERFACE target, so these steps only
       # configure and copy headers, nothing is compiled. GEOLIO_ENABLE_MIQ consumes it
       # through find_package(libigl).
+      #
+      # libigl is pinned to the tag v2.5.0, so the installed prefix cannot change between
+      # runs and is cached: a hit skips the clone and the install. A hit is only honoured
+      # when libigl-config.cmake is actually there, because a job that was killed
+      # mid-install still leaves its (incomplete) prefix in the cache.
+
+      - name: Restore Dependency libigl Cache (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v6
+        with:
+          path: libigl-install
+          key: libigl-v2.5.0-${{ runner.os }}-v1
 
       - name: Install Dependency libigl (Linux)
         if: runner.os == 'Linux'
         run: |
-          git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
-          # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
-          # they are switched off explicitly: only igl::core is needed here, and the rest
-          # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
-          cmake -S libigl -B libigl-build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$PWD/libigl-install" \
-            -DCMAKE_INSTALL_LIBDIR=lib \
-            -DLIBIGL_INSTALL=ON \
-            -DLIBIGL_USE_STATIC_LIBRARY=OFF \
-            -DLIBIGL_BUILD_TESTS=OFF \
-            -DLIBIGL_BUILD_TUTORIALS=OFF \
-            -DLIBIGL_COPYLEFT_CGAL=OFF \
-            -DLIBIGL_COPYLEFT_COMISO=OFF \
-            -DLIBIGL_COPYLEFT_TETGEN=OFF \
-            -DLIBIGL_OPENGL=OFF \
-            -DLIBIGL_IMGUI=OFF \
-            -DLIBIGL_GLFW=OFF \
-            -DLIBIGL_EMBREE=OFF \
-            -DLIBIGL_SPECTRA=OFF \
-            -DLIBIGL_XML=OFF \
-            -DLIBIGL_STB=OFF \
-            -DLIBIGL_PREDICATES=OFF \
-            -DLIBIGL_CYCODEBASE=OFF \
-            -DLIBIGL_RESTRICTED_TRIANGLE=OFF \
-            -DLIBIGL_RESTRICTED_MATLAB=OFF \
-            -DLIBIGL_RESTRICTED_MOSEK=OFF
-          cmake --install libigl-build --config Release
+          if [ ! -f libigl-install/lib/cmake/igl/libigl-config.cmake ]; then
+            git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
+            # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
+            # they are switched off explicitly: only igl::core is needed here, and the rest
+            # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
+            cmake -S libigl -B libigl-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PWD/libigl-install" \
+              -DCMAKE_INSTALL_LIBDIR=lib \
+              -DLIBIGL_INSTALL=ON \
+              -DLIBIGL_USE_STATIC_LIBRARY=OFF \
+              -DLIBIGL_BUILD_TESTS=OFF \
+              -DLIBIGL_BUILD_TUTORIALS=OFF \
+              -DLIBIGL_COPYLEFT_CGAL=OFF \
+              -DLIBIGL_COPYLEFT_COMISO=OFF \
+              -DLIBIGL_COPYLEFT_TETGEN=OFF \
+              -DLIBIGL_OPENGL=OFF \
+              -DLIBIGL_IMGUI=OFF \
+              -DLIBIGL_GLFW=OFF \
+              -DLIBIGL_EMBREE=OFF \
+              -DLIBIGL_SPECTRA=OFF \
+              -DLIBIGL_XML=OFF \
+              -DLIBIGL_STB=OFF \
+              -DLIBIGL_PREDICATES=OFF \
+              -DLIBIGL_CYCODEBASE=OFF \
+              -DLIBIGL_RESTRICTED_TRIANGLE=OFF \
+              -DLIBIGL_RESTRICTED_MATLAB=OFF \
+              -DLIBIGL_RESTRICTED_MOSEK=OFF
+            cmake --install libigl-build --config Release
+          fi
           # find_package(libigl) reads libigl-config.cmake, which libigl installs to
           # <prefix>/lib/cmake/igl. The package is named `libigl` but that directory is
           # named `igl`, so CMAKE_PREFIX_PATH=<prefix> would NOT find it; the exact
@@ -143,75 +241,93 @@ jobs:
           # environment.
           echo "libigl_DIR=$PWD/libigl-install/lib/cmake/igl" >> "$GITHUB_ENV"
 
+      - name: Restore Dependency libigl Cache (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: libigl-install
+          key: libigl-v2.5.0-${{ runner.os }}-v1
+
       - name: Install Dependency libigl (Windows)
         shell: pwsh
         if: runner.os == 'Windows'
         run: |
-          git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
-          # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
-          # they are switched off explicitly: only igl::core is needed here, and the rest
-          # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
-          # $LASTEXITCODE is checked after each cmake call because PowerShell does not
-          # fail a step on the non-zero exit of a native command by itself.
-          cmake -S libigl -B libigl-build `
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-            -DCMAKE_INSTALL_PREFIX="$(Get-Location)/libigl-install" `
-            -DCMAKE_INSTALL_LIBDIR=lib `
-            -DLIBIGL_INSTALL=ON `
-            -DLIBIGL_USE_STATIC_LIBRARY=OFF `
-            -DLIBIGL_BUILD_TESTS=OFF `
-            -DLIBIGL_BUILD_TUTORIALS=OFF `
-            -DLIBIGL_COPYLEFT_CGAL=OFF `
-            -DLIBIGL_COPYLEFT_COMISO=OFF `
-            -DLIBIGL_COPYLEFT_TETGEN=OFF `
-            -DLIBIGL_OPENGL=OFF `
-            -DLIBIGL_IMGUI=OFF `
-            -DLIBIGL_GLFW=OFF `
-            -DLIBIGL_EMBREE=OFF `
-            -DLIBIGL_SPECTRA=OFF `
-            -DLIBIGL_XML=OFF `
-            -DLIBIGL_STB=OFF `
-            -DLIBIGL_PREDICATES=OFF `
-            -DLIBIGL_CYCODEBASE=OFF `
-            -DLIBIGL_RESTRICTED_TRIANGLE=OFF `
-            -DLIBIGL_RESTRICTED_MATLAB=OFF `
-            -DLIBIGL_RESTRICTED_MOSEK=OFF
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --install libigl-build --config ${{ matrix.build_type }}
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'libigl-install/lib/cmake/igl/libigl-config.cmake')) {
+            git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
+            # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
+            # they are switched off explicitly: only igl::core is needed here, and the rest
+            # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
+            # $LASTEXITCODE is checked after each cmake call because PowerShell does not
+            # fail a step on the non-zero exit of a native command by itself.
+            cmake -S libigl -B libigl-build `
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+              -DCMAKE_INSTALL_PREFIX="$(Get-Location)/libigl-install" `
+              -DCMAKE_INSTALL_LIBDIR=lib `
+              -DLIBIGL_INSTALL=ON `
+              -DLIBIGL_USE_STATIC_LIBRARY=OFF `
+              -DLIBIGL_BUILD_TESTS=OFF `
+              -DLIBIGL_BUILD_TUTORIALS=OFF `
+              -DLIBIGL_COPYLEFT_CGAL=OFF `
+              -DLIBIGL_COPYLEFT_COMISO=OFF `
+              -DLIBIGL_COPYLEFT_TETGEN=OFF `
+              -DLIBIGL_OPENGL=OFF `
+              -DLIBIGL_IMGUI=OFF `
+              -DLIBIGL_GLFW=OFF `
+              -DLIBIGL_EMBREE=OFF `
+              -DLIBIGL_SPECTRA=OFF `
+              -DLIBIGL_XML=OFF `
+              -DLIBIGL_STB=OFF `
+              -DLIBIGL_PREDICATES=OFF `
+              -DLIBIGL_CYCODEBASE=OFF `
+              -DLIBIGL_RESTRICTED_TRIANGLE=OFF `
+              -DLIBIGL_RESTRICTED_MATLAB=OFF `
+              -DLIBIGL_RESTRICTED_MOSEK=OFF
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cmake --install libigl-build --config ${{ matrix.build_type }}
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           echo "libigl_DIR=$(Get-Location)/libigl-install/lib/cmake/igl" >> $env:GITHUB_ENV
+
+      - name: Restore Dependency libigl Cache (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v6
+        with:
+          path: libigl-install
+          key: libigl-v2.5.0-${{ runner.os }}-v1
 
       - name: Install Dependency libigl (macOS)
         if: runner.os == 'macOS'
         run: |
-          git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
-          # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
-          # they are switched off explicitly: only igl::core is needed here, and the rest
-          # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
-          cmake -S libigl -B libigl-build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$PWD/libigl-install" \
-            -DCMAKE_INSTALL_LIBDIR=lib \
-            -DLIBIGL_INSTALL=ON \
-            -DLIBIGL_USE_STATIC_LIBRARY=OFF \
-            -DLIBIGL_BUILD_TESTS=OFF \
-            -DLIBIGL_BUILD_TUTORIALS=OFF \
-            -DLIBIGL_COPYLEFT_CGAL=OFF \
-            -DLIBIGL_COPYLEFT_COMISO=OFF \
-            -DLIBIGL_COPYLEFT_TETGEN=OFF \
-            -DLIBIGL_OPENGL=OFF \
-            -DLIBIGL_IMGUI=OFF \
-            -DLIBIGL_GLFW=OFF \
-            -DLIBIGL_EMBREE=OFF \
-            -DLIBIGL_SPECTRA=OFF \
-            -DLIBIGL_XML=OFF \
-            -DLIBIGL_STB=OFF \
-            -DLIBIGL_PREDICATES=OFF \
-            -DLIBIGL_CYCODEBASE=OFF \
-            -DLIBIGL_RESTRICTED_TRIANGLE=OFF \
-            -DLIBIGL_RESTRICTED_MATLAB=OFF \
-            -DLIBIGL_RESTRICTED_MOSEK=OFF
-          cmake --install libigl-build --config Release
+          if [ ! -f libigl-install/lib/cmake/igl/libigl-config.cmake ]; then
+            git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
+            # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
+            # they are switched off explicitly: only igl::core is needed here, and the rest
+            # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
+            cmake -S libigl -B libigl-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PWD/libigl-install" \
+              -DCMAKE_INSTALL_LIBDIR=lib \
+              -DLIBIGL_INSTALL=ON \
+              -DLIBIGL_USE_STATIC_LIBRARY=OFF \
+              -DLIBIGL_BUILD_TESTS=OFF \
+              -DLIBIGL_BUILD_TUTORIALS=OFF \
+              -DLIBIGL_COPYLEFT_CGAL=OFF \
+              -DLIBIGL_COPYLEFT_COMISO=OFF \
+              -DLIBIGL_COPYLEFT_TETGEN=OFF \
+              -DLIBIGL_OPENGL=OFF \
+              -DLIBIGL_IMGUI=OFF \
+              -DLIBIGL_GLFW=OFF \
+              -DLIBIGL_EMBREE=OFF \
+              -DLIBIGL_SPECTRA=OFF \
+              -DLIBIGL_XML=OFF \
+              -DLIBIGL_STB=OFF \
+              -DLIBIGL_PREDICATES=OFF \
+              -DLIBIGL_CYCODEBASE=OFF \
+              -DLIBIGL_RESTRICTED_TRIANGLE=OFF \
+              -DLIBIGL_RESTRICTED_MATLAB=OFF \
+              -DLIBIGL_RESTRICTED_MOSEK=OFF
+            cmake --install libigl-build --config Release
+          fi
           # find_package(libigl) reads libigl-config.cmake, which libigl installs to
           # <prefix>/lib/cmake/igl. The package is named `libigl` but that directory is
           # named `igl`, so CMAKE_PREFIX_PATH=<prefix> would NOT find it; the exact

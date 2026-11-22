@@ -26,17 +26,56 @@ jobs:
 
       # == Install Dependency Geogram =================================================================================
 
+      # The clone below tracks geogram's default branch, so the build cache is keyed by
+      # the revision that branch points at today. `git ls-remote` resolves it without a
+      # clone - under bash, because the windows-latest image ships Git Bash; an empty
+      # result fails the step, because an empty revision would key the cache on nothing
+      # and silently reuse a stale build tree.
+      - name: Resolve Dependency Geogram Revision
+        id: geogram-rev
+        shell: bash
+        run: |
+          rev=$(git ls-remote https://github.com/BrunoLevy/geogram.git HEAD | cut -f1)
+          test -n "$rev"
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
       - name: Install Dependency Geogram
         shell: pwsh
         run: |
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
           cd geogram
+          echo "GEOGRAM_DIR=$(Get-Location)" >> $env:GITHUB_ENV
+
+      # Building geogram from source is by far the most expensive step of this workflow.
+      # build/Windows holds both configurations of this matrix, and a cache entry only
+      # carries the one its job built, so the configuration is part of the key: a Debug
+      # job must never end up "restoring" a tree that only has the Release libraries.
+      # The key carries no workflow name on purpose, so the Release leg shares an entry
+      # with the same configuration in Nightly and in the Windows Consumer job; bump the
+      # trailing salt to `v2` when the way geogram is configured here changes.
+      - name: Restore Dependency Geogram Cache
+        uses: actions/cache@v6
+        with:
+          path: geogram/build/Windows
+          key: geogram-${{ runner.os }}-${{ matrix.build_type }}-${{ steps.geogram-rev.outputs.rev }}-v1
+
+      - name: Build Dependency Geogram
+        shell: pwsh
+        run: |
+          cd geogram
+          # MSBuild decides what to rebuild by timestamp, so a restored tree looks older
+          # than the freshly cloned sources and would be rebuilt from scratch. Touching it
+          # first turns that into an incremental build that only fills in what is missing,
+          # which is also what repairs a cache whose build was interrupted.
+          if (Test-Path 'build/Windows') {
+            Get-ChildItem -Path 'build/Windows' -Recurse -File | ForEach-Object { $_.LastWriteTime = Get-Date }
+          }
           .\configure.bat
-          $geogramRoot = Get-Location
-          echo "GEOGRAM_DIR=$geogramRoot" >> $env:GITHUB_ENV
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Build the configuration matching the matrix build type (Release or
           # Debug); the Build/Test steps below link the corresponding geogram lib.
           cmake --build build/Windows --config ${{ matrix.build_type }} --parallel (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # == Install Dependency Eigen3 ==================================================================================
 
@@ -59,39 +98,53 @@ jobs:
       # only calls find_package(BLAS) on non-Apple UNIX.
       # $LASTEXITCODE is checked after each cmake call because PowerShell does not fail
       # a step on the non-zero exit of a native command by itself.
+      #
+      # The installed package is cached because libigl is pinned to the tag v2.5.0: the
+      # result cannot change between runs, so the clone and the install are skipped
+      # whenever the prefix is already there. The install is checked rather than trusted
+      # - a job that was killed mid-install still saves its cache - so a hit only counts
+      # when libigl-config.cmake is present.
+      - name: Restore Dependency libigl Cache
+        uses: actions/cache@v6
+        with:
+          path: libigl-install
+          key: libigl-v2.5.0-${{ runner.os }}-v1
+
       - name: Install Dependency libigl
         shell: pwsh
         run: |
-          git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
-          # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
-          # they are switched off explicitly: only igl::core is needed here, and the rest
-          # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
-          cmake -S libigl -B libigl-build `
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-            -DCMAKE_INSTALL_PREFIX="$(Get-Location)/libigl-install" `
-            -DCMAKE_INSTALL_LIBDIR=lib `
-            -DLIBIGL_INSTALL=ON `
-            -DLIBIGL_USE_STATIC_LIBRARY=OFF `
-            -DLIBIGL_BUILD_TESTS=OFF `
-            -DLIBIGL_BUILD_TUTORIALS=OFF `
-            -DLIBIGL_COPYLEFT_CGAL=OFF `
-            -DLIBIGL_COPYLEFT_COMISO=OFF `
-            -DLIBIGL_COPYLEFT_TETGEN=OFF `
-            -DLIBIGL_OPENGL=OFF `
-            -DLIBIGL_IMGUI=OFF `
-            -DLIBIGL_GLFW=OFF `
-            -DLIBIGL_EMBREE=OFF `
-            -DLIBIGL_SPECTRA=OFF `
-            -DLIBIGL_XML=OFF `
-            -DLIBIGL_STB=OFF `
-            -DLIBIGL_PREDICATES=OFF `
-            -DLIBIGL_CYCODEBASE=OFF `
-            -DLIBIGL_RESTRICTED_TRIANGLE=OFF `
-            -DLIBIGL_RESTRICTED_MATLAB=OFF `
-            -DLIBIGL_RESTRICTED_MOSEK=OFF
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --install libigl-build --config ${{ matrix.build_type }}
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'libigl-install/lib/cmake/igl/libigl-config.cmake')) {
+            git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
+            # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
+            # they are switched off explicitly: only igl::core is needed here, and the rest
+            # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
+            cmake -S libigl -B libigl-build `
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+              -DCMAKE_INSTALL_PREFIX="$(Get-Location)/libigl-install" `
+              -DCMAKE_INSTALL_LIBDIR=lib `
+              -DLIBIGL_INSTALL=ON `
+              -DLIBIGL_USE_STATIC_LIBRARY=OFF `
+              -DLIBIGL_BUILD_TESTS=OFF `
+              -DLIBIGL_BUILD_TUTORIALS=OFF `
+              -DLIBIGL_COPYLEFT_CGAL=OFF `
+              -DLIBIGL_COPYLEFT_COMISO=OFF `
+              -DLIBIGL_COPYLEFT_TETGEN=OFF `
+              -DLIBIGL_OPENGL=OFF `
+              -DLIBIGL_IMGUI=OFF `
+              -DLIBIGL_GLFW=OFF `
+              -DLIBIGL_EMBREE=OFF `
+              -DLIBIGL_SPECTRA=OFF `
+              -DLIBIGL_XML=OFF `
+              -DLIBIGL_STB=OFF `
+              -DLIBIGL_PREDICATES=OFF `
+              -DLIBIGL_CYCODEBASE=OFF `
+              -DLIBIGL_RESTRICTED_TRIANGLE=OFF `
+              -DLIBIGL_RESTRICTED_MATLAB=OFF `
+              -DLIBIGL_RESTRICTED_MOSEK=OFF
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cmake --install libigl-build --config ${{ matrix.build_type }}
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           # find_package(libigl) reads libigl-config.cmake, which libigl installs to
           # <prefix>/lib/cmake/igl. The package is named `libigl` but that directory is
           # named `igl`, so CMAKE_PREFIX_PATH=<prefix> would NOT find it; the exact

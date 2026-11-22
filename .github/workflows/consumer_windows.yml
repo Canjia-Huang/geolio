@@ -27,17 +27,50 @@ jobs:
 
       # ================================================================================================
       # Install Geogram. geolio locates it through the GEOGRAM_DIR environment variable.
+      #
+      # The clone tracks geogram's default branch, so the build cache is keyed by the revision that
+      # branch points at today: `git ls-remote` resolves it without a clone (under bash, because the
+      # windows-latest image ships Git Bash). The key also names the configuration, so this Release
+      # job shares an entry with the Release leg of `Nightly` and never picks up Debug libraries.
       # ================================================================================================
+
+      - name: Resolve Dependency Geogram Revision
+        id: geogram-rev
+        shell: bash
+        run: |
+          rev=$(git ls-remote https://github.com/BrunoLevy/geogram.git HEAD | cut -f1)
+          # An empty revision would key the cache on nothing and silently reuse a stale
+          # build tree, so a failed lookup fails the step instead.
+          test -n "$rev"
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
 
       - name: Install Dependency Geogram
         shell: pwsh
         run: |
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
           cd geogram
+          echo "GEOGRAM_DIR=$(Get-Location)" >> $env:GITHUB_ENV
+
+      - name: Restore Dependency Geogram Cache
+        uses: actions/cache@v6
+        with:
+          path: geogram/build/Windows
+          key: geogram-${{ runner.os }}-Release-${{ steps.geogram-rev.outputs.rev }}-v1
+
+      - name: Build Dependency Geogram
+        shell: pwsh
+        run: |
+          cd geogram
+          # MSBuild decides what to rebuild by timestamp, so a restored tree looks older than the
+          # freshly cloned sources and would be rebuilt from scratch. Touching it first turns that
+          # into an incremental build that only fills in what is missing.
+          if (Test-Path 'build/Windows') {
+            Get-ChildItem -Path 'build/Windows' -Recurse -File | ForEach-Object { $_.LastWriteTime = Get-Date }
+          }
           .\configure.bat
-          $geogramRoot = Get-Location
-          echo "GEOGRAM_DIR=$geogramRoot" >> $env:GITHUB_ENV
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build/Windows --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # ================================================================================================
       # Install Eigen3. geolio finds it through find_package(Eigen3), which honors the Eigen3_DIR

@@ -27,7 +27,21 @@ jobs:
 
       # ================================================================================================
       # Install Geogram. geolio locates it through the GEOGRAM_DIR environment variable.
+      #
+      # The clone tracks geogram's default branch, so the build cache is keyed by the revision that
+      # branch points at today: `git ls-remote` resolves it without a clone. The cached build tree
+      # is shared with `Linux CI` and `Nightly` - same clone location, same configure.sh - and its
+      # key ends in a manual salt that is bumped if the configuration below ever changes.
       # ================================================================================================
+
+      - name: Resolve Dependency Geogram Revision
+        id: geogram-rev
+        run: |
+          rev=$(git ls-remote https://github.com/BrunoLevy/geogram.git HEAD | cut -f1)
+          # An empty revision would key the cache on nothing and silently reuse a stale
+          # build tree, so a failed lookup fails the step instead.
+          test -n "$rev"
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
 
       - name: Install Dependency Geogram
         run: |
@@ -35,11 +49,29 @@ jobs:
           sudo apt-get install libxi-dev libxcursor-dev libxinerama-dev libxrandr-dev
           sudo apt-get install libtbb-dev
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          echo "GEOGRAM_DIR=$(pwd)/geogram" >> $GITHUB_ENV
+
+      - name: Restore Dependency Geogram Cache
+        uses: actions/cache@v6
+        with:
+          path: geogram/build/Linux64-gcc-dynamic-Release
+          key: geogram-${{ runner.os }}-${{ steps.geogram-rev.outputs.rev }}-v1
+
+      - name: Build Dependency Geogram
+        run: |
           cd geogram
-          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          # The cache keeps the mtimes of the build it saved, while the sources were cloned a
+          # moment ago and therefore look newer than every object file: touching the restored
+          # tree makes configure.sh + make a no-op on a hit, and leaves make in charge of
+          # filling in whatever the cache is missing (a build that was interrupted still
+          # leaves a partially populated directory behind).
+          if [ -d build/Linux64-gcc-dynamic-Release ]; then
+            find build/Linux64-gcc-dynamic-Release -exec touch {} +
+          fi
           ./configure.sh
-          cd build/Linux64-gcc-dynamic-Release
-          make -j
+          # -j"$(nproc)" instead of a bare `make -j`: an unbounded job count starts one compiler
+          # per source file on a 4 vCPU runner, which is slow and memory hungry.
+          make -C build/Linux64-gcc-dynamic-Release -j"$(nproc)"
 
       # ================================================================================================
       # Install Eigen3. geolio finds it through find_package(Eigen3), which honors the Eigen3_DIR

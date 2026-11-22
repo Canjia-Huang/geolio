@@ -23,17 +23,61 @@ jobs:
 
       # == Install Dependency Geogram =================================================================================
 
+      # The clone below tracks geogram's default branch, so the build cache further down
+      # has to be keyed by the revision that branch points at today. `git ls-remote`
+      # resolves it without a clone, which keeps the clone and the (cheap) cache restore
+      # independent of each other: the restore only needs the key, not the source tree.
+      - name: Resolve Dependency Geogram Revision
+        id: geogram-rev
+        run: |
+          rev=$(git ls-remote https://github.com/BrunoLevy/geogram.git HEAD | cut -f1)
+          # An empty revision would key the cache on nothing and silently reuse a stale
+          # build tree, so a failed lookup fails the step instead.
+          test -n "$rev"
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
       - name: Install Dependency Geogram
         run: |
           sudo apt-get install cmake build-essential libx11-dev libxcb1-dev libxau-dev libxdmcp-dev
           sudo apt-get install libxi-dev libxcursor-dev libxinerama-dev libxrandr-dev
           sudo apt-get install libtbb-dev
           git clone --recurse-submodules https://github.com/BrunoLevy/geogram.git
+          echo "GEOGRAM_DIR=$(pwd)/geogram" >> $GITHUB_ENV
+
+      # Building geogram from source is by far the most expensive step of this workflow:
+      # configure.sh runs CMake over the whole tree and the build then compiles
+      # libgeogram, libgeogram_gfx and the vendored GLFW. That output only depends on the
+      # geogram revision, so it is restored from the action cache instead of rebuilt.
+      # The key deliberately carries no workflow name: Linux CI, Nightly and the Linux
+      # Consumer job all clone geogram into $GITHUB_WORKSPACE/geogram and configure it the
+      # same way, so they share a single entry. The cached tree holds absolute paths
+      # (CMakeCache.txt, the link lines of the built libraries), which is exactly why the
+      # share works - and why the key ends in a manual salt: if the way geogram is
+      # configured here ever changes, or a stale entry misbehaves after a runner image
+      # update, bump it to `v2` instead of debugging a cache hit.
+      - name: Restore Dependency Geogram Cache
+        uses: actions/cache@v6
+        with:
+          path: geogram/build/Linux64-gcc-dynamic-Release
+          key: geogram-${{ runner.os }}-${{ steps.geogram-rev.outputs.rev }}-v1
+
+      - name: Build Dependency Geogram
+        run: |
           cd geogram
-          echo "GEOGRAM_DIR=$(pwd)" >> $GITHUB_ENV
+          # A restored build tree has to be told that it is up to date: the cache keeps the
+          # mtimes it had when it was saved, while the source tree was cloned a moment ago
+          # and therefore looks newer than every object file in it. Touching the restored
+          # tree restores that ordering, so configure.sh + make below become no-ops on a
+          # hit and only fill in what the cache is missing - a build that was interrupted
+          # leaves a partially populated directory behind, and it heals on the next run
+          # because make, not the cache hit, decides what has to be compiled.
+          if [ -d build/Linux64-gcc-dynamic-Release ]; then
+            find build/Linux64-gcc-dynamic-Release -exec touch {} +
+          fi
           ./configure.sh
-          cd build/Linux64-gcc-dynamic-Release
-          make -j
+          # -j"$(nproc)" instead of a bare `make -j`: an unbounded job count starts one
+          # compiler per source file on a 4 vCPU runner, which is slow and memory hungry.
+          make -C build/Linux64-gcc-dynamic-Release -j"$(nproc)"
 
       # == Install Dependency Eigen3 ==================================================================================
 
@@ -55,36 +99,50 @@ jobs:
       # libigl is header-only: igl::core is an INTERFACE target, so this step only
       # configures and copies headers, nothing is compiled. GEOLIO_ENABLE_MIQ consumes
       # it through find_package(libigl).
+      #
+      # The installed package is cached because libigl is pinned to the tag v2.5.0: the
+      # result cannot change between runs, so the clone and the install are skipped
+      # whenever the prefix is already there. The install is checked rather than trusted
+      # - a job that was killed mid-install still saves its cache - so a hit only counts
+      # when libigl-config.cmake is present.
+      - name: Restore Dependency libigl Cache
+        uses: actions/cache@v6
+        with:
+          path: libigl-install
+          key: libigl-v2.5.0-${{ runner.os }}-v1
+
       - name: Install Dependency libigl
         run: |
-          git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
-          # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
-          # they are switched off explicitly: only igl::core is needed here, and the rest
-          # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
-          cmake -S libigl -B libigl-build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$PWD/libigl-install" \
-            -DCMAKE_INSTALL_LIBDIR=lib \
-            -DLIBIGL_INSTALL=ON \
-            -DLIBIGL_USE_STATIC_LIBRARY=OFF \
-            -DLIBIGL_BUILD_TESTS=OFF \
-            -DLIBIGL_BUILD_TUTORIALS=OFF \
-            -DLIBIGL_COPYLEFT_CGAL=OFF \
-            -DLIBIGL_COPYLEFT_COMISO=OFF \
-            -DLIBIGL_COPYLEFT_TETGEN=OFF \
-            -DLIBIGL_OPENGL=OFF \
-            -DLIBIGL_IMGUI=OFF \
-            -DLIBIGL_GLFW=OFF \
-            -DLIBIGL_EMBREE=OFF \
-            -DLIBIGL_SPECTRA=OFF \
-            -DLIBIGL_XML=OFF \
-            -DLIBIGL_STB=OFF \
-            -DLIBIGL_PREDICATES=OFF \
-            -DLIBIGL_CYCODEBASE=OFF \
-            -DLIBIGL_RESTRICTED_TRIANGLE=OFF \
-            -DLIBIGL_RESTRICTED_MATLAB=OFF \
-            -DLIBIGL_RESTRICTED_MOSEK=OFF
-          cmake --install libigl-build --config Release
+          if [ ! -f libigl-install/lib/cmake/igl/libigl-config.cmake ]; then
+            git clone --depth 1 --branch v2.5.0 https://github.com/libigl/libigl.git
+            # Every LIBIGL_* module option defaults to ON for a top-level libigl build, so
+            # they are switched off explicitly: only igl::core is needed here, and the rest
+            # would drag in CGAL, CoMISo, embree, imgui, glfw, tetgen and friends.
+            cmake -S libigl -B libigl-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PWD/libigl-install" \
+              -DCMAKE_INSTALL_LIBDIR=lib \
+              -DLIBIGL_INSTALL=ON \
+              -DLIBIGL_USE_STATIC_LIBRARY=OFF \
+              -DLIBIGL_BUILD_TESTS=OFF \
+              -DLIBIGL_BUILD_TUTORIALS=OFF \
+              -DLIBIGL_COPYLEFT_CGAL=OFF \
+              -DLIBIGL_COPYLEFT_COMISO=OFF \
+              -DLIBIGL_COPYLEFT_TETGEN=OFF \
+              -DLIBIGL_OPENGL=OFF \
+              -DLIBIGL_IMGUI=OFF \
+              -DLIBIGL_GLFW=OFF \
+              -DLIBIGL_EMBREE=OFF \
+              -DLIBIGL_SPECTRA=OFF \
+              -DLIBIGL_XML=OFF \
+              -DLIBIGL_STB=OFF \
+              -DLIBIGL_PREDICATES=OFF \
+              -DLIBIGL_CYCODEBASE=OFF \
+              -DLIBIGL_RESTRICTED_TRIANGLE=OFF \
+              -DLIBIGL_RESTRICTED_MATLAB=OFF \
+              -DLIBIGL_RESTRICTED_MOSEK=OFF
+            cmake --install libigl-build --config Release
+          fi
           # find_package(libigl) reads libigl-config.cmake, which libigl installs to
           # <prefix>/lib/cmake/igl. The package is named `libigl` but that directory is
           # named `igl`, so CMAKE_PREFIX_PATH=<prefix> would NOT find it; the exact
