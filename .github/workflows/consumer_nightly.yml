@@ -121,7 +121,9 @@ jobs:
           }
           .\configure.bat
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/Windows --config Release --parallel
+          # Explicit job count: a bare `--parallel` is unbounded and starts one compiler
+          # per ready target instead of one per core.
+          cmake --build build/Windows --config Release --parallel (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install Dependency Geogram (macOS)
@@ -374,8 +376,12 @@ jobs:
       - name: Configure consumer
         run: cmake -B consumer/build -S consumer -DCMAKE_BUILD_TYPE=Release -DGEOLIO_ENABLE_LBFGS_LITE=ON -DGEOLIO_ENABLE_COMISO=ON -DGEOLIO_ENABLE_MIQ=ON
 
+      # Explicit job count: a bare `--parallel` is unbounded and starts one compiler per
+      # ready target instead of one per core. bash and nproc (coreutils) are present on
+      # all three runner images, so this step stays shell-agnostic.
       - name: Build consumer (geolio + tests)
-        run: cmake --build consumer/build --config Release --parallel
+        shell: bash
+        run: cmake --build consumer/build --config Release --parallel "$(nproc)"
 
       # ================================================================================================
       # Run geolio's unit tests (built from the submodule) via CTest

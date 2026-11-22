@@ -108,8 +108,11 @@ jobs:
       - name: Configure consumer
         run: cmake -B consumer/build -S consumer -DCMAKE_BUILD_TYPE=Release
 
+      # The job count is explicit: without one CMake hands GNU Make a bare `-j`, which
+      # starts one compiler per ready target and is what exhausts a 4 vCPU runner on the
+      # Release (-O3) configuration.
       - name: Build consumer (geolio + tests)
-        run: cmake --build consumer/build --config Release --parallel
+        run: cmake --build consumer/build --config Release --parallel "$(nproc)"
 
       # ================================================================================================
       # Run geolio's unit tests (built from the submodule) via CTest

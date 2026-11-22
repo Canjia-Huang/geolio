@@ -145,8 +145,13 @@ jobs:
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DGEOLIO_ENABLE_LBFGS_LITE=ON -DGEOLIO_ENABLE_COMISO=ON -DGEOLIO_ENABLE_MIQ=ON
 
+      # `--parallel` is given an explicit job count on purpose: without one CMake hands
+      # GNU Make a bare `-j`, which starts one compiler per ready target rather than one
+      # per core. The Release configuration (-O3 over the geogram and Eigen templates)
+      # needs several hundred MB per compiler, so an unbounded build is what overwhelms
+      # the runner - the Debug leg builds the same sources and survives.
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel "$(sysctl -n hw.ncpu)"
 
       # == Test =======================================================================================================
 
