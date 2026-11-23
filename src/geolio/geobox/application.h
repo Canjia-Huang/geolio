@@ -5,8 +5,10 @@
 #ifndef GEOLIO_APPLICATION_H
 #define GEOLIO_APPLICATION_H
 
+#include <cstddef>
 #include <map>
 #include <string>
+#include <vector>
 #include <geogram_gfx/gui/simple_mesh_application.h>
 #include "application/base_application.h"
 #include "application/application_menu.h"
@@ -264,12 +266,21 @@ namespace geolio::geobox
         /**
          * @brief Opens the "Save as..." file dialog of one object.
          * @details Called by the context menu of the object in the object list.
-         *          The dialog only offers the formats the object accepts (see
-         *          BaseObject::can_write_extension()), and starts on the format
-         *          the object was read from -- or on .geogram when it was not
-         *          read from a file. The dialog itself is answered by
-         *          draw_gui(), which saves the object it was opened for (see
-         *          object_to_save_).
+         *          The dialog lists the formats the object accepts (see
+         *          BaseObject::can_write_extension()), the format a save proposes
+         *          first -- the one the previous save used, or the one the object
+         *          was read from, or the first one it accepts -- first. The
+         *          dialog itself is answered by draw_gui(), which saves the
+         *          object it was opened for (see object_to_save_).
+         *
+         *          Every save gets a dialog of its own (see
+         *          object_save_dialog_label_): GeoGram keeps the format its list
+         *          was left on from one opening to the next, and has no way of
+         *          being told to start on another one, so a dialog opened again
+         *          would show the format chosen for the previous save next to a
+         *          file name carrying the format proposed for this one. A dialog
+         *          that never opened before starts on the first format of its
+         *          list, which is the one the proposed file name has.
          * @param[in] object Object to save.
          */
         void open_object_save_dialog(const std::shared_ptr<BaseObject>& object);
@@ -436,6 +447,21 @@ namespace geolio::geobox
         /** The object whose "Save as..." dialog is open, i.e. the one whose
          *  context menu entry was used (see open_object_save_dialog()). */
         std::weak_ptr<BaseObject> object_to_save_;
+
+        /** Label of the "Save as..." dialog of that object. It is renewed for
+         *  every save, so that the dialog starts on the format the file name it
+         *  proposes has (see open_object_save_dialog()). */
+        std::string object_save_dialog_label_ = "##object_save_dlg";
+
+        /** Number of "Save as..." dialogs opened so far, which numbers their
+         *  labels (see object_save_dialog_label_). */
+        std::size_t object_save_dialogs_opened_ = 0;
+
+        /** The format the last successful save wrote, proposed first by the
+         *  next "Save as..." so that saving a series of objects in the same
+         *  format does not need it to be chosen again (see
+         *  open_object_save_dialog()). */
+        std::string last_save_extension_;
 
         // Current size of the Object Properties window, tracked so its
         // right edge can be kept flush against the viewport's right edge.

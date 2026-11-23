@@ -347,13 +347,23 @@ namespace geolio::geobox
             load(filename_);
 
         // The "Save as..." of an object (see draw_objects_properties()): the
-        // dialog was opened on the object whose row was right-clicked.
+        // dialog was opened on the object whose row was right-clicked. Its
+        // label is the one that save was given (see
+        // open_object_save_dialog()).
         if (draw_file_dialog(
-                "##object_save_dlg", filename_, GEO::geo_imgui_string_length)) {
+                object_save_dialog_label_.c_str(),
+                filename_,
+                GEO::geo_imgui_string_length)) {
             if (const auto object = object_to_save_.lock()) {
-                if (object->save(filename_))
+                if (object->save(filename_)) {
+                    // The format the object was actually written in, which the
+                    // next save proposes again: the format can be chosen in the
+                    // dialog, and it is not necessarily the one proposed there
+                    // (see open_object_save_dialog()).
+                    last_save_extension_ =
+                        GEO::FileSystem::extension(filename_);
                     LOG::INFO("Saved `{}` to {}", object->name(), filename_);
-                else
+                } else
                     LOG::ERROR(
                         "Could not save `{}` to {}", object->name(), filename_);
             }
@@ -1068,6 +1078,9 @@ namespace geolio::geobox
     void GeoBoxApplication::open_object_save_dialog(
         const std::shared_ptr<BaseObject>& object
         ) {
+        if (object == nullptr)
+            return;
+
         // The formats the dialog offers: the ones the application knows how to
         // write (the extensions the registered IO handlers answer for) that the
         // object also accepts -- what a kind of object can store is up to the
@@ -1083,29 +1096,34 @@ namespace geolio::geobox
                    object->can_write_extension(extension);
         };
 
-        // The default format is the one of the file the object was read from.
-        // An object that was not read from a file -- or that cannot be written
-        // in that format -- defaults to the first format it accepts: there is no
-        // format every kind of object can be written in (.geogram for a mesh,
-        // .fra for a directional field, ...).
+        // The format proposed first is the one the previous save wrote: saving a
+        // series of objects in the same format should not need it to be chosen
+        // again. An object that cannot be written in it falls back to the format
+        // of the file it was read from, then to the first format it accepts:
+        // there is no format every kind of object can be written in (.geogram for
+        // a mesh, .fra for a directional field, ...).
         const std::string original_extension =
             GEO::FileSystem::extension(object->filepath());
-        std::string default_extension = original_extension;
-        if (!writable(default_extension)) {
+        std::string default_extension;
+        if (writable(last_save_extension_))
+            default_extension = last_save_extension_;
+        else if (writable(original_extension))
+            default_extension = original_extension;
+        else {
             const auto first = std::ranges::find_if(
                 registered_extensions,
                 [&](const std::string& extension) {
                     return writable(extension);
                 });
-            default_extension =
-                first != registered_extensions.end() ? *first : std::string();
+            if (first != registered_extensions.end())
+                default_extension = *first;
         }
 
         // The format list of the dialog starts on its first entry, so the
         // default format goes first; the other writable formats follow, in the
-        // order the application registered them. The dialog takes its first
-        // entry as the format it saves in, and the file name below is built with
-        // that one -- the two cannot disagree.
+        // order the application registered them. The file name below is built
+        // with the first one, and a dialog that never opened before starts on
+        // that one too -- the two cannot disagree.
         std::vector<std::string> extensions;
         if (writable(default_extension))
             extensions.push_back(default_extension);
@@ -1140,12 +1158,40 @@ namespace geolio::geobox
         std::copy(suggested.begin(), suggested.end(), filename_);
         filename_[suggested.size()] = '\0';
 
+        // The dialog saves in the directory the object was read from, so that
+        // saving an object back next to -- or over -- the file it comes from
+        // does not need the directory to be picked again. An object that was
+        // not read from a file, or whose file has been moved or removed since,
+        // has no such directory: the dialog then starts in the directory
+        // GeoGram's dialogs start in by default.
+        std::string directory;
+        if (!object->filepath().empty()) {
+            directory = GEO::FileSystem::absolute_path(
+                GEO::FileSystem::dir_name(object->filepath()));
+            if (!GEO::FileSystem::is_directory(directory))
+                directory.clear();
+        }
+        if (directory.empty())
+            directory = default_file_dialog_directory();
+
+        // A dialog of its own for every save: GeoGram keeps the format its list
+        // was left on from one opening to the next and has no way of being told
+        // to start on another one, so a dialog opened again would show the
+        // format chosen for the previous save while the file name above carries
+        // the format proposed for this one. A label that was never used before
+        // gets a dialog that starts on the first format of its list. GeoGram
+        // does not give a dialog back, so the ones of the previous saves stay in
+        // its table, a few kilobytes each.
+        object_save_dialog_label_ =
+            "##object_save_dlg." + std::to_string(++object_save_dialogs_opened_);
+
         object_to_save_ = object;
-        ImGui::OpenFileDialog(
-            "##object_save_dlg",
+        open_file_dialog_in_directory(
+            object_save_dialog_label_.c_str(),
             GEO::String::join_strings(extensions, ';').c_str(),
             filename_,
-            ImGuiExtFileDialogFlags_Save);
+            ImGuiExtFileDialogFlags_Save,
+            directory);
     }
 
     void GeoBoxApplication::draw_object_properties_window(
