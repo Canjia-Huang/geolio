@@ -7,6 +7,7 @@
 #include <geogram/mesh/mesh_io.h>
 #include "aedtplt_io.h"
 #include "hexex_io.h"
+#include "mphtxt_io.h"
 #include "off_io.h"
 #include "ovm_io.h"
 #include "pts_io.h"
@@ -18,6 +19,7 @@ namespace geolio
         ) {
         geo_register_MeshIOHandler_creator(AEDTPLT_IOHandler, "aedtplt");
         geo_register_MeshIOHandler_creator(HEXEX_IOHandler, "hexex");
+        geo_register_MeshIOHandler_creator(MPHTXT_IOHandler, "mphtxt");
         geo_register_MeshIOHandler_creator(OFF_IOHandler, "off");
         geo_register_MeshIOHandler_creator(OVM_IOHandler, "ovm");
         geo_register_MeshIOHandler_creator(PTS_IOHandler, "pts");
