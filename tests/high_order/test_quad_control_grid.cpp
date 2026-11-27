@@ -488,9 +488,11 @@ namespace geolio::test
             GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
             GEO::Attribute<GEO::index_t> mesh_out_f_facet(mesh_out.facets.attributes(), "facet");
 
-            control_grid->append_discretized_high_order_facets(
+            control_grid->append_discretized_high_order_mesh(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
+                false, false, true, // patches only
+                nullptr,
                 &mesh_out_v_facet,
                 &mesh_out_v_uv,
                 &mesh_out_f_facet);
@@ -637,7 +639,8 @@ namespace geolio::test
                 ++new_e;
             }
 
-            this->control_grid->append_discretized_high_order_facets(mesh_out, BACKGROUND_RESOLUTION);
+            this->control_grid->append_discretized_high_order_mesh(
+                mesh_out, BACKGROUND_RESOLUTION, false, false, true); // background patches only
             EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
         }
     }
@@ -676,8 +679,84 @@ namespace geolio::test
             new_e += 2;
         }
 
-        this->control_grid->append_discretized_high_order_facets(mesh_out, BACKGROUND_RESOLUTION);
+        this->control_grid->append_discretized_high_order_mesh(
+            mesh_out, BACKGROUND_RESOLUTION, false, false, true); // background patches only
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
+    }
+
+    /**
+     * @brief The discretization must append the requested pieces and remove the unused samples.
+     *
+     * Checks the number of generated elements and the labelling attributes, and that requesting
+     * only the arcs of the facets removes the interior samples of the patches.
+     */
+    TYPED_TEST(SingleQuadControlGridTest, discretized_facets) {
+        constexpr GEO::index_t RESOLUTION = 4;
+        constexpr GEO::index_t ARC_VERTICES_NB = RESOLUTION+1;
+        constexpr GEO::index_t PATCH_VERTICES_NB = ARC_VERTICES_NB*ARC_VERTICES_NB;
+        constexpr GEO::index_t ARC_NODES_NB = SingleQuadControlGridTest<TypeParam>::ORDER+1;
+        constexpr GEO::index_t CONTROL_NODES_NB = ARC_NODES_NB*ARC_NODES_NB;
+
+        // Patches, arcs and control nodes: the patches and the arcs share the sampled vertices,
+        // while the control nodes are appended last.
+        {
+            GEO::Mesh mesh_out;
+            GEO::Attribute<bool> mesh_out_v_node(mesh_out.vertices.attributes(), "node");
+            GEO::Attribute<GEO::index_t> mesh_out_v_facet(mesh_out.vertices.attributes(), "facet");
+            GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
+            GEO::Attribute<GEO::index_t> mesh_out_f_facet(mesh_out.facets.attributes(), "facet");
+
+            this->control_grid->append_discretized_high_order_mesh(
+                mesh_out, RESOLUTION,
+                true, true, true,
+                &mesh_out_v_node, &mesh_out_v_facet, &mesh_out_v_uv, &mesh_out_f_facet);
+
+            EXPECT_EQ(mesh_out.vertices.nb(), PATCH_VERTICES_NB + CONTROL_NODES_NB);
+            EXPECT_EQ(mesh_out.edges.nb(), 4*RESOLUTION);
+            EXPECT_EQ(mesh_out.facets.nb(), RESOLUTION*RESOLUTION);
+            EXPECT_EQ(mesh_out.cells.nb(), 0);
+
+            GEO::index_t nodes_nb = 0;
+            for (const auto v : mesh_out.vertices) {
+                if (mesh_out_v_node[v]) {
+                    ++nodes_nb;
+                    EXPECT_EQ(mesh_out_v_facet[v], GEO::NO_FACET);
+                    EXPECT_EQ(mesh_out_v_uv[v].x, -1.0);
+                    EXPECT_EQ(mesh_out_v_uv[v].y, -1.0);
+                }
+                else {
+                    EXPECT_EQ(mesh_out_v_facet[v], FACET);
+                    EXPECT_GE(mesh_out_v_uv[v].x, 0.0);
+                    EXPECT_LE(mesh_out_v_uv[v].x, 1.0);
+                    EXPECT_GE(mesh_out_v_uv[v].y, 0.0);
+                    EXPECT_LE(mesh_out_v_uv[v].y, 1.0);
+                }
+            }
+            EXPECT_EQ(nodes_nb, CONTROL_NODES_NB);
+
+            for (const auto f : mesh_out.facets)
+                EXPECT_EQ(mesh_out_f_facet[f], FACET);
+        }
+
+        // Arcs only: the interior samples of the patches are removed, so only the vertices of
+        // the four boundary edges remain, and every arc follows its edge parameterization.
+        {
+            GEO::Mesh mesh_out;
+            GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
+            this->control_grid->append_discretized_high_order_mesh(
+                mesh_out, RESOLUTION, false, true, false, nullptr, nullptr, &mesh_out_v_uv);
+
+            EXPECT_EQ(mesh_out.vertices.nb(), 4*RESOLUTION);
+            EXPECT_EQ(mesh_out.edges.nb(), 4*RESOLUTION);
+            EXPECT_EQ(mesh_out.facets.nb(), 0);
+
+            for (GEO::index_t le = 0; le < 4; ++le) {
+                const auto first = mesh_out.edges.vertex(le*RESOLUTION, 0);
+                const auto last = mesh_out.edges.vertex(le*RESOLUTION+RESOLUTION-1, 1);
+                EXPECT_NEAR(GEO::distance2(mesh_out_v_uv[first], project_quad_le_t_to_uv(0.0, le)), 0.0, EXACT_DIST2_TOL);
+                EXPECT_NEAR(GEO::distance2(mesh_out_v_uv[last], project_quad_le_t_to_uv(1.0, le)), 0.0, EXACT_DIST2_TOL);
+            }
+        }
     }
 
     TYPED_TEST(SingleQuadControlGridTest, measure_not_inverse) {

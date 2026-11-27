@@ -592,9 +592,11 @@ namespace geolio::test
             GEO::Attribute<GEO::index_t> mesh_out_v_facet(mesh_out.vertices.attributes(), "facet");
             GEO::Attribute<GEO::vec2> mesh_out_v_uv(mesh_out.vertices.attributes(), "uv");
 
-            control_grid->append_discretized_high_order_facets(
+            control_grid->append_discretized_high_order_mesh(
                 mesh_out,
                 DISCRETIZATION_RESOLUTION,
+                false, false, true, // patches only
+                nullptr,
                 &mesh_out_v_facet,
                 &mesh_out_v_uv);
 

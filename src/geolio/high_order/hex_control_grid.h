@@ -703,25 +703,97 @@ namespace geolio
         }
 
         /**
-         * @brief Append a discretized surface mesh of all high-order cell facets (for visualization purposes).
+         * @brief Append a discretized high-order mesh of all the cells of the control grid.
          *
-         * @param[in,out] mesh_out Output mesh that receives the discretized facets.
-         * @param[in] resolution Number of samples per parametric direction on each facet.
-         *                      Must be greater than 0; larger values produce finer tessellation.
-         * @param[out] mesh_out_v_cell Optional vertex attribute storing the source cell index
-         *                             for each generated output vertex.
-         * @param[out] mesh_out_v_uvw Optional vertex attribute storing the corresponding
-         *                            parametric coordinate of each generated output vertex.
-         * @param[out] mesh_out_f_cell Optional face attribute storing the source cell index
-         *                             for each generated output facet.
+         * Single entry point of the discretization routines (the former
+         * `append_discretized_high_order_cells_border()` and
+         * `append_discretized_high_order_cells()`): the high-order mapping of every cell is
+         * sampled on a regular `(resolution+1)^3` grid of its local parametric domain
+         * [0,1]^3, and the requested pieces of the resulting sub-mesh are appended to
+         * \p mesh_out:
+         *  - `append_blocks`: the `resolution^3` hexahedral blocks filling each cell;
+         *  - `append_patches`: the `6*resolution^2` quadrilateral patches discretizing the
+         *    six facets of each cell (i.e. the border of the cells);
+         *  - `append_arcs`: the `12*resolution` segments discretizing the twelve edges of
+         *    each cell;
+         *  - `append_nodes`: the control nodes of the high-order representation, appended as
+         *    isolated vertices, not referenced by any generated element.
+         *
+         * The blocks, patches and arcs of a cell share the same sampled vertices, so the
+         * generated elements of a cell are conforming. Everything is appended after the
+         * content already present in \p mesh_out, which is left untouched; each generated
+         * element can be related to its source cell through the optional attributes below.
+         *
+         * Inside one cell, the samples are ordered with `u` varying fastest, then `v`, then
+         * `w`: the vertex of the parametric sample `uvw = (k, j, i)/resolution` is stored at
+         * `first_vertex + (resolution+1)^2*i + (resolution+1)*j + k`. The blocks are numbered
+         * in the same order, with `u` varying fastest, then `v`, then `w`; the patches are
+         * numbered by local facet index, then by local facet sample; the arcs by local edge
+         * index, then along the edge.
+         *
+         * @param[in,out] mesh_out Mesh that receives the discretized elements. Its current
+         *                content is preserved and the generated vertices/edges/facets/cells
+         *                are appended after the existing ones. Its vertex dimension is set to
+         *                the dimension of the control nodes.
+         * @param[in] resolution Number of sub-edges per cell edge, i.e. every cell is sampled
+         *            with `resolution+1` points per parametric direction. Must be greater
+         *            than 0; larger values produce a finer discretization.
+         * @param[in] append_nodes Append the control nodes of the high-order representation as
+         *            extra vertices. They are appended after all the sampled vertices and are
+         *            the only vertices marked `true` in \p mesh_out_v_node.
+         * @param[in] append_arcs Append the discretized cell edges.
+         * @param[in] append_patches Append the discretized cell facets.
+         * @param[in] append_blocks Append the discretized cells.
+         * @param[out] mesh_out_v_node Optional vertex attribute (bound to
+         *             `mesh_out.vertices`) set to `true` on the control-node vertices and to
+         *             `false` on the sampled vertices. Only written when \p append_nodes is set.
+         * @param[out] mesh_out_v_cell Optional vertex attribute receiving the index of the cell
+         *             each sampled vertex comes from; control-node vertices get
+         *             `GEO::NO_CELL`.
+         * @param[out] mesh_out_v_uvw Optional vertex attribute receiving the cell-local
+         *             parametric coordinate `(u,v,w)` of each sampled vertex; control-node
+         *             vertices get `(-1,-1,-1)`.
+         * @param[out] mesh_out_f_cell Optional facet attribute receiving the index of the cell
+         *             each generated patch belongs to. Only written when \p append_patches is
+         *             set.
+         * @param[out] mesh_out_c_cell Optional cell attribute receiving the index of the cell
+         *             each generated block belongs to. Only written when \p append_blocks is
+         *             set.
+         *
+         * @pre `resolution > 0`.
+         * @pre Every non-null output attribute is bound to the attribute manager of the
+         *      corresponding element array of \p mesh_out and holds one value per element
+         *      already present in that array at call time; the entries of the generated
+         *      elements are appended after them.
+         * @note The sampled vertices that end up referenced by no generated element (the
+         *       interior samples when only the border/arcs are requested, or the control
+         *       nodes when \p append_nodes is not set) are removed before returning, so that
+         *       \p mesh_out contains no isolated vertices.
+         * @note The indices of the generated elements can be recovered by recording
+         *       `mesh_out.vertices.nb()`, `mesh_out.edges.nb()`, `mesh_out.facets.nb()` and
+         *       `mesh_out.cells.nb()` before the call.
          */
-        void append_discretized_high_order_cells_border(
+        void append_discretized_high_order_mesh(
             GEO::Mesh& mesh_out,
             const GEO::index_t resolution = 10,
+            const bool append_nodes = true,
+            const bool append_arcs = true,
+            const bool append_patches = true,
+            const bool append_blocks = true,
+            GEO::Attribute<bool>* mesh_out_v_node = nullptr,
             GEO::Attribute<GEO::index_t>* mesh_out_v_cell = nullptr,
             GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
-            GEO::Attribute<GEO::index_t>* mesh_out_f_cell = nullptr
+            GEO::Attribute<GEO::index_t>* mesh_out_f_cell = nullptr,
+            GEO::Attribute<GEO::index_t>* mesh_out_c_cell = nullptr
             ) const {
+            assert(resolution > 0);
+
+            if (append_nodes) {
+                if (mesh_out_v_node != nullptr) {
+                    assert(mesh_out_v_node->is_bound());
+                    assert(mesh_out_v_node->size() == mesh_out.vertices.nb());
+                }
+            }
             if (mesh_out_v_cell != nullptr) {
                 assert(mesh_out_v_cell->is_bound());
                 assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
@@ -730,141 +802,115 @@ namespace geolio
                 assert(mesh_out_v_uvw->is_bound());
                 assert(mesh_out_v_uvw->size() == mesh_out.vertices.nb());
             }
-            if (mesh_out_f_cell != nullptr) {
-                assert(mesh_out_f_cell->is_bound());
-                assert(mesh_out_f_cell->size() == mesh_out.facets.nb());
+            if (append_patches) {
+                if (mesh_out_f_cell != nullptr) {
+                    assert(mesh_out_f_cell->is_bound());
+                    assert(mesh_out_f_cell->size() == mesh_out.facets.nb());
+                }
             }
-
-            const GEO::index_t DIM = control_nodes.dimension();
-            const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
-
-            mesh_out.vertices.set_dimension(DIM);
-            GEO::index_t new_v = mesh_out.vertices.create_vertices(6*this->control_nodes.mesh().cells.nb() * (resolution+1) * (resolution+1));
-            GEO::index_t new_f = mesh_out.facets.create_quads(6*this->control_nodes.mesh().cells.nb() * resolution * resolution);
-            for (const auto& c : this->control_nodes.mesh().cells) {
-                for (GEO::index_t lf = 0; lf < 6; ++lf) {
-                    const auto PREV_M_VERTICES = new_v;
-
-                    /*
-                     * Vertices:
-                     * y & j
-                     *   |
-                     *  ...
-                     *   |         |       ...       |         |
-                     * (0,1) --- (1,1) --- ... --- (n,1) -- (n+1,1)
-                     *   |         |       ...       |         |
-                     * (0,0) --- (1,0) --- ... --- (n,0) -- (n+1,0) -> x & i
-                     */
-                    for (GEO::index_t i = 0; i < VERTICES_NB_PER_EDGE; ++i) {
-                        const double u = static_cast<double>(i)/resolution;
-                        for (GEO::index_t j = 0; j < VERTICES_NB_PER_EDGE; ++j) {
-                            const double v = static_cast<double>(j)/resolution;
-
-                            const GEO::vec3 uvw = project_hex_lf_uv_to_uvw(GEO::vec2(u,v), lf);
-
-                            compute_cell_uvw_position(c, uvw, DIM, mesh_out.vertices.point_ptr(new_v));
-
-                            if (mesh_out_v_cell != nullptr)
-                                (*mesh_out_v_cell)[new_v] = c;
-                            if (mesh_out_v_uvw != nullptr)
-                                (*mesh_out_v_uvw)[new_v] = uvw;
-
-                            ++new_v;
-                        }
-                    }
-
-                    /*
-                     * Facets:
-                     * ...
-                     * +-----+-----+- ... -+-----+      v3 --- v2
-                     * | n+1 | n+2 |  ...  |2n+1 |       |     |
-                     * +-----+-----+- ... -+-----+      v0 --- v1
-                     * |  0  |  1  |  ...  |  n  |
-                     * +-----+-----+- ... -+-----+
-                     */
-                    for (GEO::index_t i = 0; i < resolution; ++i) {
-                        for (GEO::index_t j = 0; j < resolution; ++j) {
-                            const GEO::index_t v0 = VERTICES_NB_PER_EDGE*i+j;
-                            const GEO::index_t v1 = v0+VERTICES_NB_PER_EDGE;
-                            const GEO::index_t v2 = v1+1;
-                            const GEO::index_t v3 = v0+1;
-                            assert(v0 < mesh_out.vertices.nb());
-                            assert(v1 < mesh_out.vertices.nb());
-                            assert(v2 < mesh_out.vertices.nb());
-                            assert(v3 < mesh_out.vertices.nb());
-                            mesh_out.facets.set_vertex(new_f, 0, PREV_M_VERTICES+v0);
-                            mesh_out.facets.set_vertex(new_f, 1, PREV_M_VERTICES+v1);
-                            mesh_out.facets.set_vertex(new_f, 2, PREV_M_VERTICES+v2);
-                            mesh_out.facets.set_vertex(new_f, 3, PREV_M_VERTICES+v3);
-
-                            if (mesh_out_f_cell != nullptr)
-                                (*mesh_out_f_cell)[new_f] = c;
-
-                            ++new_f;
-                        }
-                    }
+            if (append_blocks) {
+                if (mesh_out_c_cell != nullptr) {
+                    assert(mesh_out_c_cell->is_bound());
+                    assert(mesh_out_c_cell->size() == mesh_out.cells.nb());
                 }
             }
 
-            mesh_out.facets.connect();
-        }
-
-        /**
-         * @brief Append a discretized volumetric mesh of all high-order cells (for visualization purposes).
-         *
-         * The routine samples each hexahedral cell with a regular
-         * `resolution x resolution x resolution` grid in parametric space and appends
-         * the generated volume elements to \p mesh_out.
-         *
-         * @param[in,out] mesh_out Output mesh that receives the discretized cells.
-         * @param[in] resolution Number of samples per parametric direction inside each cell.
-         *                      Must be greater than 0; larger values produce finer subdivision.
-         * @param[out] mesh_out_v_cell Optional vertex attribute storing the source cell index
-         *                             for each generated output vertex.
-         * @param[out] mesh_out_v_uvw Optional vertex attribute storing the corresponding
-         *                            parametric coordinate of each generated output vertex.
-         * @param[out] mesh_out_c_cell Optional cell attribute storing the source cell index
-         *                             for each generated output volume element.
-         */
-        void append_discretized_high_order_cells(
-            GEO::Mesh& mesh_out,
-            const GEO::index_t resolution = 10,
-            GEO::Attribute<GEO::index_t>* mesh_out_v_cell = nullptr,
-            GEO::Attribute<GEO::vec3>* mesh_out_v_uvw = nullptr,
-            GEO::Attribute<GEO::index_t>* mesh_out_c_cell = nullptr
-            ) const {
-            if (mesh_out_v_cell != nullptr) {
-                assert(mesh_out_v_cell->is_bound());
-                assert(mesh_out_v_cell->size() == mesh_out.vertices.nb());
-            }
-            if (mesh_out_v_uvw != nullptr) {
-                assert(mesh_out_v_uvw->is_bound());
-                assert(mesh_out_v_uvw->size() == mesh_out.vertices.nb());
-            }
-            if (mesh_out_c_cell != nullptr) {
-                assert(mesh_out_c_cell->is_bound());
-                assert(mesh_out_c_cell->size() == mesh_out.cells.nb());
-            }
-
             const GEO::index_t DIM = control_nodes.dimension();
-            const GEO::index_t VERTICES_NB_PER_EDGE = resolution+1;
-            const GEO::index_t VERTICES_NB_PER_FACET = VERTICES_NB_PER_EDGE * VERTICES_NB_PER_EDGE;
+            const GEO::index_t VERTICES_NB_PER_ARC = resolution+1;
+            const GEO::index_t VERTICES_NB_PER_PATCH = VERTICES_NB_PER_ARC * VERTICES_NB_PER_ARC;
+            const GEO::index_t VERTICES_NB_PER_BLOCK = VERTICES_NB_PER_PATCH * VERTICES_NB_PER_ARC;
+            const GEO::index_t EDGES_NB_PER_ARC = resolution;
+            const GEO::index_t FACETS_NB_PER_PATCH = resolution * resolution;
+            const GEO::index_t CELLS_NB_PER_BLOCK = resolution * resolution * resolution;
+            const std::array<GEO::index_t, 12> EDGE_START_VERTEX_INDICES = {
+                0,
+                VERTICES_NB_PER_ARC-1,
+                VERTICES_NB_PER_PATCH-1,
+                VERTICES_NB_PER_ARC*(VERTICES_NB_PER_ARC-1),
+                VERTICES_NB_PER_PATCH*(VERTICES_NB_PER_ARC-1),
+                VERTICES_NB_PER_PATCH*(VERTICES_NB_PER_ARC-1) + VERTICES_NB_PER_ARC-1,
+                VERTICES_NB_PER_PATCH*(VERTICES_NB_PER_ARC-1) + VERTICES_NB_PER_PATCH-1,
+                VERTICES_NB_PER_PATCH*(VERTICES_NB_PER_ARC-1) + VERTICES_NB_PER_ARC*(VERTICES_NB_PER_ARC-1),
+                0,
+                VERTICES_NB_PER_ARC-1,
+                VERTICES_NB_PER_PATCH-1,
+                VERTICES_NB_PER_ARC*(VERTICES_NB_PER_ARC-1)
+            };
+            const std::array<int, 12> EDGE_STEP_VERTEX_INDICES = {
+                1,
+                static_cast<int>(VERTICES_NB_PER_ARC),
+                -1,
+                -static_cast<int>(VERTICES_NB_PER_ARC),
+                1,
+                static_cast<int>(VERTICES_NB_PER_ARC),
+                -1,
+                -static_cast<int>(VERTICES_NB_PER_ARC),
+                static_cast<int>(VERTICES_NB_PER_PATCH),
+                static_cast<int>(VERTICES_NB_PER_PATCH),
+                static_cast<int>(VERTICES_NB_PER_PATCH),
+                static_cast<int>(VERTICES_NB_PER_PATCH)
+            };
+            const std::array<GEO::index_t, 6> FACET_START_VERTEX_INDICES = {
+                0,
+                VERTICES_NB_PER_PATCH-1,
+                VERTICES_NB_PER_ARC-1,
+                VERTICES_NB_PER_ARC*(VERTICES_NB_PER_ARC-1),
+                VERTICES_NB_PER_ARC-1,
+                VERTICES_NB_PER_PATCH*(VERTICES_NB_PER_ARC-1)
+            };
+            const std::array<int, 6> FACET_STEP_1_VERTEX_INDICES = {
+                static_cast<int>(VERTICES_NB_PER_ARC),
+                -static_cast<int>(VERTICES_NB_PER_ARC),
+                -1,
+                1,
+                static_cast<int>(VERTICES_NB_PER_ARC),
+                static_cast<int>(VERTICES_NB_PER_ARC),
+            };
+            const std::array<int, 6> FACET_STEP_2_VERTEX_INDICES = {
+                static_cast<int>(VERTICES_NB_PER_PATCH),
+                static_cast<int>(VERTICES_NB_PER_PATCH),
+                static_cast<int>(VERTICES_NB_PER_PATCH),
+                static_cast<int>(VERTICES_NB_PER_PATCH),
+                -1,
+                1
+            };
 
+            /* Create elements */
             mesh_out.vertices.set_dimension(DIM);
-            GEO::index_t new_v = mesh_out.vertices.create_vertices(this->control_nodes.mesh().cells.nb() * (resolution+1) * (resolution+1) * (resolution+1));
-            GEO::index_t new_c = mesh_out.cells.create_hexes(this->control_nodes.mesh().cells.nb() * resolution * resolution * resolution);
+
+            const GEO::index_t PREV_VERTICES_NB = mesh_out.vertices.nb();
+            GEO::index_t new_v = mesh_out.vertices.create_vertices(
+                this->control_nodes.mesh().cells.nb() * VERTICES_NB_PER_BLOCK +
+                this->control_nodes.mesh().vertices.nb() // control nodes
+                );
+            GEO::index_t new_e = mesh_out.edges.create_edges(
+                append_arcs ? 12*this->control_nodes.mesh().cells.nb() * EDGES_NB_PER_ARC : 0);
+            GEO::index_t new_f = mesh_out.facets.create_quads(
+                append_patches ? 6*this->control_nodes.mesh().cells.nb() * FACETS_NB_PER_PATCH : 0);
+            GEO::index_t new_c = mesh_out.cells.create_hexes(
+                append_blocks ? this->control_nodes.mesh().cells.nb() * CELLS_NB_PER_BLOCK : 0);
+
+            /* The vertices of the caller are kept; only the vertices generated by this call are
+             * candidates for deletion when no element ends up referencing them. */
+            GEO::vector<GEO::index_t> vertices_to_delete(mesh_out.vertices.nb(), 0);
+            std::fill(vertices_to_delete.begin()+PREV_VERTICES_NB, vertices_to_delete.end(), 1);
+
             for (const auto& c : this->control_nodes.mesh().cells) {
                 const auto PREV_M_VERTICES = new_v;
 
-                /* Vertices */
-                for (GEO::index_t i = 0; i < VERTICES_NB_PER_EDGE; ++i) {
-                    const double u = static_cast<double>(i)/resolution;
-                    for (GEO::index_t j = 0; j < VERTICES_NB_PER_EDGE; ++j) {
+                /* Vertices
+                 * The parametric samples are stored with u varying fastest, then v, then w:
+                 * the sample (u, v, w) = (k, j, i)/resolution is written at
+                 * PREV_M_VERTICES + i*VERTICES_NB_PER_PATCH + j*VERTICES_NB_PER_ARC + k.
+                 * All the elements of the cell (arcs, patches, blocks) index into that grid.
+                 */
+                for (GEO::index_t i = 0; i < VERTICES_NB_PER_ARC; ++i) {
+                    const double w = static_cast<double>(i)/resolution;
+                    for (GEO::index_t j = 0; j < VERTICES_NB_PER_ARC; ++j) {
                         const double v = static_cast<double>(j)/resolution;
-                        for (GEO::index_t k = 0; k < VERTICES_NB_PER_EDGE; ++k) {
-                            const double w = static_cast<double>(k)/resolution;
+                        for (GEO::index_t k = 0; k < VERTICES_NB_PER_ARC; ++k) {
+                            const double u = static_cast<double>(k)/resolution;
                             const GEO::vec3 uvw(u, v, w);
-
                             compute_cell_uvw_position(c, uvw, DIM, mesh_out.vertices.point_ptr(new_v));
 
                             if (mesh_out_v_cell != nullptr)
@@ -877,52 +923,148 @@ namespace geolio
                     }
                 }
 
-                /* Cells
-                 *    +Z                4-------6
-                 *    |                /|      /|
-                 *    o --- +Y        5-------7 |
-                 *   /                | 0-----|-2
-                 *  +X                |/      |/
-                 *                    1-------3
-                 */
-                for (GEO::index_t i = 0; i < resolution; ++i) {
-                    for (GEO::index_t j = 0; j < resolution; ++j) {
-                        for (GEO::index_t k = 0; k < resolution; ++k) {
-                            const GEO::index_t v0 = VERTICES_NB_PER_FACET*i+VERTICES_NB_PER_EDGE*j+k;
-                            const GEO::index_t v1 = v0+VERTICES_NB_PER_FACET;
-                            const GEO::index_t v2 = v0+VERTICES_NB_PER_EDGE;
-                            const GEO::index_t v3 = v1+VERTICES_NB_PER_EDGE;
-                            const GEO::index_t v4 = v0+1;
-                            const GEO::index_t v5 = v4+VERTICES_NB_PER_FACET;
-                            const GEO::index_t v6 = v4+VERTICES_NB_PER_EDGE;
-                            const GEO::index_t v7 = v5+VERTICES_NB_PER_EDGE;
+                /* Edges */
+                if (append_arcs) {
+                    for (GEO::index_t le = 0; le < 12; ++le) {
+                        const auto start_v = EDGE_START_VERTEX_INDICES[le];
+                        const auto step = EDGE_STEP_VERTEX_INDICES[le];
+                        for (GEO::index_t i = 0; i < resolution; ++i) {
+                            const GEO::index_t v0 = PREV_M_VERTICES + start_v + i*step;
+                            const GEO::index_t v1 = v0 + step;
                             assert(v0 < mesh_out.vertices.nb());
                             assert(v1 < mesh_out.vertices.nb());
-                            assert(v2 < mesh_out.vertices.nb());
-                            assert(v3 < mesh_out.vertices.nb());
-                            assert(v4 < mesh_out.vertices.nb());
-                            assert(v5 < mesh_out.vertices.nb());
-                            assert(v6 < mesh_out.vertices.nb());
-                            assert(v7 < mesh_out.vertices.nb());
-                            mesh_out.cells.set_vertex(new_c, 0, PREV_M_VERTICES+v0);
-                            mesh_out.cells.set_vertex(new_c, 1, PREV_M_VERTICES+v1);
-                            mesh_out.cells.set_vertex(new_c, 2, PREV_M_VERTICES+v2);
-                            mesh_out.cells.set_vertex(new_c, 3, PREV_M_VERTICES+v3);
-                            mesh_out.cells.set_vertex(new_c, 4, PREV_M_VERTICES+v4);
-                            mesh_out.cells.set_vertex(new_c, 5, PREV_M_VERTICES+v5);
-                            mesh_out.cells.set_vertex(new_c, 6, PREV_M_VERTICES+v6);
-                            mesh_out.cells.set_vertex(new_c, 7, PREV_M_VERTICES+v7);
+                            mesh_out.edges.set_vertex(new_e, 0, v0);
+                            mesh_out.edges.set_vertex(new_e, 1, v1);
+                            vertices_to_delete[v0] = 0;
+                            vertices_to_delete[v1] = 0;
+                            ++new_e;
+                        }
+                    }
+                }
 
-                            if (mesh_out_c_cell != nullptr)
-                                (*mesh_out_c_cell)[new_c] = c;
+                /* Facets */
+                if (append_patches) {
+                    for (GEO::index_t lf = 0; lf < 6; ++lf) {
+                        const auto start_v = FACET_START_VERTEX_INDICES[lf];
+                        const auto step1 = FACET_STEP_1_VERTEX_INDICES[lf];
+                        const auto step2 = FACET_STEP_2_VERTEX_INDICES[lf];
+                        /*
+                         * Facets:
+                         * ...
+                         * +-----+-----+- ... -+-----+      v3 --- v2
+                         * | n+1 | n+2 |  ...  |2n+1 |       |     |
+                         * +-----+-----+- ... -+-----+      v0 --- v1
+                         * |  0  |  1  |  ...  |  n  |
+                         * +-----+-----+- ... -+-----+
+                         */
+                        for (GEO::index_t i = 0; i < resolution; ++i) {
+                            for (GEO::index_t j = 0; j < resolution; ++j) {
+                                const GEO::index_t v0 = PREV_M_VERTICES + start_v + i*step1 + j*step2;
+                                const GEO::index_t v1 = v0+step1;
+                                const GEO::index_t v2 = v1+step2;
+                                const GEO::index_t v3 = v0+step2;
+                                assert(v0 < mesh_out.vertices.nb());
+                                assert(v1 < mesh_out.vertices.nb());
+                                assert(v2 < mesh_out.vertices.nb());
+                                assert(v3 < mesh_out.vertices.nb());
+                                mesh_out.facets.set_vertex(new_f, 0, v0);
+                                mesh_out.facets.set_vertex(new_f, 1, v1);
+                                mesh_out.facets.set_vertex(new_f, 2, v2);
+                                mesh_out.facets.set_vertex(new_f, 3, v3);
+                                vertices_to_delete[v0] = 0;
+                                vertices_to_delete[v1] = 0;
+                                vertices_to_delete[v2] = 0;
+                                vertices_to_delete[v3] = 0;
 
-                            ++new_c;
+                                if (mesh_out_f_cell != nullptr)
+                                    (*mesh_out_f_cell)[new_f] = c;
+
+                                ++new_f;
+                            }
+                        }
+                    }
+                }
+
+                /* Cells */
+                if (append_blocks) {
+                    /* Cells
+                     *    +Z                4-------6
+                     *    |                /|      /|
+                     *    o --- +Y        5-------7 |
+                     *   /                | 0-----|-2
+                     *  +X                |/      |/
+                     *                    1-------3
+                     */
+                    for (GEO::index_t i = 0; i < resolution; ++i) {
+                        for (GEO::index_t j = 0; j < resolution; ++j) {
+                            for (GEO::index_t k = 0; k < resolution; ++k) {
+                                const GEO::index_t v0 = PREV_M_VERTICES + VERTICES_NB_PER_PATCH*i+VERTICES_NB_PER_ARC*j+k;
+                                const GEO::index_t v1 = v0+1;                            // +u
+                                const GEO::index_t v2 = v0+VERTICES_NB_PER_ARC;          // +v
+                                const GEO::index_t v3 = v2+1;                            // +u +v
+                                const GEO::index_t v4 = v0+VERTICES_NB_PER_PATCH;        // +w
+                                const GEO::index_t v5 = v4+1;                            // +u +w
+                                const GEO::index_t v6 = v4+VERTICES_NB_PER_ARC;          // +v +w
+                                const GEO::index_t v7 = v6+1;                            // +u +v +w
+                                assert(v0 < mesh_out.vertices.nb());
+                                assert(v1 < mesh_out.vertices.nb());
+                                assert(v2 < mesh_out.vertices.nb());
+                                assert(v3 < mesh_out.vertices.nb());
+                                assert(v4 < mesh_out.vertices.nb());
+                                assert(v5 < mesh_out.vertices.nb());
+                                assert(v6 < mesh_out.vertices.nb());
+                                assert(v7 < mesh_out.vertices.nb());
+                                mesh_out.cells.set_vertex(new_c, 0, v0);
+                                mesh_out.cells.set_vertex(new_c, 1, v1);
+                                mesh_out.cells.set_vertex(new_c, 2, v2);
+                                mesh_out.cells.set_vertex(new_c, 3, v3);
+                                mesh_out.cells.set_vertex(new_c, 4, v4);
+                                mesh_out.cells.set_vertex(new_c, 5, v5);
+                                mesh_out.cells.set_vertex(new_c, 6, v6);
+                                mesh_out.cells.set_vertex(new_c, 7, v7);
+                                vertices_to_delete[v0] = 0;
+                                vertices_to_delete[v1] = 0;
+                                vertices_to_delete[v2] = 0;
+                                vertices_to_delete[v3] = 0;
+                                vertices_to_delete[v4] = 0;
+                                vertices_to_delete[v5] = 0;
+                                vertices_to_delete[v6] = 0;
+                                vertices_to_delete[v7] = 0;
+
+                                if (mesh_out_c_cell != nullptr)
+                                    (*mesh_out_c_cell)[new_c] = c;
+
+                                ++new_c;
+                            }
                         }
                     }
                 }
             }
 
-            mesh_out.cells.connect();
+            if (append_nodes) {
+                if (mesh_out_v_node != nullptr)
+                    mesh_out_v_node->fill(false);
+
+                for (const auto& v : this->control_nodes.mesh().vertices) {
+                    std::ranges::copy_n(
+                        this->control_nodes.mesh().vertices.point_ptr(v),
+                        DIM,
+                        mesh_out.vertices.point_ptr(new_v));
+                    vertices_to_delete[new_v] = 0;
+
+                    if (mesh_out_v_cell != nullptr)
+                        (*mesh_out_v_cell)[new_v] = GEO::NO_CELL;
+                    if (mesh_out_v_uvw != nullptr)
+                        (*mesh_out_v_uvw)[new_v] = GEO::vec3(-1,-1,-1);
+                    if (mesh_out_v_node != nullptr)
+                        (*mesh_out_v_node)[new_v] = true;
+
+                    ++new_v;
+                }
+            }
+
+            /* Remove unused vertices */
+            mesh_out.vertices.delete_elements(vertices_to_delete);
         }
 
     protected:

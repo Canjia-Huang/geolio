@@ -420,6 +420,8 @@ namespace geolio::test
          * @return The measure values.
          */
         [[nodiscard]] Quality evaluate_quality(const GEO::index_t c, const GEO::vec3& uvw) const {
+            if (c == GEO::NO_CELL)
+                return {};
             return {
                 .det_jacobian = control_grid->compute_cell_uvw_measure(c, uvw, Grid::MeasureType::DET_JACOBIAN),
                 .scaled_jacobian = control_grid->compute_cell_uvw_measure(c, uvw, Grid::MeasureType::SCALED_JACOBIAN),
@@ -652,76 +654,23 @@ namespace geolio::test
 
         /* == artifacts ======================================================================================== */
 
-        /**
-         * @brief Dump the control nodes as a point set, with their quantities when they are defined.
-         * @param[in] suffix Suffix of the artifact file name.
-         */
-        void save_control_nodes(const std::string_view suffix = "_nodes.geogram") const {
-            ASSERT_NE(control_grid, nullptr);
-
-            GEO::Mesh mesh_out(DIM);
-            GEO::Attribute<GEO::index_t> mesh_out_v_idx(mesh_out.vertices.attributes(), "idx");
-
-            mesh_out.vertices.create_vertices(control_grid->control_nodes.nb());
-            for (const auto v : mesh_out.vertices) {
-                mesh_out.vertices.point<DIM>(v) = control_grid->control_nodes.point<DIM>(v);
-                mesh_out_v_idx[v] = v;
-            }
-
-            EXPECT_TRUE(mesh_out.save(artifact_path(suffix)));
-        }
-
-        /**
-         * @brief Dump the discretized high-order cell borders of the mesh.
-         *
-         * The quality measures are stored as per-vertex attributes, together with the source cell
-         * and the parametric coordinate of each vertex. The control-node quantities are
-         * interpolated on the vertices when they are defined.
-         *
-         * @param[in] suffix Suffix of the artifact file name.
-         */
-        void save_high_order_mesh_border(const std::string_view suffix = "_border.geogram") const {
+        void save_results(const std::string_view suffix = ".geogram") {
             ASSERT_NE(control_grid, nullptr);
 
             GEO::Mesh mesh_out;
+            GEO::Attribute<bool> mesh_out_v_node(mesh_out.vertices.attributes(), "node");
             GEO::Attribute<GEO::index_t> mesh_out_v_cell(mesh_out.vertices.attributes(), "cell");
             GEO::Attribute<GEO::vec3> mesh_out_v_uvw(mesh_out.vertices.attributes(), "uvw");
             GEO::Attribute<GEO::index_t> mesh_out_f_cell(mesh_out.facets.attributes(), "cell");
-
-            control_grid->append_discretized_high_order_cells_border(
-                mesh_out,
-                DISCRETIZATION_RESOLUTION,
-                &mesh_out_v_cell,
-                &mesh_out_v_uvw,
-                &mesh_out_f_cell);
-
-            save_vertices_quality(mesh_out, mesh_out_v_cell, mesh_out_v_uvw);
-
-            EXPECT_TRUE(mesh_out.save(artifact_path(suffix)));
-        }
-
-        /**
-         * @brief Dump the discretized high-order cells of the mesh.
-         *
-         * The quality measures are stored as per-vertex attributes, together with the source cell
-         * and the parametric coordinate of each vertex. The control-node quantities are
-         * interpolated on the vertices when they are defined.
-         *
-         * @param[in] suffix Suffix of the artifact file name.
-         */
-        void save_high_order_mesh_cells(const std::string_view suffix = "_cells.geogram") const {
-            ASSERT_NE(control_grid, nullptr);
-
-            GEO::Mesh mesh_out;
-            GEO::Attribute<GEO::index_t> mesh_out_v_cell(mesh_out.vertices.attributes(), "cell");
-            GEO::Attribute<GEO::vec3> mesh_out_v_uvw(mesh_out.vertices.attributes(), "uvw");
             GEO::Attribute<GEO::index_t> mesh_out_c_cell(mesh_out.cells.attributes(), "cell");
-
-            control_grid->append_discretized_high_order_cells(
+            control_grid->append_discretized_high_order_mesh(
                 mesh_out,
-                DISCRETIZATION_RESOLUTION,
+                20,
+                true, true, true, true,
+                &mesh_out_v_node,
                 &mesh_out_v_cell,
                 &mesh_out_v_uvw,
+                &mesh_out_f_cell,
                 &mesh_out_c_cell);
 
             save_vertices_quality(mesh_out, mesh_out_v_cell, mesh_out_v_uvw);
@@ -827,9 +776,7 @@ namespace geolio::test
             EXPECT_NEAR(quality.MIPS, 1.0, REFERENCE_TOL);
         }
 
-        save_control_nodes();
-        save_high_order_mesh_border();
-        save_high_order_mesh_cells();
+        save_results();
     }
 
     TEST_F(SingleHexControlGridTest, random) {
@@ -841,9 +788,7 @@ namespace geolio::test
         expect_mapping_moved_at_node(CELL, 1, 2, 3);
         expect_quality_invariants_over_grid(CELL, SAMPLE_RESOLUTION);
 
-        save_control_nodes();
-        save_high_order_mesh_border();
-        save_high_order_mesh_cells();
+        save_results();
     }
 
     TEST_F(SingleHexControlGridTest, facet_normal) {
@@ -901,7 +846,10 @@ namespace geolio::test
             }
         }
 
-        control_grid->append_discretized_high_order_cells_border(mesh_out, BACKGROUND_RESOLUTION);
+        control_grid->append_discretized_high_order_mesh(
+            mesh_out,
+            BACKGROUND_RESOLUTION,
+            false, false, true, false);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
     }
 
@@ -943,8 +891,102 @@ namespace geolio::test
             new_e += 3;
         }
 
-        control_grid->append_discretized_high_order_cells(mesh_out, BACKGROUND_RESOLUTION);
+        control_grid->append_discretized_high_order_mesh(
+            mesh_out,
+            BACKGROUND_RESOLUTION,
+            false, false, false, true);
         EXPECT_TRUE(mesh_out.save(artifact_path(".geogram")));
+    }
+
+    /**
+     * @brief The discretization must append the requested pieces and keep the caller's elements.
+     *
+     * Checks the number of generated elements, the labelling attributes, the preservation of the
+     * elements already present in the output mesh, and that the generated blocks are positively
+     * oriented (their local frame has a positive triple product).
+     */
+    TEST_F(SingleHexControlGridTest, discretized_mesh) {
+        constexpr GEO::index_t RESOLUTION = 4;
+        constexpr GEO::index_t ARC_VERTICES_NB = RESOLUTION+1;
+        constexpr GEO::index_t PATCH_VERTICES_NB = ARC_VERTICES_NB*ARC_VERTICES_NB;
+        constexpr GEO::index_t BLOCK_VERTICES_NB = PATCH_VERTICES_NB*ARC_VERTICES_NB;
+        constexpr GEO::index_t CONTROL_NODES_NB = (ORDER+1)*(ORDER+1)*(ORDER+1);
+        /* The patches are extracted from the block sample grid, so they keep the samples of
+         * the cell boundary only (the interior samples are removed). */
+        constexpr GEO::index_t BOUNDARY_VERTICES_NB =
+            BLOCK_VERTICES_NB - (ARC_VERTICES_NB-2)*(ARC_VERTICES_NB-2)*(ARC_VERTICES_NB-2);
+
+        // Patches only: the interior samples are removed, but the caller's vertex is kept.
+        {
+            GEO::Mesh mesh_out;
+            const GEO::index_t prev_v = mesh_out.vertices.create_vertices(1);
+            std::fill_n(mesh_out.vertices.point_ptr(prev_v), mesh_out.vertices.dimension(), 0.0);
+
+            GEO::Attribute<GEO::index_t> mesh_out_v_cell(mesh_out.vertices.attributes(), "cell");
+            GEO::Attribute<GEO::vec3> mesh_out_v_uvw(mesh_out.vertices.attributes(), "uvw");
+            GEO::Attribute<GEO::index_t> mesh_out_f_cell(mesh_out.facets.attributes(), "cell");
+
+            control_grid->append_discretized_high_order_mesh(
+                mesh_out, RESOLUTION,
+                false, false, true, false,
+                nullptr, &mesh_out_v_cell, &mesh_out_v_uvw, &mesh_out_f_cell);
+
+            EXPECT_EQ(mesh_out.vertices.nb(), 1 + BOUNDARY_VERTICES_NB);
+            EXPECT_EQ(mesh_out.edges.nb(), 0);
+            EXPECT_EQ(mesh_out.facets.nb(), 6*RESOLUTION*RESOLUTION);
+            EXPECT_EQ(mesh_out.cells.nb(), 0);
+
+            for (const auto f : mesh_out.facets)
+                EXPECT_EQ(mesh_out_f_cell[f], CELL);
+            for (const auto v : mesh_out.vertices) {
+                if (v == prev_v)
+                    continue; // the caller's vertex is not labelled by the routine
+                EXPECT_EQ(mesh_out_v_cell[v], CELL);
+                EXPECT_GE(mesh_out_v_uvw[v].x, 0.0);
+                EXPECT_LE(mesh_out_v_uvw[v].x, 1.0);
+                EXPECT_GE(mesh_out_v_uvw[v].y, 0.0);
+                EXPECT_LE(mesh_out_v_uvw[v].y, 1.0);
+                EXPECT_GE(mesh_out_v_uvw[v].z, 0.0);
+                EXPECT_LE(mesh_out_v_uvw[v].z, 1.0);
+            }
+        }
+
+        // Everything: the blocks, patches and arcs share the sampled vertices, the control
+        // nodes are appended last, and all the blocks are positively oriented.
+        {
+            GEO::Mesh mesh_out;
+            GEO::Attribute<bool> mesh_out_v_node(mesh_out.vertices.attributes(), "node");
+            GEO::Attribute<GEO::index_t> mesh_out_v_cell(mesh_out.vertices.attributes(), "cell");
+            GEO::Attribute<GEO::index_t> mesh_out_c_cell(mesh_out.cells.attributes(), "cell");
+
+            control_grid->append_discretized_high_order_mesh(
+                mesh_out, RESOLUTION,
+                true, true, true, true,
+                &mesh_out_v_node, &mesh_out_v_cell, nullptr, nullptr, &mesh_out_c_cell);
+
+            EXPECT_EQ(mesh_out.vertices.nb(), BLOCK_VERTICES_NB + CONTROL_NODES_NB);
+            EXPECT_EQ(mesh_out.edges.nb(), 12*RESOLUTION);
+            EXPECT_EQ(mesh_out.facets.nb(), 6*RESOLUTION*RESOLUTION);
+            EXPECT_EQ(mesh_out.cells.nb(), RESOLUTION*RESOLUTION*RESOLUTION);
+
+            GEO::index_t nodes_nb = 0;
+            for (const auto v : mesh_out.vertices) {
+                if (!mesh_out_v_node[v])
+                    continue;
+                ++nodes_nb;
+                EXPECT_EQ(mesh_out_v_cell[v], GEO::NO_CELL);
+            }
+            EXPECT_EQ(nodes_nb, CONTROL_NODES_NB);
+
+            for (const auto c : mesh_out.cells) {
+                EXPECT_EQ(mesh_out_c_cell[c], CELL);
+                const auto p0 = mesh_out.vertices.point(mesh_out.cells.vertex(c, 0));
+                const auto p1 = mesh_out.vertices.point(mesh_out.cells.vertex(c, 1));
+                const auto p2 = mesh_out.vertices.point(mesh_out.cells.vertex(c, 2));
+                const auto p4 = mesh_out.vertices.point(mesh_out.cells.vertex(c, 4));
+                EXPECT_GT(GEO::dot(p1-p0, GEO::cross(p2-p0, p4-p0)), 0.0) << "inverted block " << c;
+            }
+        }
     }
 
     /**
@@ -982,9 +1024,7 @@ namespace geolio::test
         expect_shared_vertices_are_conforming(0, 1);
         expect_shared_facets_are_conforming(0, 1);
 
-        save_control_nodes();
-        save_high_order_mesh_border();
-        save_high_order_mesh_cells();
+        save_results();
     }
 
     TEST_F(TwoHexControlGridTest, random) {
@@ -1001,8 +1041,6 @@ namespace geolio::test
         // Jittering a node of the shared facet must keep the two cells conforming.
         expect_shared_facets_are_conforming(0, 1);
 
-        save_control_nodes();
-        save_high_order_mesh_border();
-        save_high_order_mesh_cells();
+        save_results();
     }
 }
